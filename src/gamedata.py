@@ -4,6 +4,7 @@
 - 이름·설명: data/game_text_ko.json (게임 파일에서 추출한 공식 번역)
 - 진화 레시피·상태 이상 태그·시작 볼: data/*_db.json (외부 위키, 미검증)
 - 추천 규칙: data/rules.json (근거가 적힌 수동 정리)
+- 커뮤니티 평가: data/community.json (공략 사이트 티어·캐릭터 빌드, 의견)
 """
 from __future__ import annotations
 
@@ -93,6 +94,7 @@ class GameData:
     level_props: Dict[str, List[Dict[str, int]]] = field(default_factory=dict)   # 게임 연동: 레벨별 수치
     derived_tags: Dict[str, tuple] = field(default_factory=dict)   # 위키 태그 대신 게임 수치로 판정한 (상태, 피해)
     buildings: Dict[str, dict] = field(default_factory=dict)   # 건물 slug → {name_ko, desc_ko, ...}
+    community: dict = field(default_factory=dict)   # 커뮤니티 평가·추천 빌드 (data/community.json, 의견)
     level_schedules: Dict[str, Tuple[Tuple[int, ...], Tuple[int, ...]]] = field(default_factory=dict)  # 지역 → (보스 턴, 융합기 턴)
 
     def __post_init__(self):
@@ -179,6 +181,24 @@ class GameData:
             if tags or aoe:
                 self.derived_tags[iid] = (tags, aoe)
 
+    def community_tier(self, item_id: str) -> Optional[str]:
+        """커뮤니티 평가 티어 (S~D). 볼은 Game Rant, 패시브는 Dexerto 순위 — 없으면 None."""
+        it = self.items.get(item_id)
+        if it is None:
+            return None
+        table = self.community.get("ball_tiers" if it.kind == "ball" else "passive_tiers") or {}
+        for tier, names in table.items():
+            if it.name_en in names:
+                return tier
+        return None
+
+    def char_build_items(self, char_id: str) -> Tuple[set, str]:
+        """캐릭터 추천 빌드의 핵심 항목 ID 들과 한 줄 설명 (커뮤니티, 의견)."""
+        b = (self.community.get("char_builds") or {}).get(char_id)
+        if not b:
+            return set(), ""
+        return {self.item_by_english(n) for n in b.get("items", []) if self.item_by_english(n)}, b.get("why", "")
+
     def status_tags(self, item_id: str) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
         """(상태 이상, 피해 종류) — 위키 태그, 없으면 게임 수치로 판정한 것."""
         it = self.items.get(item_id)
@@ -229,7 +249,7 @@ class GameData:
         return _re.sub(r"(?<=[a-z])(?=[A-Z])", " ", key)   # 번역이 없는 건물: 게임 내부 이름을 띄어 쓴다
 
 
-OWN_JSON = ("rules.json",)       # 이 프로그램의 규칙 파일 — 게임 자료가 아니므로 항상 저장소 data/ 에서
+OWN_JSON = ("rules.json", "community.json")       # 이 프로그램의 규칙 파일 — 게임 자료가 아니므로 항상 저장소 data/ 에서
 
 
 def _read_json(name: str, data_dir: str):
@@ -286,6 +306,10 @@ def load_game_data(data_dir: Optional[str] = None) -> GameData:
         rules=_read_json("rules.json", data_dir), ui_text=text.get("ui", {}), source=text.get("source", {}),
         buildings=text.get("buildings", {}),
     )
+    try:
+        data.community = _read_json("community.json", data_dir)
+    except (OSError, ValueError):
+        data.community = {}
     _finish(data)
     return data
 

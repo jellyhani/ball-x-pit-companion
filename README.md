@@ -18,7 +18,7 @@
 - **추정 값**: 배치 점수의 가중치, 재생 건물 효과량, 효과가 겹칠 때의 규칙, 유령의 집(수치 미확인이라 계산에서 뺌),
   금광 골드 추정(튕김 × 1.5)은 게임 값이 아니라 추정·커뮤니티 측정값입니다.
 - **채집 궤적**: 실제 채집 기록 몇 번과 맞춘 수준입니다(궤적 7~11초 일치, 돌은 ±5).
-- **추천 규칙**: 규칙 기반입니다. 캐릭터 궁합은 공식 캐릭터 설명에서 끌어낸 프로필(13명, 가중치는 추정)과 이 캐릭터로 한 내 런 기록(같은 항목을 가진 런 3번 이상일 때)으로 반영하지만, 공략 수준의 빌드 운영(언제 무엇을 버릴지 등)은 아직 약합니다.
+- **추천 규칙**: 규칙 기반입니다. 캐릭터 궁합은 공식 캐릭터 설명에서 끌어낸 프로필(13명, 가중치는 추정), 공략 사이트의 볼·패시브 티어와 캐릭터별 추천 빌드(8명), 이 캐릭터로 한 내 런 기록(같은 항목을 가진 런 3번 이상일 때)으로 반영합니다. 티어는 한 사람·한 사이트의 의견이고 게임 버전에 따라 달라지므로 작은 가중치(비슷할 때 가르는 정도)로만 씁니다. 공략 수준의 빌드 운영(언제 무엇을 버릴지 등)은 아직 약합니다.
 - **게임 업데이트**: 게임이 바뀌면 연동 플러그인을 다시 빌드해야 할 수 있습니다.
 - **exe**: 서명이 없어 SmartScreen 경고가 뜨고, 백신이 오탐할 수 있습니다. 걱정되면 소스에서 직접 실행·빌드하세요.
 - 코드도 빠르게 덧붙여 온 부분이 많아(특히 `src/app_controller.py`) 구조 정리가 필요합니다.
@@ -98,6 +98,8 @@ PyInstaller onedir 빌드(Qt 라이브러리는 LGPL 조건대로 별도 파일)
 - [BALL x PIT Wiki (wiki.gg)](https://ballxpit.wiki.gg/wiki/Buildings) — 거처 효과는 캐릭터 레벨 4부터, 수도원 튕김당 +0.07초 등
 - Steam 가이드 [My Optimized Town Layout](https://steamcommunity.com/sharedfiles/filedetails/?id=3610566537),
   [100% Utilization Base Layout](https://steamcommunity.com/sharedfiles/filedetails/?id=3602389407) — 생산량 측정값, 배치 권장
+- 커뮤니티 평가(`data/community.json`, 순위·이름만 정리): [Game Rant 볼 진화 티어](https://gamerant.com/ball-x-pit-evolutions-tier-list-best-balls/) (2026-06),
+  [Dexerto 패시브 티어](https://www.dexerto.com/wikis/ball-x-pit/passive-tier-list/) (2026-08), Dexerto 캐릭터별 추천 빌드
 - [StonedModder/BallxPitxApp](https://github.com/StonedModder/BallxPitxApp) 연구 문서 — 생산 주기·타일 용량·건설 비용,
   빌드 아키타입 아이디어
 

@@ -278,6 +278,7 @@ class Recommender:
         self._game_hints(ev, card, run)
         self._character(ev, item, kind, upgrade, run)
         self._char_strategy(ev, item, kind, upgrade, run)
+        self._community(ev, item.id, kind, run)
         self._char_history(ev, item.id, run)
         self._support(ev, item.id, run, progress)
         self._progress(ev, kind, upgrade, progress)
@@ -472,6 +473,41 @@ class Recommender:
                 ev.reasons.append(Reason("char_fit", f"{cname} 궁합: {st.get('why', '')}", float(best[0]), "캐릭터 궁합"))
             if worst[0] < 0:
                 ev.warnings.append(Reason("char_misfit", f"{cname}: {st.get('why', '')}", float(worst[0]), "캐릭터와 덜 맞음"))
+
+    TIER_W = {"S": 3, "A": 1.5, "B": 0, "C": -1, "D": -1.5}   # 의견이라 작게: 비슷할 때 가르는 정도
+
+    def _community(self, ev: ActionEval, item_id: str, kind: str, run: RunState):
+        """커뮤니티 의견: 항목·진화 결과의 티어(볼 Game Rant, 패시브 Dexerto), 캐릭터 추천 빌드 핵심 항목.
+        게임 값이 아니라 공략 사이트 평가라 가중치는 작게."""
+        d = self.data
+        if not d.community:
+            return
+        # 진화로 가는 카드면 그 결과의 티어를, 아니면 카드 자신의 티어를 본다
+        # 진화 결과는 나머지 재료를 이미 가진 레시피만 (가능성만 있는 진화까지 세면 거의 모든 카드가 S 가 된다)
+        results = [r.result for r in d.recipes_using(item_id)
+                   if all(i == item_id or i in run.owned for i in r.ingredients)]
+        tiers = [(d.community_tier(res), res) for res in results if d.community_tier(res)]
+        if tiers:
+            tier, res = min(tiers, key=lambda t: "SABCD".index(t[0]))
+            if self.TIER_W[tier] > 0:
+                ev.reasons.append(Reason("community_evo_tier", f"커뮤니티 평가: {d.name(res)} 진화는 {tier}티어",
+                                         float(self.TIER_W[tier]), f"{tier}티어 진화"))
+        else:
+            tier = d.community_tier(item_id)
+            if tier and self.TIER_W[tier] > 0:
+                ev.reasons.append(Reason("community_tier", f"커뮤니티 평가 {tier}티어", float(self.TIER_W[tier]),
+                                         f"{tier}티어"))
+            elif tier and self.TIER_W[tier] < 0 and not ev.linked and not any(
+                    d.community_tier(r.result) in ("S", "A") for r in d.recipes_using(item_id)):
+                ev.warnings.append(Reason("community_tier_low", f"커뮤니티 평가 {tier}티어 (진화 재료가 아니면 약함)",
+                                          float(self.TIER_W[tier]), f"{tier}티어"))
+        for cid in run.character_ids:
+            core, why = d.char_build_items(cid)
+            hit = item_id in core or any(res in core for res in results)
+            if hit:
+                ev.reasons.append(Reason("char_build", f"{d.name(cid)} 추천 빌드 핵심 (커뮤니티): {why}", 5.0,
+                                         "캐릭터 추천 빌드"))
+                break
 
     def _char_history(self, ev: ActionEval, item_id: str, run: RunState):
         """내 기록: 이 캐릭터로 이 항목을 가진 런의 보스 격퇴율 (3번 이상일 때만, 캐릭터 평균과 비교)."""

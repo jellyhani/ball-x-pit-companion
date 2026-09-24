@@ -1,0 +1,234 @@
+{
+ "note": "커뮤니티 평가·추천 빌드 요약 (의견이며 게임 값 아님). 순위·이름만 옮기고 글은 옮기지 않음.",
+ "sources": {
+  "ball_tiers": {
+   "title": "Game Rant — Ball x Pit Tier List (Best Evolutions)",
+   "url": "https://gamerant.com/ball-x-pit-evolutions-tier-list-best-balls/",
+   "date": "2026-06-23"
+  },
+  "passive_tiers": {
+   "title": "Dexerto — Ball x Pit Passives tier list",
+   "url": "https://www.dexerto.com/wikis/ball-x-pit/passive-tier-list/",
+   "date": "2026-08-06"
+  },
+  "char_builds": {
+   "title": "Dexerto — Best <character> build in Ball x Pit",
+   "url": "https://www.dexerto.com/wikis/ball-x-pit/",
+   "date": "2026"
+  }
+ },
+ "ball_tiers": {
+  "S": [
+   "Sun",
+   "Hemorrhage",
+   "Maggot",
+   "Burn",
+   "Virus",
+   "Satan",
+   "Frozen Flame",
+   "Nuclear Bomb",
+   "Glacier",
+   "Magma",
+   "Mosquito King",
+   "Berserk",
+   "Inferno",
+   "Swamp",
+   "Spider Queen"
+  ],
+  "A": [
+   "Mosquito Swarm",
+   "Vampire Lord",
+   "Sandstorm",
+   "Bomb",
+   "Assassin",
+   "Laser Cutter",
+   "Leech",
+   "Blizzard",
+   "Lightning Rod",
+   "Noxious",
+   "Radiation Beam",
+   "Overgrowth"
+  ],
+  "B": [
+   "Voluptuous Egg Sac",
+   "Black Hole",
+   "Holy Laser",
+   "Freeze Ray",
+   "Flash",
+   "Nosferatu",
+   "Phantom",
+   "Sacrifice",
+   "Poison",
+   "Banished Flame",
+   "Incubus",
+   "Cell"
+  ],
+  "C": [
+   "Flicker",
+   "Brood Mother",
+   "Laser Beam",
+   "Lovestruck",
+   "Shotgun",
+   "Bleed",
+   "Dark",
+   "Egg Sac",
+   "Soul Sucker",
+   "Landslide",
+   "Vampire",
+   "Laser (Horizontal)",
+   "Fireworks",
+   "Brimstone"
+  ],
+  "D": [
+   "Wraith",
+   "Storm",
+   "Laser (Vertical)",
+   "Succubus",
+   "Iron",
+   "Earthquake",
+   "Charm",
+   "Freeze",
+   "Ghost",
+   "Lightning",
+   "Light",
+   "Wind",
+   "Stone",
+   "Steel",
+   "Catapult"
+  ]
+ },
+ "passive_tiers": {
+  "S": [
+   "Deadeye's Impaler",
+   "Grotesque Artillery",
+   "Deadeye's Cross",
+   "Phantom Regalia",
+   "Ethereal Cloak"
+  ],
+  "A": [
+   "Iron Onesie",
+   "Baby Rattle",
+   "War Horn",
+   "Cornucopia",
+   "Wagon Wheel"
+  ],
+  "B": [
+   "Slingshot",
+   "Archer's Effigy",
+   "Stone Effigy",
+   "Healer's Effigy",
+   "Artificial Heart"
+  ],
+  "C": [
+   "Breastplate",
+   "Dynamite",
+   "Lover's Quiver",
+   "Hourglass",
+   "Wretched Onion"
+  ]
+ },
+ "char_builds": {
+  "char:itchyfinger": {
+   "items": [
+    "Burn",
+    "Frozen Flame",
+    "Radiation Beam",
+    "Phantom",
+    "Maggot",
+    "Deadeye's Cross",
+    "Breastplate",
+    "Soul Reaver",
+    "Magnet"
+   ],
+   "why": "화상 시작, 빙화상·방사능을 겹치고 쉬지 않고 쏘기"
+  },
+  "char:shade": {
+   "items": [
+    "Holy Laser",
+    "Laser Beam",
+    "Radiation Beam",
+    "Magic Staff",
+    "Ethereal Cloak",
+    "Dynamite"
+   ],
+   "why": "뒤에서 쏘므로 관통·범위 피해로 화면 전체를 치기"
+  },
+  "char:wimp": {
+   "items": [
+    "Bomb",
+    "Radiation Beam",
+    "Blizzard",
+    "Flash",
+    "Magic Staff",
+    "Radiant Feather",
+    "Gemspring",
+    "Eye of the Beholder"
+   ],
+   "why": "원하는 지점에 떨어뜨린 뒤 튕김 — 범위 피해 연쇄"
+  },
+  "char:tiptoer": {
+   "items": [
+    "Laser Cutter",
+    "Radiation Beam",
+    "Laser Beam",
+    "Banished Flame",
+    "Silver Blindfold",
+    "Deadeye's Amulet",
+    "Reacher's Spear",
+    "Ethereal Cloak"
+   ],
+   "why": "들키지 않으니 한 자리에서 레이저·치명타 누적"
+  },
+  "char:recaller": {
+   "items": [
+    "Blizzard",
+    "Frozen Flame",
+    "Assassin",
+    "Radiation Beam",
+    "Phantom Regalia",
+    "Wings of the Anointed",
+    "Magnet",
+    "Soul Reaver"
+   ],
+   "why": "얼려 두고 되돌아오는 볼의 튕김 피해를 키우기"
+  },
+  "char:spendthrift": {
+   "items": [
+    "Mosquito King",
+    "Sandstorm",
+    "Frozen Flame",
+    "Phantom",
+    "Soul Reaver",
+    "Pressure Valve",
+    "Fleet Feet"
+   ],
+   "why": "한 번에 쏘는 볼로 흡혈·범위 — 계속 쏘며 회복"
+  },
+  "char:brickhead": {
+   "items": [
+    "Hemorrhage",
+    "Leech",
+    "Virus",
+    "Sacrifice",
+    "Breastplate",
+    "Crown of Thorns",
+    "Bandage Roll",
+    "Everflowing Goblet"
+   ],
+   "why": "가까이서 방패 반사로 출혈을 터뜨리기"
+  },
+  "char:sisyphus": {
+   "items": [
+    "Magma",
+    "Sandstorm",
+    "Nuclear Bomb",
+    "Glacier",
+    "Magic Staff",
+    "Breastplate",
+    "Ethereal Cloak",
+    "Everflowing Goblet"
+   ],
+   "why": "범위·상태 이상 4배 — 범위 지대를 겹치기"
+  }
+ }
+}
