@@ -13,7 +13,7 @@
 강화 전 거처·일꾼이 없는 생산 건물은 효과를 절반으로 계산한다 (나중에 켜질 효과).
 
 탐색: 타일 격자 위의 '같은 크기 두 영역 맞바꾸기'(건물 맞바꾸기·빈 자리로 옮기기·작은 타일 묶음 교환을 모두 포함)로
-담금질(simulated annealing). 충돌 모양(ㄱ자 건물) 기준으로 겹침을 막는다. 공사 중인 건물은 옮기지 않는다.
+담금질(simulated annealing). 충돌 모양(ㄱ자 건물) 기준으로 겹침을 막는다. 공사 중인 건물도 옮긴다(커뮤니티 공략: 채집 구역 가장자리로).
 마지막에 후보 몇 개를 채집 궤적 계산으로 다시 비교해 (범위 효과 / 지금 값) + (채집 발사량 / 지금 값) 이 가장 큰 것을 고른다.
 """
 from __future__ import annotations
@@ -40,7 +40,7 @@ STAT_FALLBACK = {"kBarracks", "kClinic", "kConsulate", "kGunsmith", "kSchoolhous
                  "kEnduranceStatue", "kStrengthStatue", "kLeadershipStatue", "kSpeedStatue", "kDexterityStatue",
                  "kIntelligenceStatue"}
 # 건물 → (대상, 가중치, 겹침 방식, 켜지는 조건, 설명)
-#   대상: 1 밀 / 2 나무 / 3 돌 타일, "all" 모든 건물, "stat" 능력치 건물, "housing" 거처
+#   대상: 1 밀 / 2 나무 / 3 돌 타일, "all" 모든 건물, "stat" 능력치 건물, "housing" 거처, "build" 공사 중·무한 강화 건물
 #   겹침: regen(타일당 한 번) · harvest(첫 건물 1, 둘째 0.5) · count(건물마다 따로)
 # 가중치 = 범위 안 자원 타일 하나의 값 (농장 옆 밀밭 1칸 = 1.0 기준, 타일 용량을 곱함).
 # 생산 건물은 '붙어 있는 타일마다' 주기적으로 1씩 캐므로 칸 수에 비례 (상한 없음):
@@ -63,9 +63,10 @@ EFFECTS: Dict[str, Tuple[object, float, str, str, str]] = {
     "kRockyHill": (3, 0.3, "regen", "upgraded", "근처 바위 재생 속도 상승 (레벨 3은 범위 +1칸)"),
     "kMansion": ("all", 0.2, "count", "upgraded", "근처 건물마다 분당 골드 1 (최대 29)"),
     "kCaptainQuarters": ("stat", 1.0, "count", "upgraded", "인근 능력치 보너스 건물 +1 — 능력치 건물을 모두 범위 안에"),
-    "kVeteranHut": ("housing", 0.6, "count", "upgraded", "인근 거처 입주민 추가 경험치 +30% — 거처를 모두 범위 안에"),
-    # 강철 요새(방패잡이): 튕기면 근처 공사·강화에 건설 점수 +4 → 무한 강화 능력치 건물 근처에 (Steam 가이드 '100% Utilization')
-    "kBrickHouse": ("statue", 0.5, "count", "upgraded", "튕기면 근처 공사·강화에 건설 점수 +4 — 무한 강화 능력치 건물 근처에"),
+    "kVeteranHut": ("housing", 0.6, "count", "upgraded", "인근 거처 입주민 추가 경험치 (캐릭터 레벨 4·7·9에서 20·25·30%) — 거처를 모두 범위 안에"),
+    # 강철 요새(방패잡이): 튕기면 근처 공사장에 건설 점수 +4 (위키 Iron Fortress) → 지금 공사 중인 건물과
+    # 계속 강화할 무한 강화 능력치 건물 근처에 (Steam 가이드 '100% Utilization', 토론 'Max Iron Fortress')
+    "kBrickHouse": ("build", 0.5, "count", "upgraded", "튕기면 근처 공사장에 건설 점수 +4 — 공사 중·무한 강화 건물 근처에"),
 }
 # 무한 강화 능력치 건물 6개 (병원·사수 조합·카피톨륨·대박물관·마차 공장·전사 조합)
 STATUE_TYPES = {"kEnduranceStatue", "kDexterityStatue", "kLeadershipStatue", "kIntelligenceStatue", "kSpeedStatue",
@@ -74,6 +75,24 @@ STATUE_TYPES = {"kEnduranceStatue", "kDexterityStatue", "kLeadershipStatue", "kI
 # 게임 캐릭터 레벨은 0부터 (CharMetaInst.Lvl) → 3 = 화면 레벨 4.
 HOUSE_ACTIVE_LVL = 3
 HOUSE_INACTIVE = 0.35     # 아직 안 켜진 거처 효과 (나중에 켜질 것 — 조금만 반영)
+# 레벨에 따라 세지는 거처 효과 (위키): 잔병의 오두막 경험치 20% (레벨 4) · 25% (7) · 30% (9) → 최대 대비 비율. 게임 레벨은 0부터.
+HOUSE_LEVEL_SCALE = {"kVeteranHut": ((8, 1.0), (6, 25 / 30), (3, 20 / 30))}
+UNFINISHED_BUILD_W = 2.0  # 강철 요새: 공사 중인 건물은 무한 강화 건물보다 두 배 (지금 바로 건설 점수가 필요)
+
+
+def _next_house_level(btype: str, lvl: int) -> int:
+    """효과가 다음으로 세지는 화면 레벨 (게임 레벨 +1)."""
+    steps = sorted([HOUSE_ACTIVE_LVL] + [n for n, _ in HOUSE_LEVEL_SCALE.get(btype, ())])
+    return next((n + 1 for n in steps if lvl < n), steps[-1] + 1)
+
+
+def _house_factor(btype: str, lvl: int) -> float:
+    if lvl < HOUSE_ACTIVE_LVL:
+        return HOUSE_INACTIVE
+    for need, f in HOUSE_LEVEL_SCALE.get(btype, ()):
+        if lvl >= need:
+            return f
+    return 1.0
 CHAR_LEVELS: Dict[str, int] = {}   # 캐릭터 slug(소문자, 예: recaller) → 게임 레벨 (계산 작업마다 set_char_levels 로 넣음)
 
 
@@ -144,6 +163,7 @@ class Piece:
     range: float
     factor: float = 1.0       # 효과가 켜진 정도 (강화 전·일꾼 없음 → 0.5)
     cap: float = 1.0          # 자원 타일 용량 (고급 타일 3~4, 강화하면 늘어남 — 게임 값 cap)
+    unfinished: bool = False  # 공사 중·강화 공사 중 (강철 요새 건설 점수 대상)
 
 
 @dataclass
@@ -240,16 +260,17 @@ def pieces_from_base(base: dict, grid: Grid, housing: Set[str], fixed: Sequence[
         if eff and eff[3] == "upgraded":
             ch = house_characters().get(_slug(b.type))
             if ch and CHAR_LEVELS and ch[0] in CHAR_LEVELS:
-                factor = 1.0 if CHAR_LEVELS[ch[0]] >= HOUSE_ACTIVE_LVL else HOUSE_INACTIVE
+                factor = _house_factor(b.type, CHAR_LEVELS[ch[0]])
             elif int(info.get("lvl") or 0) < 1:
                 factor = 0.5
         rng_ = b.range
         if b.type in REGEN_TYPES and int(info.get("lvl") or 0) >= 2:   # 게임 레벨은 0부터 — 2 = 화면 레벨 3
             rng_ += LVL3_RANGE_BONUS
-        # 공사 중인 건물은 옮기지 않는다 (옮길 수 있는지 확인하지 못함)
-        movable = b.type not in FIXED_TYPES and info.get("state") not in UNFINISHED_STATES and i not in fixed
+        # 공사 중인 건물도 옮길 수 있다 (커뮤니티: 채집 구역 가장자리로 옮겨 일꾼이 치게 — Screen Rant 기지 공략)
+        unfinished = info.get("state") in UNFINISHED_STATES
+        movable = b.type not in FIXED_TYPES and i not in fixed
         cap = float(info.get("cap") or TILE_CAPACITY.get(b.type, 1)) if b.type in TILE_RES else 1.0
-        pieces[i] = Piece(i, b.type, w, h, frozenset(rel), movable, rng_, factor, max(1.0, cap))
+        pieces[i] = Piece(i, b.type, w, h, frozenset(rel), movable, rng_, factor, max(1.0, cap), unfinished)
         origin[i] = (round((b.x - w * grid.size / 2 - grid.ox) / grid.size),
                      round((b.y - h * grid.size / 2 - grid.oy) / grid.size))
     return pieces, origin
@@ -298,7 +319,7 @@ class Scorer:
         self.pad = pad                     # 범위 판정 여유 (게임 값으로 맞춘 것, calibrate_range)
         self.res_weight = res_weight or {1: 1.0, 2: 1.0, 3: 1.0}
         self.effects = [i for i, p in pieces.items() if p.type in EFFECTS and p.range > 0]
-        self.targets: Dict[object, List[int]] = {1: [], 2: [], 3: [], "all": [], "stat": [], "housing": [], "statue": []}
+        self.targets: Dict[object, List[int]] = {1: [], 2: [], 3: [], "all": [], "stat": [], "housing": [], "statue": [], "build": []}
         for i, p in pieces.items():
             if p.type in TILE_RES:
                 self.targets[TILE_RES[p.type]].append(i)
@@ -308,6 +329,8 @@ class Scorer:
                 self.targets["housing"].append(i)
             if p.type in STATUE_TYPES:
                 self.targets["statue"].append(i)
+            if p.type in STATUE_TYPES or p.unfinished:
+                self.targets["build"].append(i)
             self.targets["all"].append(i)
 
     def score(self, lay: Layout) -> Tuple[float, Dict[str, float]]:
@@ -333,6 +356,8 @@ class Scorer:
                 if mode == "harvest" and n > HARVEST_CAP:
                     continue                           # 채집 건물 하나가 쓰는 타일 수 상한
                 val = w * p.factor * (self.res_weight.get(kind, 1.0) * self.pieces[t].cap if isinstance(kind, int) else 1.0)
+                if kind == "build" and self.pieces[t].unfinished:
+                    val *= UNFINISHED_BUILD_W
                 if mode == "regen":
                     k = (p.type, t)
                     regen[k] = max(regen.get(k, 0.0), val)
@@ -856,12 +881,12 @@ def activation_gains(base: dict, res_weight: Optional[Dict[int, float]] = None, 
         if p.type not in EFFECTS or p.factor >= 1.0:
             continue
         pcs = dict(pieces)
-        pcs[i] = Piece(p.id, p.type, p.w, p.h, p.rel, p.movable, p.range, 1.0)
+        pcs[i] = Piece(p.id, p.type, p.w, p.h, p.rel, p.movable, p.range, 1.0, p.cap, p.unfinished)
         s1 = Scorer(pcs, stats, housing, res_weight, pad).score(Layout(grid, pcs, origin))[0]
         if s1 - s0 > 0.05:
             ch = house_characters().get(_slug(p.type))
             what = ("일꾼 배정" if EFFECTS[p.type][3] == "worker"
-                    else f"{ch[1]} 레벨 4" if ch else "강화")
+                    else f"{ch[1]} 레벨 {_next_house_level(p.type, CHAR_LEVELS.get(ch[0], 0))}" if ch else "강화")
             out.append((i, p.type, what, s1 - s0))
     out.sort(key=lambda x: -x[3])
     return out

@@ -128,6 +128,32 @@ class LayoutOptTest(unittest.TestCase):
         finally:
             lo.set_char_levels({})
 
+    def test_veteran_hut_bonus_grows_with_level(self):
+        """잔병의 오두막 경험치 20·25·30% (화면 레벨 4·7·9, 위키) — 게임 레벨은 0부터."""
+        self.assertEqual(lo._house_factor("kVeteranHut", 2), lo.HOUSE_INACTIVE)
+        self.assertAlmostEqual(lo._house_factor("kVeteranHut", 3), 20 / 30)
+        self.assertAlmostEqual(lo._house_factor("kVeteranHut", 6), 25 / 30)
+        self.assertEqual(lo._house_factor("kVeteranHut", 8), 1.0)
+        self.assertEqual(lo._house_factor("kVilla", 3), 1.0)
+        self.assertEqual(lo._next_house_level("kVeteranHut", 3), 7)
+        self.assertEqual(lo._next_house_level("kVilla", 1), 4)
+
+    def test_iron_fortress_prefers_scaffolds(self):
+        """강철 요새는 근처 공사장에 건설 점수 — 공사 중인 건물은 무한 강화 건물보다 두 배, 공사 중이어도 옮길 수 있다."""
+        _, _, grid, _, _ = setup()
+        sq = frozenset((x, y) for x in range(2) for y in range(2))
+        fort = lo.Piece(1, "kBrickHouse", 2, 2, sq, True, 3.0)
+        statue = lo.Piece(2, "kStrengthStatue", 2, 2, sq, True, 0.0)
+        scaf = lo.Piece(3, "kIdleFarm", 2, 2, sq, True, 0.0, unfinished=True)
+        pieces = {1: fort, 2: statue, 3: scaf}
+        tiles = sorted(grid.tiles)
+        x0, y0 = tiles[0]
+        scorer = lo.Scorer(pieces, set(), set())
+        near_scaf = lo.Layout(grid, pieces, {1: (x0, y0), 3: (x0 + 2, y0), 2: (x0 + 20, y0)})
+        near_statue = lo.Layout(grid, pieces, {1: (x0, y0), 2: (x0 + 2, y0), 3: (x0 + 20, y0)})
+        self.assertGreater(scorer.score(near_statue)[0], 0)
+        self.assertAlmostEqual(scorer.score(near_scaf)[0], 2 * scorer.score(near_statue)[0])
+
     def test_previous_target_is_kept(self):
         fx, base, *_ = setup()
         p1 = lo.optimize(base, None, None, seconds=1.5, restarts=1, seed=4)
