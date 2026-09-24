@@ -15,8 +15,8 @@ sys.path.insert(0, ROOT)
 
 def main(argv) -> int:
     from PIL import Image
-    from PyQt6.QtCore import QRect
-    from PyQt6.QtWidgets import QApplication
+    from PySide6.QtCore import QRect
+    from PySide6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
     from src.domain import FrameInfo, ScreenKind

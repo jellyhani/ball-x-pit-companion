@@ -19,8 +19,8 @@ from collections import deque
 from dataclasses import asdict
 from typing import Deque, Dict, List, Optional
 
-from PyQt6.QtCore import QObject, QPoint, QRect, QTimer
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtCore import QObject, QPoint, QRect, QTimer
+from PySide6.QtWidgets import QApplication
 
 from .domain import SCREEN_LABEL, CardLabel, Click, PickOutcome, ScreenKind, ScreenObservation
 from .engine.expedition import ExpeditionAdvice, advise as advise_expedition

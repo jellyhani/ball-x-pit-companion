@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass
 from typing import List
 
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 log = logging.getLogger(__name__)
 
@@ -118,9 +118,9 @@ def summarize_phase(events: List[LogEvent]) -> str:
 class PlayerLogWatcher(QObject):
     """Player.log 를 주기적으로 읽는다. 게임이 다시 시작되어 파일이 줄어들면 처음부터 읽는다."""
 
-    log_event = pyqtSignal(object, float)          # LogEvent, monotonic time
-    synced = pyqtSignal(str, str)              # phase, game_version
-    status_changed = pyqtSignal(str)
+    log_event = Signal(object, float)          # LogEvent, monotonic time
+    synced = Signal(str, str)              # phase, game_version
+    status_changed = Signal(str)
 
     def __init__(self, log_dir: str = DEFAULT_LOG_DIR, interval_ms: int = 250, parent=None):
         super().__init__(parent)

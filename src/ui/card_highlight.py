@@ -9,9 +9,9 @@ from __future__ import annotations
 import logging
 from typing import List, Tuple
 
-from PyQt6.QtCore import QRect, QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
-from PyQt6.QtWidgets import QWidget
+from PySide6.QtCore import QRect, QRectF, Qt
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
+from PySide6.QtWidgets import QWidget
 
 from ..services import game_window as gw
 from . import tokens as tk

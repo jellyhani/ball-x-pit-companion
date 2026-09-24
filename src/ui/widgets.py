@@ -3,9 +3,9 @@ from __future__ import annotations
 
 from typing import List, Optional, Sequence
 
-from PyQt6.QtCore import QPropertyAnimation, QRectF, QSize, Qt, pyqtProperty, pyqtSignal
-from PyQt6.QtGui import QColor, QPainter, QPainterPath
-from PyQt6.QtWidgets import (QAbstractButton, QButtonGroup, QFrame, QHBoxLayout, QLabel, QPushButton,
+from PySide6.QtCore import QPropertyAnimation, QRectF, QSize, Qt, Property, Signal
+from PySide6.QtGui import QColor, QPainter, QPainterPath
+from PySide6.QtWidgets import (QAbstractButton, QButtonGroup, QFrame, QHBoxLayout, QLabel, QPushButton,
                              QSizePolicy, QVBoxLayout, QWidget)
 
 ACCENT = QColor(10, 132, 255)
@@ -41,7 +41,7 @@ class Toggle(QAbstractButton):
         self._pos = v
         self.update()
 
-    knob = pyqtProperty(float, get_knob, set_knob)
+    knob = Property(float, get_knob, set_knob)
 
     def paintEvent(self, e):
         p = QPainter(self)
@@ -66,7 +66,7 @@ class Toggle(QAbstractButton):
 class Segmented(QFrame):
     """세그먼트 버튼 (하나만 선택)."""
 
-    changed = pyqtSignal(int)
+    changed = Signal(int)
 
     def __init__(self, labels: Sequence[str], current: int = 0, parent=None):
         super().__init__(parent)

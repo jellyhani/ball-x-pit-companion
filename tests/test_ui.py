@@ -2,8 +2,8 @@
 import sys
 import unittest
 
-from PyQt6.QtCore import QRect
-from PyQt6.QtWidgets import QApplication, QLabel
+from PySide6.QtCore import QRect
+from PySide6.QtWidgets import QApplication, QLabel
 
 from src.domain import CardLabel
 from src.engine.recommender import Recommender

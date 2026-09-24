@@ -6,9 +6,9 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional
 
-from PyQt6.QtCore import QPointF, QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
-from PyQt6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
+from PySide6.QtCore import QPointF, QRectF, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
 from ..engine.layout import TILE_TYPES, Bld, LayoutPlan, Move, buildings_from_base, swap_positions
 from ..engine.layout_opt import EFFECTS
@@ -111,8 +111,8 @@ class MapCanvas(QWidget):
 
 
 class LayoutWindow(QWidget):
-    recalc_requested = pyqtSignal()
-    preset_chosen = pyqtSignal(str)          # effect | gold_u
+    recalc_requested = Signal()
+    preset_chosen = Signal(str)          # effect | gold_u
 
     def __init__(self, data: GameData):
         super().__init__(None)

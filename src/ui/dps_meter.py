@@ -8,9 +8,9 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
-from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath
-from PyQt6.QtWidgets import QWidget
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath
+from PySide6.QtWidgets import QWidget
 
 from ..gamedata import GameData
 from ..services import game_window as gw

@@ -18,9 +18,9 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import List, Optional, Sequence, Tuple
 
-from PyQt6.QtCore import QPoint, QRectF, Qt, QTimer, pyqtSignal
-from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
-from PyQt6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtCore import QPoint, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ..engine.fusion import FusionRecommendation
 from ..engine.recommender import ActionEval, Recommendation, card_badge, card_rank, card_verdict
@@ -136,7 +136,7 @@ class _Pill(_Label):
 
 
 class RecommendationHud(QWidget):
-    moved = pyqtSignal(QPoint)
+    moved = Signal(QPoint)
 
     BASE_WIDTH = 372
 

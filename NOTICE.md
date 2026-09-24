@@ -14,7 +14,7 @@ This repository contains only original source code (MIT, see LICENSE) and one bi
 
 | Package | License |
 |---|---|
-| PyQt6 | GPL v3 (or commercial). Any bundled binary of this app is therefore distributed under GPL v3 terms; the source here stays MIT. |
+| PySide6-Essentials / shiboken6 (Qt for Python) | LGPL-3.0 (Qt libraries, dynamically linked — users may replace them). |
 | Pillow | MIT-CMU (HPND) |
 | numpy | BSD-3-Clause |
 | mss | MIT |

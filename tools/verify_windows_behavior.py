@@ -17,8 +17,8 @@ sys.path.insert(0, ROOT)
 def main() -> int:
     import mss
     from PIL import Image, ImageChops, ImageStat
-    from PyQt6.QtCore import QPoint
-    from PyQt6.QtWidgets import QApplication
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QApplication
 
     app = QApplication(sys.argv)
     from src.services import game_window as gw

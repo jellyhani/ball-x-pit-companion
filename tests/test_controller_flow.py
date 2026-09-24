@@ -10,7 +10,7 @@ import tempfile
 import time
 import unittest
 
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 from tests.test_bridge import LEVELUP
 

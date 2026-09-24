@@ -10,7 +10,7 @@ import logging
 import time
 from typing import Callable, Dict, Optional, Set
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 log = logging.getLogger(__name__)
 
@@ -35,12 +35,12 @@ class KeyDebouncer:
 
 
 class InputWatcher(QObject):
-    toggle_detail = pyqtSignal()   # F7 HUD 간단히 / 자세히
-    resync = pyqtSignal()          # F8
-    toggle_hud = pyqtSignal()      # F9
-    toggle_window = pyqtSignal()   # F10
-    clicked = pyqtSignal(int, int, float)   # 화면 물리 좌표, monotonic
-    status_changed = pyqtSignal(str)
+    toggle_detail = Signal()   # F7 HUD 간단히 / 자세히
+    resync = Signal()          # F8
+    toggle_hud = Signal()      # F9
+    toggle_window = Signal()   # F10
+    clicked = Signal(int, int, float)   # 화면 물리 좌표, monotonic
+    status_changed = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)

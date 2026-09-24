@@ -97,7 +97,7 @@ class RankTest(unittest.TestCase):
 
 class SimWorkerTest(unittest.TestCase):
     def test_process_worker_returns_latest_only(self):
-        from PyQt6.QtCore import QCoreApplication
+        from PySide6.QtCore import QCoreApplication
         from src.services.sim_worker import SimWorker
         app = QCoreApplication.instance() or QCoreApplication([])
         fx = load()

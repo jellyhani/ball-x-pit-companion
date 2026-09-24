@@ -6,8 +6,8 @@ import logging
 import os
 from logging.handlers import RotatingFileHandler
 
-from PyQt6.QtCore import QObject, pyqtSignal
-from PyQt6.QtNetwork import QLocalServer, QLocalSocket
+from PySide6.QtCore import QObject, Signal
+from PySide6.QtNetwork import QLocalServer, QLocalSocket
 
 from .settings import APP_DIR
 
@@ -43,7 +43,7 @@ def send_command(command: str, timeout_ms: int = 1500) -> bool:
 class InstanceServer(QObject):
     """현재 사용자 전용 로컬 소켓. 두 번째 실행과 stop 명령을 받는다."""
 
-    command = pyqtSignal(str)
+    command = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)

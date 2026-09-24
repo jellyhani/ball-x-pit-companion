@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import List, Optional, Sequence, Tuple
 
-from PyQt6.QtCore import QPoint, QRect
-from PyQt6.QtGui import QGuiApplication
+from PySide6.QtCore import QPoint, QRect
+from PySide6.QtGui import QGuiApplication
 
 Rect = Tuple[int, int, int, int]
 

@@ -13,7 +13,7 @@ import threading
 import time
 from typing import Optional
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 log = logging.getLogger(__name__)
 
@@ -24,8 +24,8 @@ MAX_LINE = 1_000_000
 
 
 class BridgeClient(QObject):
-    snapshot = pyqtSignal(object, float)     # dict, monotonic 수신 시각
-    status_changed = pyqtSignal(str)
+    snapshot = Signal(object, float)     # dict, monotonic 수신 시각
+    status_changed = Signal(str)
 
     def __init__(self, pipe_name: str = PIPE_NAME, parent=None):
         super().__init__(parent)

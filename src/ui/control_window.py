@@ -7,9 +7,9 @@ from __future__ import annotations
 import os
 from typing import Dict, List, Optional
 
-from PyQt6.QtCore import QSize, Qt, pyqtSignal
-from PyQt6.QtGui import QIcon, QPixmap
-from PyQt6.QtWidgets import (QComboBox, QCompleter, QHBoxLayout, QLabel, QLineEdit, QListWidget,
+from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtWidgets import (QComboBox, QCompleter, QHBoxLayout, QLabel, QLineEdit, QListWidget,
                              QListWidgetItem, QPushButton, QScrollArea, QSpinBox, QStackedWidget, QVBoxLayout,
                              QWidget)
 
@@ -157,14 +157,14 @@ class _Page(QScrollArea):
 
 
 class ControlWindow(QWidget):
-    scan_requested = pyqtSignal()
-    save_frame_requested = pyqtSignal()
-    hud_edit_toggled = pyqtSignal(bool)
-    hud_reset_requested = pyqtSignal()
-    settings_changed = pyqtSignal()
-    run_edited = pyqtSignal()
-    mod_install_requested = pyqtSignal()
-    layout_requested = pyqtSignal()
+    scan_requested = Signal()
+    save_frame_requested = Signal()
+    hud_edit_toggled = Signal(bool)
+    hud_reset_requested = Signal()
+    settings_changed = Signal()
+    run_edited = Signal()
+    mod_install_requested = Signal()
+    layout_requested = Signal()
 
     def __init__(self, data: GameData, run: RunState, settings: Settings):
         super().__init__(None)

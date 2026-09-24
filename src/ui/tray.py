@@ -1,9 +1,9 @@
 """작업 표시줄 알림 영역 아이콘. 실행 중임을 알리고 열기·숨기기·종료를 제공한다."""
 from __future__ import annotations
 
-from PyQt6.QtCore import QRectF, Qt, pyqtSignal
-from PyQt6.QtGui import QAction, QIcon, QPainter, QPen, QPixmap
-from PyQt6.QtWidgets import QMenu, QSystemTrayIcon
+from PySide6.QtCore import QRectF, Qt, Signal
+from PySide6.QtGui import QAction, QIcon, QPainter, QPen, QPixmap
+from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
 from . import tokens as tk
 
@@ -33,10 +33,10 @@ def app_icon() -> QIcon:
 
 
 class Tray(QSystemTrayIcon):
-    open_requested = pyqtSignal()
-    hud_toggle_requested = pyqtSignal()
-    scan_requested = pyqtSignal()
-    quit_requested = pyqtSignal()
+    open_requested = Signal()
+    hud_toggle_requested = Signal()
+    scan_requested = Signal()
+    quit_requested = Signal()
 
     def __init__(self):
         super().__init__(app_icon())

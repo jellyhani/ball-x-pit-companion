@@ -11,7 +11,7 @@ import time
 import unittest
 from ctypes import wintypes
 
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 
 from src.domain import CardLabel, ScreenKind
 from src.services.bridge_client import BridgeClient

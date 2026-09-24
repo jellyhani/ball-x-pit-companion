@@ -12,7 +12,7 @@ from concurrent.futures import Executor, Future, ProcessPoolExecutor, ThreadPool
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Dict, Optional, Tuple
 
-from PyQt6.QtCore import QObject, pyqtSignal
+from PySide6.QtCore import QObject, Signal
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ LANES = {"now": "fast", "sweep": "heavy", "layout": "layout"}
 
 
 class SimWorker(QObject):
-    done = pyqtSignal(str, object, object)     # (채널, 요청 키, 결과 — 실패하면 None)
+    done = Signal(str, object, object)     # (채널, 요청 키, 결과 — 실패하면 None)
 
     def __init__(self, use_process: bool = True):
         super().__init__()

@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional
 
 from PIL import Image, ImageChops, ImageStat
-from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
+from PySide6.QtCore import QObject, QThread, Signal, Slot
 
 from ..domain import FrameInfo, ScreenKind, ScreenObservation
 from ..recognition.screen_parser import parse_layout
@@ -35,7 +35,7 @@ class ScanResult:
 
 
 class _Worker(QObject):
-    finished = pyqtSignal(object)
+    finished = Signal(object)
 
     def __init__(self):
         super().__init__()
@@ -70,7 +70,7 @@ class _Worker(QObject):
             log.exception("OCR 초기화 실패")
             return False
 
-    @pyqtSlot(int, int, bool, bool)
+    @Slot(int, int, bool, bool)
     def scan(self, job_id: int, generation: int, forced: bool, keep_image: bool):
         t0 = time.perf_counter()
         timings: Dict[str, float] = {}
@@ -139,7 +139,7 @@ class _Worker(QObject):
         from dataclasses import replace
         return replace(obs, frame=frame)
 
-    @pyqtSlot()
+    @Slot()
     def shutdown(self):
         if self._reader is not None:
             self._reader.close()
@@ -149,9 +149,9 @@ class _Worker(QObject):
 class RecognitionService(QObject):
     """GUI 스레드에서 쓰는 창구. 요청은 시그널로 작업 스레드에 전달된다."""
 
-    result = pyqtSignal(object)
-    _request = pyqtSignal(int, int, bool, bool)
-    _shutdown = pyqtSignal()
+    result = Signal(object)
+    _request = Signal(int, int, bool, bool)
+    _shutdown = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)

@@ -9,7 +9,7 @@ import threading
 import time
 from typing import Callable, Optional
 
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 from . import mod_installer as mi
 
@@ -19,8 +19,8 @@ NO_BRIDGE_WARN_S = 60.0   # 게임이 켜진 뒤 이만큼 연동이 없으면 �
 
 
 class ModGuard(QObject):
-    status = pyqtSignal(str, str)     # (설명, 상태: ok | wait | warn | error)
-    notice = pyqtSignal(str)          # 트레이 알림
+    status = Signal(str, str)     # (설명, 상태: ok | wait | warn | error)
+    notice = Signal(str)          # 트레이 알림
 
     def __init__(self, settings, data_build: Optional[str], bridge_connected: Callable[[], bool]):
         super().__init__()

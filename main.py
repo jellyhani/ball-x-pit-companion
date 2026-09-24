@@ -7,14 +7,14 @@
 import logging
 import sys
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QApplication
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication
 
 
 def install_crash_logging(log: logging.Logger, log_path: str):
     """예외를 로그에 남기고 앱은 계속 실행한다.
 
-    PyQt6 는 시그널 처리 중 잡히지 않은 예외가 나면 기본 excepthook 일 때 프로그램을 강제 종료한다.
+    PySide6 는 시그널 처리 중 잡히지 않은 예외가 나면 기본 excepthook 일 때 프로그램을 강제 종료한다.
     pythonw 로 실행하면 콘솔이 없어 흔적 없이 꺼지므로, 직접 훅을 달아 기록한다.
     """
     import faulthandler
