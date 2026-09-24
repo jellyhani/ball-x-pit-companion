@@ -1,0 +1,85 @@
+{
+  "version": "2026-09-23.1",
+  "game_build_id": "23150541",
+  "notes": "추천 엔진이 쓰는 구조화 규칙. 각 항목의 source는 근거다. 'game_text'는 게임 파일의 공식 설명문(build 23150541), 'wiki_db'는 data/*_db.json(외부 위키, 미검증)이다.",
+
+  "max_level": {
+    "ball": 3,
+    "passive": 3,
+    "source": "wiki_db",
+    "verified": false,
+    "note": "게임 설명문(tut_evolution)은 '강화를 마친 볼'만 진화할 수 있다고 한다. 최대 레벨 숫자는 게임 파일에서 확인하지 못했다."
+  },
+
+  "tags": {
+    "baby_ball_source": {
+      "label": "베이비볼 생성",
+      "source": "game_text",
+      "items": ["ball:broodmother", "ball:catapult", "ball:eggsac", "ball:fleshmound", "ball:maggot",
+                "ball:shotgun", "ball:sniper", "passive:arrowoffate", "passive:babyrattle",
+                "passive:bandageroll", "passive:cornucopia", "passive:slingshot", "passive:tornado", "passive:turret"]
+    },
+    "baby_ball_scaling": {
+      "label": "베이비볼 수에 비례",
+      "source": "game_text",
+      "items": ["passive:addfollowerdamage", "passive:irononesie", "passive:cornucopia"]
+    },
+    "heal_source": {
+      "label": "체력 회복",
+      "source": "game_text",
+      "items": ["ball:lovestruck", "ball:reaper", "ball:succubus", "ball:vampire", "ball:vampirelord",
+                "passive:ghostlyshield", "passive:healereffigy", "passive:loversquiver",
+                "passive:soulreaver", "passive:traitorscowl", "passive:vampiricsword"]
+    },
+    "needs_healing": {
+      "label": "회복할 때 발동",
+      "source": "game_text",
+      "items": ["passive:bandageroll", "passive:overheal"]
+    }
+  },
+
+  "characters": {
+    "char:emptynester": {
+      "reduces_tags": ["baby_ball_source", "baby_ball_scaling"],
+      "reason": "공식 설명: 베이비볼 없음",
+      "source": "game_text"
+    },
+    "char:sisyphus": {
+      "reduces_tags": ["baby_ball_source", "baby_ball_scaling"],
+      "boosts_wiki_status_or_aoe": true,
+      "reason": "공식 설명: 볼 직접 피해 없음, 범위·상태 이상 피해 4배, 베이비볼 없음",
+      "source": "game_text"
+    },
+    "char:itchyfinger": {
+      "boosts_wiki_on_hit_status": true,
+      "reason": "공식 설명: 발사 속도 두 배",
+      "source": "game_text"
+    },
+    "char:backpacker": {
+      "passive_slots": 0,
+      "reason": "공식 설명: 패시브 슬롯 없음",
+      "source": "game_text"
+    },
+    "char:packrat": {
+      "ball_slots": 2,
+      "reason": "공식 설명: 볼 슬롯 두 개",
+      "source": "game_text"
+    },
+    "char:cogitator": {
+      "auto_selects_upgrades": true,
+      "reason": "공식 설명: 강화를 자동 선택",
+      "source": "game_text"
+    },
+    "char:radicalai": {
+      "auto_selects_upgrades": true,
+      "reason": "공식 설명: 강화까지 자동으로 선택",
+      "source": "game_text"
+    }
+  },
+
+  "card_level_semantics": {
+    "shown_level_is_after_pick": true,
+    "verified": true,
+    "note": "사용자 스크린샷(1920×1080, 버전 1.301): 보유 칸의 화상은 '1', 같은 화면 카드는 '레벨 2↑'. 카드 레벨은 고른 뒤 레벨이다."
+  }
+}

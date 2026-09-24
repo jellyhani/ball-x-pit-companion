@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    BALL x PIT 읽기 전용 상태 브리지 (BepInEx 6 IL2CPP 플러그인).
+    게임 폴더의 .NET 6 런타임 어셈블리와 BepInEx 가 만든 interop 어셈블리를 직접 참조한다 (NuGet 다운로드 없음).
+    빌드: dotnet build -c Release  (GameDir 속성으로 게임 폴더 지정 가능)
+  -->
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
+    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>BallxPitBridge</AssemblyName>
+    <RootNamespace>BallxPitBridge</RootNamespace>
+    <Version>1.10.0</Version>
+    <NoWarn>MSB3277;MSB3246;CS8632;CA1416</NoWarn>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\BALLxPIT</GameDir>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- 배포용 DLL 에 빌드한 PC 의 경로(PDB 경로)가 들어가지 않게 -->
+    <DebugType>none</DebugType>
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="$(GameDir)\dotnet\System*.dll" Private="false" />
+    <Reference Include="$(GameDir)\dotnet\netstandard.dll" Private="false" />
+    <Reference Include="$(GameDir)\dotnet\mscorlib.dll" Private="false" />
+    <Reference Include="$(GameDir)\dotnet\Microsoft.Win32.Primitives.dll" Private="false" />
+    <Reference Include="$(GameDir)\BepInEx\core\BepInEx.Core.dll" Private="false" />
+    <Reference Include="$(GameDir)\BepInEx\core\BepInEx.Unity.IL2CPP.dll" Private="false" />
+    <Reference Include="$(GameDir)\BepInEx\core\Il2CppInterop.Runtime.dll" Private="false" />
+    <Reference Include="$(GameDir)\BepInEx\core\Il2CppInterop.Common.dll" Private="false" />
+    <Reference Include="$(GameDir)\BepInEx\interop\*.dll" Private="false" />
+  </ItemGroup>
+</Project>

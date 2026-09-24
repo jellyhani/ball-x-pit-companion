@@ -1,0 +1,870 @@
+{
+"note": "테스트용: 게임 안 진화 레시피(어떤 항목끼리 합쳐지는지)만. 레벨별 수치·최대 레벨은 넣지 않음 (테스트가 직접 정함).",
+"balls": [
+{
+"type": "kBomb",
+"recipes": [
+[
+"kBurn",
+"kHeavy"
+]
+]
+},
+{
+"type": "kLaserCross",
+"recipes": [
+[
+"kLaserHorz",
+"kLaserVert"
+]
+]
+},
+{
+"type": "kVampireLord",
+"recipes": [
+[
+"kVampire",
+"kBleed"
+],
+[
+"kVampire",
+"kDark"
+]
+]
+},
+{
+"type": "kWraith",
+"recipes": [
+[
+"kFreeze",
+"kGhost"
+]
+]
+},
+{
+"type": "kAssassin",
+"recipes": [
+[
+"kHeavy",
+"kGhost"
+],
+[
+"kHeavy",
+"kDark"
+]
+]
+},
+{
+"type": "kMagma",
+"recipes": [
+[
+"kBurn",
+"kEarthquake"
+]
+]
+},
+{
+"type": "kLightningRod",
+"recipes": [
+[
+"kLightning",
+"kHeavy"
+]
+]
+},
+{
+"type": "kSpiderQueen",
+"recipes": [
+[
+"kBroodMother",
+"kEggSac"
+]
+]
+},
+{
+"type": "kSwamp",
+"recipes": [
+[
+"kPoison",
+"kEarthquake"
+]
+]
+},
+{
+"type": "kBlizzard",
+"recipes": [
+[
+"kFreeze",
+"kLightning"
+],
+[
+"kFreeze",
+"kWind"
+]
+]
+},
+{
+"type": "kFreezeRay",
+"recipes": [
+[
+"kFreeze",
+"kLaserHorz"
+],
+[
+"kFreeze",
+"kLaserVert"
+]
+]
+},
+{
+"type": "kLeech",
+"recipes": [
+[
+"kBroodMother",
+"kBleed"
+]
+]
+},
+{
+"type": "kMosquito",
+"recipes": [
+[
+"kVampire",
+"kEggSac"
+]
+]
+},
+{
+"type": "kMosquitoKing",
+"recipes": [
+[
+"kVampire",
+"kBroodMother"
+]
+]
+},
+{
+"type": "kNosferatu",
+"recipes": [
+[
+"kVampireLord",
+"kSpiderQueen",
+"kMosquitoKing"
+]
+]
+},
+{
+"type": "kNuke",
+"recipes": [
+[
+"kBomb",
+"kPoison"
+]
+]
+},
+{
+"type": "kVirus",
+"recipes": [
+[
+"kGhost",
+"kPoison"
+],
+[
+"kCell",
+"kPoison"
+],
+[
+"kBleed",
+"kPoison"
+]
+]
+},
+{
+"type": "kInferno",
+"recipes": [
+[
+"kBurn",
+"kWind"
+],
+[
+"kBurn",
+"kTime"
+]
+]
+},
+{
+"type": "kSuccubus",
+"recipes": [
+[
+"kCharm",
+"kVampire"
+]
+]
+},
+{
+"type": "kBerserk",
+"recipes": [
+[
+"kCharm",
+"kBurn"
+],
+[
+"kCharm",
+"kBleed"
+]
+]
+},
+{
+"type": "kShotgun",
+"recipes": [
+[
+"kHeavy",
+"kEggSac"
+]
+]
+},
+{
+"type": "kSun",
+"recipes": [
+[
+"kBurn",
+"kLight"
+]
+]
+},
+{
+"type": "kLaserBeam",
+"recipes": [
+[
+"kLaserHorz",
+"kLight"
+],
+[
+"kLaserVert",
+"kLight"
+]
+]
+},
+{
+"type": "kPhantom",
+"recipes": [
+[
+"kDark",
+"kGhost"
+]
+]
+},
+{
+"type": "kSacrifice",
+"recipes": [
+[
+"kBleed",
+"kDark"
+]
+]
+},
+{
+"type": "kIncubus",
+"recipes": [
+[
+"kCharm",
+"kDark"
+]
+]
+},
+{
+"type": "kSatan",
+"recipes": [
+[
+"kIncubus",
+"kSuccubus"
+]
+]
+},
+{
+"type": "kFlash",
+"recipes": [
+[
+"kLightning",
+"kLight"
+]
+]
+},
+{
+"type": "kEggSacSac",
+"recipes": [
+[
+"kEggSac",
+"kCell"
+]
+]
+},
+{
+"type": "kMaggot",
+"recipes": [
+[
+"kCell",
+"kBroodMother"
+]
+]
+},
+{
+"type": "kGlacier",
+"recipes": [
+[
+"kFreeze",
+"kEarthquake"
+],
+[
+"kFreeze",
+"kStone"
+]
+]
+},
+{
+"type": "kStorm",
+"recipes": [
+[
+"kLightning",
+"kWind"
+]
+]
+},
+{
+"type": "kFrozenFlame",
+"recipes": [
+[
+"kBurn",
+"kFreeze"
+]
+]
+},
+{
+"type": "kBlackHole",
+"recipes": [
+[
+"kDark",
+"kSun"
+],
+[
+"kTime",
+"kSun"
+]
+]
+},
+{
+"type": "kRadiationBeam",
+"recipes": [
+[
+"kLaserHorz",
+"kPoison"
+],
+[
+"kLaserHorz",
+"kCell"
+],
+[
+"kLaserVert",
+"kCell"
+],
+[
+"kLaserVert",
+"kPoison"
+]
+]
+},
+{
+"type": "kNoxious",
+"recipes": [
+[
+"kPoison",
+"kWind"
+],
+[
+"kDark",
+"kWind"
+]
+]
+},
+{
+"type": "kFlicker",
+"recipes": [
+[
+"kLight",
+"kDark"
+]
+]
+},
+{
+"type": "kLovestruck",
+"recipes": [
+[
+"kCharm",
+"kLight"
+],
+[
+"kCharm",
+"kLightning"
+],
+[
+"kCharm",
+"kTime"
+]
+]
+},
+{
+"type": "kHemorrhage",
+"recipes": [
+[
+"kBleed",
+"kHeavy"
+],
+[
+"kBleed",
+"kFlesh"
+]
+]
+},
+{
+"type": "kSandstorm",
+"recipes": [
+[
+"kEarthquake",
+"kWind"
+],
+[
+"kStone",
+"kWind"
+]
+]
+},
+{
+"type": "kOvergrowth",
+"recipes": [
+[
+"kEarthquake",
+"kCell"
+]
+]
+},
+{
+"type": "kSoulSucker",
+"recipes": [
+[
+"kVampire",
+"kGhost"
+]
+]
+},
+{
+"type": "kMosquitoKingdom",
+"recipes": [
+[
+"kMosquitoKing",
+"kMosquito"
+]
+]
+},
+{
+"type": "kLightningBug",
+"recipes": [
+[
+"kLightning",
+"kBroodMother"
+]
+]
+},
+{
+"type": "kHeartSwallower",
+"recipes": [
+[
+"kBleed",
+"kGhost"
+]
+]
+},
+{
+"type": "kDarkFlame",
+"recipes": [
+[
+"kDark",
+"kBurn"
+]
+]
+},
+{
+"type": "kArmageddon",
+"recipes": [
+[
+"kInferno",
+"kStorm"
+]
+]
+},
+{
+"type": "kVenom",
+"recipes": [
+[
+"kPoison",
+"kFreeze"
+]
+]
+},
+{
+"type": "kZombie",
+"recipes": [
+[
+"kVampire",
+"kFlesh"
+]
+]
+},
+{
+"type": "kTumor",
+"recipes": [
+[
+"kRadiationBeam",
+"kFlesh"
+]
+]
+},
+{
+"type": "kFleshMound",
+"recipes": [
+[
+"kBroodMother",
+"kFlesh"
+]
+]
+},
+{
+"type": "kFireworks",
+"recipes": [
+[
+"kBurn",
+"kEggSac"
+]
+]
+},
+{
+"type": "kSniper",
+"recipes": [
+[
+"kShotgun",
+"kAssassin"
+]
+]
+},
+{
+"type": "kDrill",
+"recipes": [
+[
+"kEarthquake",
+"kHeavy"
+]
+]
+},
+{
+"type": "kBrimstone",
+"recipes": [
+[
+"kStone",
+"kBurn"
+],
+[
+"kPoison",
+"kBurn"
+]
+]
+},
+{
+"type": "kLandslide",
+"recipes": [
+[
+"kStone",
+"kEarthquake"
+]
+]
+},
+{
+"type": "kOffspring",
+"recipes": [
+[
+"kCell",
+"kFlesh"
+]
+]
+},
+{
+"type": "kSteel",
+"recipes": [
+[
+"kHeavy",
+"kStone"
+]
+]
+},
+{
+"type": "kCatapult",
+"recipes": [
+[
+"kStone",
+"kEggSac"
+]
+]
+},
+{
+"type": "kPetrify",
+"recipes": [
+[
+"kStone",
+"kFlesh"
+]
+]
+},
+{
+"type": "kErosion",
+"recipes": [
+[
+"kTime",
+"kWind"
+]
+]
+},
+{
+"type": "kTimeBomb",
+"recipes": [
+[
+"kTime",
+"kBomb"
+]
+]
+},
+{
+"type": "kTimeFreeze",
+"recipes": [
+[
+"kTime",
+"kFreeze"
+]
+]
+},
+{
+"type": "kWarp",
+"recipes": [
+[
+"kTime",
+"kLight"
+]
+]
+},
+{
+"type": "kXRay",
+"recipes": [
+[
+"kLaserCross",
+"kLaserBeam"
+]
+]
+},
+{
+"type": "kLaserCutter",
+"recipes": [
+[
+"kLaserHorz",
+"kSteel"
+],
+[
+"kLaserVert",
+"kSteel"
+]
+]
+},
+{
+"type": "kReaper",
+"recipes": [
+[
+"kSoulSucker",
+"kHeartSwallower"
+]
+]
+},
+{
+"type": "kElemental",
+"recipes": [
+[
+"kBurn",
+"kWind",
+"kFreeze",
+"kEarthquake"
+]
+]
+},
+{
+"type": "kBanshee",
+"recipes": [
+[
+"kPhantom",
+"kWraith"
+]
+]
+}
+],
+"passives": [
+{
+"type": "kDeadeyesCross",
+"recipes": [
+[
+"kBackstabDagger",
+"kFrontstabDagger",
+"kLeftstabDagger",
+"kRightstabDagger"
+]
+]
+},
+{
+"type": "kSoulReaver",
+"recipes": [
+[
+"kVampiricSword",
+"kOverheal"
+]
+]
+},
+{
+"type": "kTormentersMask",
+"recipes": [
+[
+"kSpikedCollar",
+"kThorns"
+]
+]
+},
+{
+"type": "kPhantomRegalia",
+"recipes": [
+[
+"kGhostlyCorset",
+"kEtherealCloak"
+]
+]
+},
+{
+"type": "kCornucopia",
+"recipes": [
+[
+"kBabyRattle",
+"kAddFollowerDamage"
+]
+]
+},
+{
+"type": "kGraciousImpaler",
+"recipes": [
+[
+"kReachersSpear",
+"kDeadeyesAmulet"
+]
+]
+},
+{
+"type": "kAnointedWings",
+"recipes": [
+[
+"kFeather",
+"kSneakers"
+]
+]
+},
+{
+"type": "kOdiferousShell",
+"recipes": [
+[
+"kWretchedOnion",
+"kArmor"
+]
+]
+},
+{
+"type": "kDeadeyesImpaler",
+"recipes": [
+[
+"kDeadeyesCross",
+"kGraciousImpaler"
+]
+]
+},
+{
+"type": "kArrowOfFate",
+"recipes": [
+[
+"kLoversQuiver",
+"kHandMirror"
+]
+]
+},
+{
+"type": "kArdentTire",
+"recipes": [
+[
+"kWagonWheel",
+"kRubberHeadband"
+]
+]
+},
+{
+"type": "kWindWeaver",
+"recipes": [
+[
+"kTornado",
+"kSlingshot"
+]
+]
+},
+{
+"type": "kArgentStopwatch",
+"recipes": [
+[
+"kHourglass",
+"kSilverBullet"
+]
+]
+},
+{
+"type": "kFullMetalRapier",
+"recipes": [
+[
+"kIronOnesie",
+"kSwordBreaker"
+]
+]
+},
+{
+"type": "kRemoteDetonator",
+"recipes": [
+[
+"kCorpseExplosion",
+"kMagnet"
+]
+]
+},
+{
+"type": "kIngloriousHammer",
+"recipes": [
+[
+"kPlatinumDumbbell",
+"kUpturnedHatchet"
+]
+]
+},
+{
+"type": "kArtillery",
+"recipes": [
+[
+"kTurret",
+"kHandFan"
+]
+]
+}
+]
+}

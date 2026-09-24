@@ -1,0 +1,2 @@
+# first-time setup only: read icons from the game's Unity assets
+UnityPy==1.25.3

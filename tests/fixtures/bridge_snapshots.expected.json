@@ -1,0 +1,628 @@
+[
+ {
+  "seq": 4361,
+  "status": "close",
+  "best": "ball:heavy",
+  "cards": [
+   [
+    "passive:thorns",
+    "skip"
+   ],
+   [
+    "ball:poison",
+    "alt"
+   ],
+   [
+    "ball:heavy",
+    "best"
+   ]
+  ],
+  "banish": null,
+  "reroll": "none"
+ },
+ {
+  "seq": 4378,
+  "status": "close",
+  "best": "ball:laservert",
+  "cards": [
+   [
+    "ball:laservert",
+    "best"
+   ],
+   [
+    "passive:bandageroll",
+    "skip"
+   ],
+   [
+    "ball:earthquake",
+    "alt"
+   ]
+  ],
+  "banish": null,
+  "reroll": "none"
+ },
+ {
+  "seq": 4411,
+  "status": "recommend",
+  "best": "ball:earthquake",
+  "cards": [
+   [
+    "ball:earthquake",
+    "best"
+   ],
+   [
+    "passive:frontstabdagger",
+    "skip"
+   ],
+   [
+    "passive:feather",
+    "skip"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4432,
+  "status": "close",
+  "best": "ball:laservert",
+  "cards": [
+   [
+    "passive:hourglass",
+    "skip"
+   ],
+   [
+    "ball:laservert",
+    "best"
+   ],
+   [
+    "ball:earthquake",
+    "alt"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4461,
+  "status": "recommend",
+  "best": "ball:light",
+  "cards": [
+   [
+    "passive:swordbreaker",
+    "skip"
+   ],
+   [
+    "passive:irononesie",
+    "skip"
+   ],
+   [
+    "ball:light",
+    "best"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4504,
+  "status": "recommend",
+  "best": "ball:heavy",
+  "cards": [
+   [
+    "ball:heavy",
+    "best"
+   ],
+   [
+    "passive:turret",
+    "skip"
+   ],
+   [
+    "ball:broodmother",
+    "banish"
+   ]
+  ],
+  "banish": "ball:broodmother",
+  "reroll": "keep"
+ },
+ {
+  "seq": 4547,
+  "status": "recommend",
+  "best": "ball:heavy",
+  "cards": [
+   [
+    "ball:heavy",
+    "best"
+   ],
+   [
+    "ball:radiationbeam",
+    "skip"
+   ],
+   [
+    "passive:etherealcloak",
+    "skip"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4571,
+  "status": "close",
+  "best": "passive:swordbreaker",
+  "cards": [
+   [
+    "passive:swordbreaker",
+    "best"
+   ],
+   [
+    "passive:rubberheadband",
+    "alt"
+   ],
+   [
+    "passive:frontstabdagger",
+    "alt"
+   ]
+  ],
+  "banish": null,
+  "reroll": "consider"
+ },
+ {
+  "seq": 4585,
+  "status": "recommend",
+  "best": "ball:radiationbeam",
+  "cards": [
+   [
+    "passive:platinumdumbbell",
+    "skip"
+   ],
+   [
+    "passive:bow",
+    "skip"
+   ],
+   [
+    "ball:radiationbeam",
+    "best"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4606,
+  "status": "close",
+  "best": "ball:light",
+  "cards": [
+   [
+    "ball:light",
+    "best"
+   ],
+   [
+    "passive:deadeyesamulet",
+    "alt"
+   ],
+   [
+    "passive:corpseexplosion",
+    "alt"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4653,
+  "status": "recommend",
+  "best": "ball:dark",
+  "cards": [
+   [
+    "ball:dark",
+    "best"
+   ],
+   [
+    "ball:wind",
+    "banish"
+   ],
+   [
+    "ball:bleed",
+    "skip"
+   ]
+  ],
+  "banish": "ball:wind",
+  "reroll": "keep"
+ },
+ {
+  "seq": 4689,
+  "status": "recommend",
+  "best": "ball:dark",
+  "cards": [
+   [
+    "passive:rightstabdagger",
+    "skip"
+   ],
+   [
+    "ball:dark",
+    "best"
+   ],
+   [
+    "passive:silverblindfold",
+    "skip"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4748,
+  "status": "recommend",
+  "best": "ball:dark",
+  "cards": [
+   [
+    "passive:armor",
+    "skip"
+   ],
+   [
+    "ball:dark",
+    "best"
+   ],
+   [
+    "passive:addfollowerdamage",
+    "skip"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4765,
+  "status": "close",
+  "best": "passive:corpseexplosion",
+  "cards": [
+   [
+    "passive:corpseexplosion",
+    "best"
+   ],
+   [
+    "ball:eggsac",
+    "banish"
+   ],
+   [
+    "passive:hourglass",
+    "alt"
+   ]
+  ],
+  "banish": "ball:eggsac",
+  "reroll": "consider"
+ },
+ {
+  "seq": 4781,
+  "status": "recommend",
+  "best": "ball:ghost",
+  "cards": [
+   [
+    "ball:ghost",
+    "best"
+   ],
+   [
+    "passive:silverblindfold",
+    "skip"
+   ],
+   [
+    "passive:corpseexplosion",
+    "skip"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4798,
+  "status": "close",
+  "best": "ball:heavy",
+  "cards": [
+   [
+    "ball:flicker",
+    "alt"
+   ],
+   [
+    "ball:heavy",
+    "best"
+   ],
+   [
+    "passive:platinumdumbbell",
+    "skip"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4832,
+  "status": "recommend",
+  "best": "passive:magnet",
+  "cards": [
+   [
+    "passive:bandageroll",
+    "skip"
+   ],
+   [
+    "passive:magnet",
+    "best"
+   ],
+   [
+    "passive:magicstaff",
+    "skip"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4876,
+  "status": "recommend",
+  "best": "ball:wind",
+  "cards": [
+   [
+    "passive:slingshot",
+    "banish"
+   ],
+   [
+    "passive:healereffigy",
+    "skip"
+   ],
+   [
+    "ball:wind",
+    "best"
+   ]
+  ],
+  "banish": "passive:slingshot",
+  "reroll": "keep"
+ },
+ {
+  "seq": 4933,
+  "status": "close",
+  "best": "ball:laserhorz",
+  "cards": [
+   [
+    "ball:laserhorz",
+    "best"
+   ],
+   [
+    "passive:healereffigy",
+    "skip"
+   ],
+   [
+    "ball:freeze",
+    "alt"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4978,
+  "status": "close",
+  "best": "ball:light",
+  "cards": [
+   [
+    "ball:light",
+    "best"
+   ],
+   [
+    "ball:eggsac",
+    "alt"
+   ],
+   [
+    "ball:stone",
+    "alt"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 4988,
+  "status": "close",
+  "best": "ball:laservert",
+  "cards": [
+   [
+    "ball:laservert",
+    "best"
+   ],
+   [
+    "passive:healereffigy",
+    "skip"
+   ],
+   [
+    "ball:ghost",
+    "alt"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 5021,
+  "status": "recommend",
+  "best": "ball:burn",
+  "cards": [
+   [
+    "passive:bandageroll",
+    "banish"
+   ],
+   [
+    "ball:burn",
+    "best"
+   ],
+   [
+    "passive:turret",
+    "skip"
+   ]
+  ],
+  "banish": "passive:bandageroll",
+  "reroll": "keep"
+ },
+ {
+  "seq": 5208,
+  "status": "recommend",
+  "best": "ball:stone",
+  "cards": [
+   [
+    "ball:stone",
+    "best"
+   ],
+   [
+    "passive:armor",
+    "banish"
+   ],
+   [
+    "passive:stoneeffigy",
+    "skip"
+   ]
+  ],
+  "banish": "passive:armor",
+  "reroll": "keep"
+ },
+ {
+  "seq": 5243,
+  "status": "recommend",
+  "best": "ball:stone",
+  "cards": [
+   [
+    "ball:vampire",
+    "skip"
+   ],
+   [
+    "passive:upturnedhatchet",
+    "banish"
+   ],
+   [
+    "ball:stone",
+    "best"
+   ]
+  ],
+  "banish": "passive:upturnedhatchet",
+  "reroll": "keep"
+ },
+ {
+  "seq": 5296,
+  "status": "hold",
+  "best": null,
+  "cards": [
+   [
+    "passive:magicstaff",
+    "neutral"
+   ],
+   [
+    "passive:backstabdagger",
+    "neutral"
+   ],
+   [
+    "passive:rubberheadband",
+    "neutral"
+   ]
+  ],
+  "banish": null,
+  "reroll": "consider"
+ },
+ {
+  "seq": 5338,
+  "status": "close",
+  "best": "ball:wind",
+  "cards": [
+   [
+    "passive:magicstaff",
+    "alt"
+   ],
+   [
+    "ball:ghost",
+    "banish"
+   ],
+   [
+    "ball:wind",
+    "best"
+   ]
+  ],
+  "banish": "ball:ghost",
+  "reroll": "keep"
+ },
+ {
+  "seq": 5382,
+  "status": "recommend",
+  "best": "ball:wind",
+  "cards": [
+   [
+    "passive:magicstaff",
+    "skip"
+   ],
+   [
+    "ball:wind",
+    "best"
+   ]
+  ],
+  "banish": null,
+  "reroll": "keep"
+ },
+ {
+  "seq": 5489,
+  "status": "close",
+  "best": "ball:sandstorm",
+  "cards": [
+   [
+    "ball:sandstorm",
+    "best"
+   ],
+   [
+    "passive:magicstaff",
+    "alt"
+   ],
+   [
+    "ball:freeze",
+    "banish"
+   ]
+  ],
+  "banish": "ball:freeze",
+  "reroll": "keep"
+ },
+ {
+  "seq": 5563,
+  "status": "recommend",
+  "best": "ball:sandstorm",
+  "cards": [
+   [
+    "ball:lightning",
+    "skip"
+   ],
+   [
+    "ball:sandstorm",
+    "best"
+   ],
+   [
+    "ball:stone",
+    "banish"
+   ]
+  ],
+  "banish": "ball:stone",
+  "reroll": "keep"
+ },
+ {
+  "seq": 6167,
+  "status": "close",
+  "best": "passive:healereffigy",
+  "cards": [
+   [
+    "passive:healereffigy",
+    "best"
+   ],
+   [
+    "ball:ghost",
+    "alt"
+   ],
+   [
+    "passive:deadeyesamulet",
+    "skip"
+   ]
+  ],
+  "banish": null,
+  "reroll": "none"
+ }
+]

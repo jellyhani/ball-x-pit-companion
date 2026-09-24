@@ -1,0 +1,85 @@
+Unloading 5 Unused Serialized files (Serialized files now loaded: 0)
+Shader 'ExtraDepthPass': dependency 'Name' shader ' Main' not found
+UnloadTime: 0.163900 ms
+Launched version 'Version 1.301 (May 08 2026 #3)' on 9월 23 26 @ 09:15 UTC
+UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+UnityEngine.Logger:Log(LogType, Object)
+UnityEngine.Debug:Log(Object)
+VersionText:LogVersionText()
+VersionText:Awake()
+UnityEngine.Object:Instantiate(Object, Transform, Boolean)
+UnityEngine.Object:Instantiate(T, Transform)
+PersistentGroup:Awake()
+
+kSelectingLevel -> kEnteringLvl
+UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+UnityEngine.Logger:Log(LogType, Object)
+UnityEngine.Debug:Log(Object)
+BaseMgr:SetState(BaseState, Boolean)
+LevelSelectItem:OnPlayClicked()
+CoolScrolledButton:RunOnPointerUp(InputButton)
+UnityEngine.EventSystems.ExecuteEvents:Execute(GameObject, BaseEventData, EventFunction`1)
+Rewired.Integration.UnityUI.RewiredStandaloneInputModule:ProcessMousePress(MouseButtonEventData)
+Rewired.Integration.UnityUI.RewiredStandaloneInputModule:ProcessMouseEvent(Int32, Int32)
+Rewired.Integration.UnityUI.RewiredStandaloneInputModule:Process()
+UnityEngine.EventSystems.EventSystem:Update()
+Rewired.Integration.UnityUI.RewiredEventSystem:Update()
+
+skippin kVampire since it was just in the pool
+UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+UnityEngine.Logger:Log(LogType, Object)
+UnityEngine.Debug:Log(Object)
+LevelUpUI:PopulateUpgrades()
+<_AnimateReroll>d__198:MoveNext()
+MEC.Timing:Update()
+
+skippin kThorns since it was just in the pool
+UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+UnityEngine.Logger:Log(LogType, Object)
+UnityEngine.Debug:Log(Object)
+LevelUpUI:PopulateUpgrades()
+<_AnimateReroll>d__198:MoveNext()
+MEC.Timing:Update()
+
+skippin kPlatinumDumbbell since it was just in the pool
+UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+UnityEngine.Logger:Log(LogType, Object)
+UnityEngine.Debug:Log(Object)
+LevelUpUI:PopulateUpgrades()
+<_AnimateReroll>d__198:MoveNext()
+MEC.Timing:Update()
+
+100 bonus gold dropped: True/False/100
+UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+UnityEngine.Logger:Log(LogType, Object)
+UnityEngine.Debug:Log(Object)
+GameMgr:MarkLevelComplete()
+GridPieceObj:DropDeathStuff()
+GridPieceInst:SetState(PieceState)
+GridMgr:KillPiece(GridPieceObj)
+GridPieceInst:InstantKill(Boolean)
+<_RunCrownDestroyed>d__59:MoveNext()
+MEC.Timing:Update()
+
+1 / 5
+UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+UnityEngine.Logger:Log(LogType, Object)
+UnityEngine.Debug:Log(Object)
+BuildingMgr:PassDay()
+GameMgr:SetState(GameState, Boolean)
+<_EnterGameOver>d__30:MoveNext()
+MEC.Timing:RunCoroutineInternal(IEnumerator`1, Segment, String, CoroutineHandle, Boolean)
+MEC.Timing:RunCoroutine(IEnumerator`1)
+<_RunLevelComplete>d__28:MoveNext()
+<CancelWith>d__0:MoveNext()
+MEC.Timing:Update()
+
+Unloading 5 Unused Serialized files (Serialized files now loaded: 4)
+UnloadTime: 4.801000 ms
+kNormal -> kReturningFromLvl
+UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+UnityEngine.Logger:Log(LogType, Object)
+UnityEngine.Debug:Log(Object)
+BaseMgr:SetState(BaseState, Boolean)
+BaseMgr:Start()
+
