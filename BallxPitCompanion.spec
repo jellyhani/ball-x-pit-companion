@@ -30,6 +30,8 @@ a = Analysis(
     hiddenimports=hiddenimports,
     excludes=["tkinter", "PyQt6", "PyQt5", "pytest"],
     noarchive=False,
+    # LGPL 파이썬 패키지는 압축 아카이브가 아니라 .py 파일 그대로 넣어 사용자가 바꿔 끼울 수 있게
+    module_collection_mode={"pynput": "py"},
 )
 # 쓰지 않는 큰 파일 빼기: 소프트웨어 OpenGL(20MB), Qt 번역, Pillow AVIF 모듈
 _DROP = ("opengl32sw.dll", "_avif.", "translations")
