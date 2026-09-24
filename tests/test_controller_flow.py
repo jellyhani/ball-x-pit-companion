@@ -33,6 +33,7 @@ class ControllerFlowTest(unittest.TestCase):
         self.c.bridge.last_at = time.monotonic()
 
     def tearDown(self):
+        self.c.shutdown()          # 입력 감시·연동·계산 스레드를 멈춘다 (살아 있으면 종료 때 파이썬이 충돌)
         self.c.hud.close()
         self.c.highlight.close()
         self.c.control.close()
