@@ -17,7 +17,13 @@
   기지를 다시 놓는 최적 배치와 옮기는 순서, 재배치 모드에서 게임 위 번호 안내. 공략 프리셋 '금광 U자'.
 - **더 지을 것**: 설계도 건물·농장·채석장·자원 타일·금광의 추천 자리와 늘어나는 효과, 스파 재채집 손익.
 
-## 설치
+## 설치 (exe, 파이썬 필요 없음)
+
+1. [Releases](../../releases) 에서 `BallxPitCompanion-*.zip` 을 받아 원하는 폴더에 풉니다.
+2. `BallxPitCompanion.exe` 를 실행합니다. 처음 한 번 **내 PC의 게임 파일에서** 게임 문구·아이콘을 추출합니다(10초 안팎).
+3. 게임이 꺼져 있을 때 연동 모드(BepInEx + 연동 플러그인)를 자동으로 설치합니다. 게임이 켜져 있으면 게임 종료를 기다렸다 설치합니다.
+
+## 설치 (소스에서)
 
 필요한 것: Windows 10/11, [uv](https://docs.astral.sh/uv/) (`winget install --id=astral-sh.uv -e`), Steam 판 BALL x PIT.
 
@@ -38,12 +44,26 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 연동 모드 끄기·지우기: `tools\bepinex\bridge.ps1 disable` / `uninstall` (이 도구가 추가한 파일만 지움).
 
+## 개인정보·보안
+
+- 인터넷 접속은 연동 모드 설치 때 BepInEx 공식 빌드 서버에서 받는 것뿐입니다(SHA-256 확인). 그 밖에 아무것도 보내지 않습니다.
+- 전역 입력 감시: 단축키(F7~F10)와 **왼쪽 클릭의 좌표·시각**만 봅니다(선택 결과 판별용, 메모리에 최근 32개). 글자 키는 보지 않고 아무것도 파일로 남기지 않습니다.
+- 로그·기록은 `%LOCALAPPDATA%\BallxPitCompanion` 에만 저장합니다. 게임 화면 저장은 설정 창에서 누를 때만 합니다.
+- Windows 시작 시 실행은 설정 창에서 켤 때만 레지스트리(현재 사용자 Run)에 등록합니다.
+
 ## 동작 방식
 
 - 연동 플러그인은 게임 메인 스레드에서 0.1~0.2초마다 값을 읽어 named pipe 로 보냅니다. Harmony 패치를 쓰지 않고
   게임 값을 바꾸지 않습니다. 게임 쪽 읽기 비용은 설정 창 진단 탭에 표시됩니다(보통 1ms 미만).
 - 궤적·배치 계산은 별도 프로세스에서 돌아 화면이 끊기지 않습니다.
 - 연동 없이도 화면 인식(Windows OCR + 아이콘 비교)으로 강화 선택창 추천은 동작합니다.
+
+## exe 빌드
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build_exe.ps1
+```
+PyInstaller onedir 빌드(Qt 라이브러리는 LGPL 조건대로 별도 파일), 테스트 통과 후에만 빌드, `dist\` 에 exe 와 zip.
 
 ## 개발
 

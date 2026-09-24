@@ -13,6 +13,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 
 
 def command() -> str:
+    if getattr(sys, "frozen", False):                # exe 로 실행 중이면 exe 자체를 등록
+        return f'"{sys.executable}" --tray'
     exe = os.path.join(ROOT, ".venv", "Scripts", "pythonw.exe")
     if not os.path.exists(exe):
         exe = sys.executable.replace("python.exe", "pythonw.exe")

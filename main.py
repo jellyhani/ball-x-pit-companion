@@ -54,9 +54,32 @@ def ensure_mod() -> int:
         return 1
 
 
+def first_run_setup(app) -> bool:
+    """게임 자료가 없으면(첫 실행·게임 업데이트 뒤 삭제 등) 사용자의 게임 파일에서 추출한다. 실패하면 안내 후 False."""
+    from src import gamedata as gd
+    if gd.has_game_text():
+        return True
+    from PySide6.QtWidgets import QLabel, QMessageBox
+    splash = QLabel("BALL x PIT 도우미: 게임 파일에서 자료를 준비하는 중… (처음 한 번, 10초 안팎)")
+    splash.setStyleSheet("padding: 18px; font-size: 14px;")
+    splash.show()
+    app.processEvents()
+    from tools.setup_data import extract
+    ok, msg = extract(say=lambda m: None)
+    splash.close()
+    if not ok:
+        QMessageBox.warning(None, "BALL x PIT 도우미", "게임 자료를 준비하지 못했습니다.\n" + msg)
+    return ok
+
+
 def main() -> int:
     if "--ensure-mod" in sys.argv:
         return ensure_mod()
+    if "--setup-data" in sys.argv:
+        from tools.setup_data import extract
+        ok, msg = extract()
+        print(msg)
+        return 0 if ok else 1
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
     app.setApplicationName("BALL x PIT 도우미")
@@ -71,6 +94,8 @@ def main() -> int:
     if send_command("show"):
         return 0   # 이미 실행 중: 기존 인스턴스가 창을 연다
 
+    if not first_run_setup(app):
+        return 1
     log_path = setup_logging()
     log = logging.getLogger("main")
     install_crash_logging(log, log_path)
@@ -102,4 +127,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()     # exe: 계산 프로세스(ProcessPoolExecutor)가 앱을 다시 켜지 않게
     sys.exit(main())

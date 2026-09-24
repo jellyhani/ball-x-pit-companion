@@ -20,3 +20,7 @@ data/icon_manifest.json
 data/*_db.json
 vendor/bepinex/*.zip
 tests/fixtures/*.png
+
+# exe 빌드 결과물 (GitHub Releases 로 배포)
+build/
+dist/

@@ -18,13 +18,18 @@ REPO_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__f
 USER_DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion", "gamedata")
 
 
-def data_dir() -> str:
+def resolve_data_dir() -> str:
     if os.path.exists(os.path.join(USER_DATA_DIR, "game_text_ko.json")):
         return USER_DATA_DIR
     return REPO_DATA_DIR
 
 
-DATA_DIR = data_dir()
+data_dir = resolve_data_dir      # 예전 이름
+DATA_DIR = resolve_data_dir()
+
+
+def has_game_text() -> bool:
+    return os.path.exists(os.path.join(resolve_data_dir(), "game_text_ko.json"))
 # 선택 자료: 위키 표 (볼 상태 이상·피해 종류, 위키 레시피). 없으면 게임 연동 값으로 대신한다.
 OPTIONAL_JSON = ("balls_db.json", "passives_db.json", "characters_db.json")
 # 게임 한국어 설명의 표현 → 상태 이상 (위키 태그가 없을 때). 위키 태그와 90개 볼 중 67개 계열 일치 — 나머지는
@@ -238,7 +243,8 @@ def _read_json(name: str, data_dir: str):
         return json.load(f)
 
 
-def load_game_data(data_dir: str = DATA_DIR) -> GameData:
+def load_game_data(data_dir: Optional[str] = None) -> GameData:
+    data_dir = data_dir or resolve_data_dir()     # 첫 실행 때 추출한 뒤에도 새 폴더를 보도록 호출 때 정한다
     text = _read_json("game_text_ko.json", data_dir)
     wiki_rows = {r["name"]: r for r in _read_json("balls_db.json", data_dir) + _read_json("passives_db.json", data_dir)}
 
@@ -294,7 +300,7 @@ def _finish(data: "GameData"):
         if tags or aoe:
             data.derived_tags[it.id] = (tags, aoe)
     # 테스트는 BXP_CATALOG_FILE 로 고정 자료(tests/fixtures/game_recipes.json)를 쓴다 — PC 마다 결과가 같게
-    path = os.environ.get("BXP_CATALOG_FILE") or os.path.join(DATA_DIR, CATALOG_FILE)
+    path = os.environ.get("BXP_CATALOG_FILE") or os.path.join(resolve_data_dir(), CATALOG_FILE)
     if os.path.exists(path):
         try:
             with open(path, encoding="utf-8") as f:
