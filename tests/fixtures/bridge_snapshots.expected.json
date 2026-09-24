@@ -190,7 +190,7 @@
  },
  {
   "seq": 4606,
-  "status": "close",
+  "status": "recommend",
   "best": "ball:light",
   "cards": [
    [
@@ -199,11 +199,11 @@
    ],
    [
     "passive:deadeyesamulet",
-    "alt"
+    "skip"
    ],
    [
     "passive:corpseexplosion",
-    "alt"
+    "skip"
    ]
   ],
   "banish": null,
@@ -526,12 +526,12 @@
  },
  {
   "seq": 5338,
-  "status": "close",
+  "status": "recommend",
   "best": "ball:wind",
   "cards": [
    [
     "passive:magicstaff",
-    "alt"
+    "skip"
    ],
    [
     "ball:ghost",
@@ -564,7 +564,7 @@
  },
  {
   "seq": 5489,
-  "status": "close",
+  "status": "recommend",
   "best": "ball:sandstorm",
   "cards": [
    [
@@ -573,7 +573,7 @@
    ],
    [
     "passive:magicstaff",
-    "alt"
+    "skip"
    ],
    [
     "ball:freeze",

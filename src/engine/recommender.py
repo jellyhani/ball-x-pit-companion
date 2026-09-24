@@ -172,6 +172,7 @@ class Recommender:
         self.data = data
         self.meta: Optional[MetaState] = None     # 게임 연동 meta (내 누적 기록)
         self.draw_weights: Optional[dict] = None  # 뽑기 관측으로 추정한 종류별 가중치 (없으면 균등 가정)
+        self.history: List = []                   # 내 런 기록 (RunRecord) — 캐릭터별 항목 성적
 
     # ---- 공개 ----
     def recommend(self, session: ChoiceSession, run: RunState) -> Recommendation:
@@ -186,6 +187,13 @@ class Recommender:
         auto = [c for c in run.character_ids if d.character_rule(c).get("auto_selects_upgrades")]
         plan = build_plan(run, d, progress)
         self._arch = detect_archetype(run, d)
+        if not self._arch.top:
+            for cid in run.character_ids:           # 초반: 볼이 적으면 캐릭터 궁합 계열을 기본 방향으로
+                fav = d.character_rule(cid).get("strategy", {}).get("favor", {})
+                seed = [a for a in ("aoe", "baby", "sustain") if fav.get(a, 0) >= 3]
+                if seed:
+                    self._arch.top = seed[:1]
+                    break
         evals = [self._evaluate(card, run, progress, plan) for card in session.cards]
         situation = situation_text(progress)
         if auto:
@@ -269,6 +277,8 @@ class Recommender:
         self._recipes(ev, item.id, kind, after, run)
         self._game_hints(ev, card, run)
         self._character(ev, item, kind, upgrade, run)
+        self._char_strategy(ev, item, kind, upgrade, run)
+        self._char_history(ev, item.id, run)
         self._support(ev, item.id, run, progress)
         self._progress(ev, kind, upgrade, progress)
         if plan is not None:
@@ -417,6 +427,72 @@ class Recommender:
             if rule.get("boosts_wiki_on_hit_status") and kind == "ball" and st_:
                 ev.reasons.append(Reason("char_fast_fire", f"{cname}: 발사 속도 두 배로 타격 효과가 자주 발동", 5,
                                          "발사 속도 연계"))
+
+    STATUS_AXES = ("burn", "freeze", "bleed", "poison", "curse")
+
+    def _item_keys(self, item_id: str, kind: str, upgrade: bool, ev: ActionEval) -> List[str]:
+        """캐릭터 궁합에 쓰는 항목 성격: status·aoe·direct·baby·sustain / crit·speed·defense·… / new_ball·upgrade_ball·passive."""
+        keys: List[str] = []
+        if kind == "ball":
+            axes = axes_of(self.data, item_id)
+            if any(a in self.STATUS_AXES for a in axes):
+                keys.append("status")
+            keys += [a for a in axes if a in ("aoe", "baby", "sustain")]
+            if not axes:
+                keys.append("direct")
+            keys.append("upgrade_ball" if upgrade else "new_ball")
+        elif kind == "passive":
+            props = self.data.level_props.get(item_id) or []
+            pe = passive_effect(props, ev.level_before if upgrade else None, ev.level_after)
+            if pe is not None:
+                keys.append({"power": "power", "aoe": "aoe", "defense": "defense", "baby": "baby",
+                             "speed": "speed"}.get(pe.role, pe.role))
+            if any("CritChance" in k for row in props for k in row):
+                keys.append("crit")
+            keys.append("passive")
+        return keys
+
+    def _char_strategy(self, ev: ActionEval, item, kind: str, upgrade: bool, run: RunState):
+        """캐릭터 궁합 (공식 설명에서 끌어낸 프로필, data/rules.json characters.*.strategy)."""
+        if kind not in ("ball", "passive"):
+            return
+        keys = self._item_keys(item.id, kind, upgrade, ev)
+        for cid in run.character_ids:
+            st = self.data.character_rule(cid).get("strategy")
+            if not st:
+                continue
+            fav = st.get("favor", {})
+            hits = [(fav[k], k) for k in keys if k in fav]
+            if not hits:
+                continue
+            best = max(hits)
+            worst = min(hits)
+            cname = self.data.name(cid)
+            if best[0] > 0:
+                ev.reasons.append(Reason("char_fit", f"{cname} 궁합: {st.get('why', '')}", float(best[0]), "캐릭터 궁합"))
+            if worst[0] < 0:
+                ev.warnings.append(Reason("char_misfit", f"{cname}: {st.get('why', '')}", float(worst[0]), "캐릭터와 덜 맞음"))
+
+    def _char_history(self, ev: ActionEval, item_id: str, run: RunState):
+        """내 기록: 이 캐릭터로 이 항목을 가진 런의 보스 격퇴율 (3번 이상일 때만, 캐릭터 평균과 비교)."""
+        if not self.history or not run.character_ids:
+            return
+        cid = run.character_ids[0]
+        runs = [h for h in self.history if getattr(h, "char", None) == cid and getattr(h, "result", "") != "중단"]
+        if len(runs) < 4:
+            return
+        have = [h for h in runs if item_id in {i for i, _ in (getattr(h, "balls", []) or [])}
+                | {i for i, _ in (getattr(h, "passives", []) or [])}]
+        if len(have) < 3:
+            return
+        rate = sum(h.result == "보스 격퇴" for h in have) / len(have)
+        base = sum(h.result == "보스 격퇴" for h in runs) / len(runs)
+        cname = self.data.name(cid)
+        text = f"내 기록({cname}): 이 항목을 가진 런 보스 격퇴 {round(rate * 100)}% ({len(have)}번, 이 캐릭터 평균 {round(base * 100)}%)"
+        if rate >= base + 0.2:
+            ev.reasons.append(Reason("char_record_good", text, 4, "이 캐릭터 기록 좋음"))
+        elif rate <= base - 0.2:
+            ev.warnings.append(Reason("char_record_bad", text, -3, "이 캐릭터 기록 나쁨"))
 
     def _support(self, ev: ActionEval, item_id: str, run: RunState, progress: Optional[RunProgress]):
         d = self.data

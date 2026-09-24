@@ -144,6 +144,7 @@ class AppController(QObject):
         self.snapshots = SnapshotLog(os.path.join(APP_DIR, "snapshots"))
         self._last_levelup_snap: Optional[dict] = None
         self.control.set_history(self.recorder.load())
+        self.recommender.history = self.recorder.load()      # 캐릭터별 항목 성적 (내 기록)
         self.control.set_draw_summary(self.draws.summary())
         self.mod_guard = ModGuard(self.settings, self.data.game_build_id, lambda: self.bridge.connected)
         self.mod_guard.status.connect(self.control.set_mod_status)
@@ -436,6 +437,7 @@ class AppController(QObject):
         if rec is not None:
             log.info("런 기록 저장: %s, %s턴, 선택 %d번", rec.result, rec.turn, len(rec.picks))
             self.control.set_history(self.recorder.load())
+            self.recommender.history = self.recorder.load()
 
     def _update_expedition(self, st: BridgeState):
         """보스를 깬 뒤 런 종료 화면에 '원정 계속' 버튼이 있으면 계속/복귀를 판단해 보여 준다."""
