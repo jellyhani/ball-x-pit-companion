@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (QComboBox, QCompleter, QHBoxLayout, QLabel, QLine
 from ..engine.base_advisor import CAT_LABEL, suggest as suggest_base
 from ..engine.planning import blueprint_targets, plan_levels
 from ..engine.harvest import advise_workers
-from ..engine.roadmap import build_roadmap, fusion_pairs
+from ..engine.roadmap import browsable_targets, build_roadmap, fusion_pairs
 from ..gamedata import DATA_DIR, GameData
 from ..services.settings import APP_DIR, Settings
 from ..tracking.meta_state import RESOURCES, MetaState
@@ -401,6 +401,30 @@ class ControlWindow(QWidget):
     # ---- 진화 ----
     def _build_evo_page(self) -> QWidget:
         pg = _Page("진화")
+        pg.add(section_title("덱 목표 (직접 고정)"))
+        self.target_group = pg.add(Group())
+        target_add_group = pg.add(Group())
+        box = QWidget()
+        box.setObjectName("row")
+        h = QHBoxLayout(box)
+        h.setContentsMargins(14, 8, 14, 8)
+        self.target_combo = QComboBox()
+        self.target_combo.setEditable(True)
+        self.target_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        for r in browsable_targets(self.data):
+            self.target_combo.addItem(self.data.name(r.result), r.result)
+        comp = self.target_combo.completer()
+        comp.setFilterMode(Qt.MatchFlag.MatchContains)
+        comp.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self.target_combo.setCurrentIndex(-1)
+        self.target_combo.lineEdit().setPlaceholderText("목표로 삼을 진화 찾기")
+        h.addWidget(self.target_combo, 1)
+        lock_btn = QPushButton("고정")
+        lock_btn.clicked.connect(self._lock_target)
+        h.addWidget(lock_btn)
+        target_add_group.add(box)
+        pg.add(_caption("고정하면 재료가 하나도 없어도 이 진화를 목표로 보고 추천이 거기 맞춰집니다. "
+                       "새 런을 시작하면 자동으로 풀립니다."))
         pg.add(section_title("보유 볼로 만들 수 있는 진화"))
         self.evo_group = pg.add(Group())
         self.evo_caption = pg.add(_caption(""))
@@ -440,8 +464,29 @@ class ControlWindow(QWidget):
         if not shown:
             self.all_recipes_group.add(row("찾는 레시피 없음"))
 
+    def _lock_target(self):
+        item_id = self.target_combo.currentData()
+        if not item_id or self.target_combo.currentText() != self.target_combo.itemText(self.target_combo.currentIndex()):
+            return
+        self.run.lock_target(item_id, self.data)
+        self.target_combo.setCurrentIndex(-1)
+        self._edited()
+
+    def _clear_target(self):
+        self.run.clear_target(self.data)
+        self._edited()
+
     def _refresh_evo(self):
         d, run = self.data, self.run
+        self.target_group.clear()
+        if run.locked_target:
+            btn = QPushButton("해제")
+            btn.setObjectName("mini")
+            btn.clicked.connect(self._clear_target)
+            self.target_group.add(row(d.name(run.locked_target), btn, "고정된 덱 목표 — 추천이 이쪽으로 맞춰집니다",
+                                      _icon_label(run.locked_target, 34)))
+        else:
+            self.target_group.add(row("고정한 목표 없음", None, "지금은 보유 볼로 자동 감지합니다"))
         self.evo_group.clear()
         entries = build_roadmap(run, d)[:10]
         if not entries:
