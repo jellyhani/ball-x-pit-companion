@@ -795,6 +795,13 @@ class AppController(QObject):
         """기지 화면 위 안내 (재배치 번호 또는 채집 조준). 계산은 하지 않고, 계산 프로세스 결과만 그린다."""
         visible_ok = (self.window is not None and self._game_active() and self.settings.hud_auto_show
                       and not self.user_hidden)
+        g0 = (base or {}).get("geo") or {}
+        hm0 = self._homography(g0.get("proj")) if g0.get("proj") else None
+        if hm0 is not None and all(k in g0 for k in ("left", "right", "top", "bottom")):
+            from .engine import harvest_sim as hs
+            self.base_overlay.set_land([hs.to_screen(hm0, x, y) for x, y in
+                                        ((g0["left"], g0["bottom"]), (g0["right"], g0["bottom"]),
+                                         (g0["right"], g0["top"]), (g0["left"], g0["top"]))])
         if base and state == "kRearrangeBuildings" and self.layout_plan and                 (self.layout_plan.swaps or getattr(self.layout_plan, "final", None)) and visible_ok:
             # 재배치 중: 다음에 옮길·맞바꿀 건물을 게임 화면에 번호로 표시
             from .engine import harvest_sim as hs
@@ -1133,9 +1140,16 @@ class AppController(QObject):
             if s.panel_rect:
                 panel = geo.phys_to_logical_rect(s.frame.to_screen(s.panel_rect))
         elif self.fusion_rec is not None and getattr(self, "_fusion_panel", None):
-            panel = geo.phys_to_logical_rect(self._fusion_panel)
-        p = geo.place_hud(game, cards, hud.width(), hud.height(),
-                          offset=(self.settings.hud_offset_x, self.settings.hud_offset_y), panel=panel)
+            fp = geo.phys_to_logical_rect(self._fusion_panel)
+            if game.contains(fp):                 # 밀려 들어오는 도중 값(화면 밖)은 쓰지 않는다
+                panel = fp
+        spot = geo.levelup_hud_spot(game, [c for c in cards if c.width() > 0], hud.width(), hud.height())             if s is not None else None
+        if spot is not None:
+            # 강화 선택창: 캐릭터 초상화 자리 (패널 위치는 밀려 들어오는 도중 값이라 쓰지 않는다 — 실제 기록 x −1680~2160)
+            p = QPoint(spot.x() + self.settings.hud_offset_x, spot.y() + self.settings.hud_offset_y)
+        else:
+            p = geo.place_hud(game, cards, hud.width(), hud.height(),
+                              offset=(self.settings.hud_offset_x, self.settings.hud_offset_y), panel=panel)
         hud.move(geo.clamp_to_screen(p, hud.width(), hud.height()))
 
     def _on_hud_moved(self, pos: QPoint):

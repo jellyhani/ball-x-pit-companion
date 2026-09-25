@@ -84,6 +84,13 @@ class BaseOverlay(QWidget):
             self._box_pts = pts
             self._changed()
 
+    def set_land(self, pts):
+        """기지 땅 네 모서리 (게임 화면 물리 좌표). 안내 글상자를 땅·건물 위에 놓지 않으려고 쓴다."""
+        pts = [tuple(p) for p in pts or []]
+        if pts != getattr(self, "_land", []):
+            self._land = pts
+            self._changed()
+
     def set_build_marks(self, pts):
         pts = [(float(x), float(y)) for x, y in pts]
         if pts != self._build:
@@ -112,9 +119,34 @@ class BaseOverlay(QWidget):
 
     # ---- 그리기 ----
     def _box_rect(self) -> QRectF:
-        w = min(BOX_W_MAX, max((self._fm.horizontalAdvance(t) for t, _ in self._lines), default=0) + 28)
+        """안내 글상자: 네 모서리 후보 중 기지 땅·표시(목표 번호·공사 표시)를 가장 덜 가리는 곳.
+        (땅이 넓어지면 왼쪽 아래 고정 자리가 건물 이름·번호를 가렸다.) 궤적 선은 계속 움직여서 기준에서 뺀다."""
+        w = max(300, min(BOX_W_MAX, max((self._fm.horizontalAdvance(t) for t, _ in self._lines), default=0) + 28))
         h = 16 + LINE_H * len(self._lines)
-        return QRectF(24, self.height() - h - 150, max(w, 300), h)
+        W, H = self.width(), self.height()
+        cands = [QRectF(24, H - h - 150, w, h), QRectF(W - w - 24, H - h - 150, w, h),
+                 QRectF(24, 96, w, h), QRectF(W - w - 24, 96, w, h)]
+        k = self._scale
+        land = getattr(self, "_land", [])
+        land_r = QRectF()
+        if len(land) >= 3:
+            xs, ys = [x * k for x, _ in land], [y * k for _, y in land]
+            land_r = QRectF(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
+        marks = [QRectF(x * k - 26, y * k - 26, 52, 52) for x, y in list(self._targets) + list(self._build)]
+        marks += [QRectF(x * k - 30, y * k - 30, 60, 60) for m in self._swap_marks for x, y in (m[:2], m[2:4])]
+
+        def cost(r: QRectF) -> float:
+            a = r.intersected(land_r) if not land_r.isNull() else QRectF()
+            c = a.width() * a.height() if not a.isEmpty() else 0.0
+            for m in marks:
+                i = r.intersected(m)
+                if not i.isEmpty():
+                    c += 20 * i.width() * i.height()     # 번호·표시를 가리는 건 훨씬 나쁘다
+            return c
+
+        # 위쪽 모서리는 게임 상단 표시(자원 등)와 겹칠 수 있어 조금 불리하게, 같으면 왼쪽 아래(예전 자리) 우선
+        best = min(range(len(cands)), key=lambda i: (cost(cands[i]) + (0.3 * w * h if i >= 2 else 0.0), i))
+        return cands[best]
 
     def _content_rect(self) -> QRect:
         k = self._scale

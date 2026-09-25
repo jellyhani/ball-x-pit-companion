@@ -35,6 +35,30 @@ def phys_to_logical_rect(rect: Rect) -> QRect:
     return QRect(tl, br)
 
 
+# 강화 선택창 (1920×1080 기준, 실제 화면): 첫 카드 (30, 570, 270×360), 캐릭터 초상화 틀 (20, 115, 370×370).
+# 초상화는 장식이라 가려도 잃는 정보가 없다 — 볼 슬롯(455~)·카드·삭제 버튼·오른쪽 설명 패널은 모두 글자·정보.
+CARD_REF_W = 270
+PORTRAIT_FROM_CARD = (-10, -455, 370, 370)      # 첫 카드 왼쪽 위 기준 초상화 틀 (x, y, w, h)
+TITLE_GAP = 40                                  # 카드 위 '강화 선택' 제목·순위 배지 자리
+
+
+def levelup_hud_spot(game: QRect, cards: Sequence[QRect], hud_w: int, hud_h: int, margin: int = 8) -> Optional[QPoint]:
+    """강화 선택창: HUD 를 캐릭터 초상화 자리에 (카드 위치로 계산). 카드 배치가 예상과 다르면 None."""
+    if not cards:
+        return None
+    first = min(cards, key=lambda c: c.left())
+    if first.width() <= 0 or first.left() - game.left() > game.width() * 0.3:
+        return None                                # 카드가 왼쪽에 있는 배치가 아님 (다른 해상도·UI) → 기본 규칙
+    s = first.width() / CARD_REF_W
+    dx, dy, w, h = PORTRAIT_FROM_CARD
+    left = first.left() + round(dx * s)
+    top = first.top() + round(dy * s)
+    bottom = first.top() - round(TITLE_GAP * s)    # 제목·배지 위까지
+    if top + hud_h > bottom:                       # HUD 가 길면 위쪽 여백(백과사전 표시 쪽)으로 올린다
+        top = max(game.top() + margin, bottom - hud_h)
+    return QPoint(max(game.left() + margin, left), top)
+
+
 def place_hud(game: QRect, cards: Sequence[QRect], hud_w: int, hud_h: int, margin: int = 12,
               offset: Tuple[int, int] = (0, 0), panel: Optional[QRect] = None) -> QPoint:
     """게임의 강화 패널·카드를 가리지 않는 자리를 고른다.
