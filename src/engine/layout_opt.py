@@ -293,6 +293,10 @@ def in_range(dx: float, dy: float, r: float, r2: Optional[float] = None) -> bool
 BOUNCE_TYPES = {"kGoldMine", "kBrickHouse", "kMonastery", "kHauntedHouse"}
 LANE_R = 7.0             # 발사대에서 이 거리(타일)까지를 앞 구역으로 — 가까울수록 크게
 LANE_W = 0.3             # 앞 구역 한 칸(가장 가까울 때) 벌점. 2×2 건물을 발사대 바로 앞에 두면 약 1 (능력치 건물 하나를 대위 막사 범위에 넣는 값)
+LANE_TILE_W = 0.2        # 앞 구역 자원 타일 가산 (공을 던져 캐는 몫 — 커뮤니티: 자원 타일은 발사대 바로 앞에). 실제 기지 3곳 비교:
+                         # 0 → 채집 계산 64.0·범위 효과 60.4, 0.2 → 74.0·59.3, 0.4 → 75.7·58.3
+HARVEST_DAMP = 10        # 채집 발사 계산 비교 때 더하는 값 — 13 → 14 같은 작은 차이(계산 오차 수준)로 배치를 바꾸지 않게
+SELECT_MOVE_COST = 0.002 # 후보 비교 때 옮기는 건물 하나당 (25개 = 5%p) — 거의 같은 효과에 많이 옮기는 배치를 막음
 
 
 def lane_values(geo: dict, grid: Grid) -> Dict[Tuple[int, int], float]:
@@ -343,6 +347,7 @@ class Scorer:
         self.pieces = pieces
         self.lane = lane or {}
         self.lane_ids = [i for i, p in pieces.items() if lane_idle(p)] if self.lane else []
+        self.lane_tiles = [i for i, p in pieces.items() if p.type in TILE_RES] if self.lane else []
         self.preset_spots = set(preset_spots)
         self.preset_type = preset_type
         self.preset_cells = {s: {(s[0] + dx, s[1] + dy) for dx in range(2) for dy in range(2)} for s in self.preset_spots}
@@ -404,6 +409,11 @@ class Scorer:
             blocked = sum(self.lane.get(c, 0.0) for i in self.lane_ids if i in lay.origin for c in lay.cells(i))
             total -= LANE_W * blocked
             detail["lane"] = round(blocked, 2)
+            # 생산 건물·거처가 이미 캐는 타일은 빼고 (같은 타일 자원을 나눠 쓰므로 둘 다 더하면 이중 계산)
+            front = sum(self.lane.get(c, 0.0) * self.res_weight.get(TILE_RES[self.pieces[i].type], 1.0) * self.pieces[i].cap
+                        for i in self.lane_tiles if i in lay.origin and i not in harvest for c in lay.cells(i))
+            total += LANE_TILE_W * front
+            detail["lane_tiles"] = round(front, 2)
         if self.preset_spots:
             filled = {lay.origin[i] for i, p in self.pieces.items() if p.type == self.preset_type and i in lay.origin
                       and lay.origin[i] in self.preset_spots}
@@ -644,12 +654,12 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     if not pieces:
         return None
     preset_spots = gold_u_spots(geo, grid) if preset == "gold_u" else []
-    scorer = Scorer(pieces, stat_types, housing, res_weight, pad, preset_spots)
-    plain = Scorer(pieces, stat_types, housing, res_weight, pad)        # 보고용 (프리셋 가산 없는 범위 효과)
-    # 발사대 앞을 비우는 후보도 만든다 — 앞 구역 벌점을 넣은 담금질과 안 넣은 담금질을 번갈아 돌리고,
-    # 후보 비교는 둘 다 같은 기준(범위 효과 + 채집 발사 계산)으로 한다. 앞을 비워 채집이 늘면 그 후보가 뽑힌다.
     lane = lane_values(geo, grid)
-    laned = Scorer(pieces, stat_types, housing, res_weight, pad, preset_spots, lane=lane) if lane else scorer
+    scorer = Scorer(pieces, stat_types, housing, res_weight, pad, preset_spots, lane=lane)
+    plain = Scorer(pieces, stat_types, housing, res_weight, pad)        # 보고용 (프리셋 가산 없는 범위 효과)
+    # 발사대 앞 구역(자원 타일은 앞에, 치여도 얻는 게 없는 건물은 뒤로)은 담금질과 후보 비교 모두에 넣는다.
+    # 실제 기지 3곳에서 앞 구역을 넣은 쪽이 채집 발사 계산·범위 효과 모두 좋았다 (53.2 → 56.2, 49.8 → 52.1).
+    laned = scorer
     if preset == "gold_u":
         prefer = None                                                  # 사용자가 고른 틀이므로 이전 목표를 고집하지 않음
     lay0 = Layout(grid, pieces, origin0)
@@ -657,7 +667,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     rng = random.Random(seed)
     cands = [(dict(origin0), e0)]
     for k in range(restarts):
-        sc = laned if k % 2 == 1 else scorer
+        sc = scorer
         lay = Layout(grid, pieces, origin0)
         o, _ = anneal(lay, sc, seconds * 0.7 / max(1, restarts), rng, origin0=origin0)
         lay = Layout(grid, pieces, o)
@@ -713,13 +723,13 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         if reach_ok is not None and not current and not reach_ok(nb):
             continue                                    # 미완성 건물로 가는 길을 막는 배치는 뺀다
         rel_e = s / e0 if e0 > 0 else (1.0 + s)
-        rel_h = (wsum(hv) / wsum(h0)) if hv and h0 and wsum(h0) > 0 else 1.0
+        rel_h = ((wsum(hv) + HARVEST_DAMP) / (wsum(h0) + HARVEST_DAMP)) if hv and h0 else 1.0
         halved = bool(hv and h0 and not current and any(h0[r] > 0 and hv[r] < 0.5 * h0[r] for r in (1, 2, 3)))
         if not current and (alt is None or rel_e > alt[0]):
             alt = (rel_e, rel_h)
         if halved:
             continue                                    # 채집 발사로 얻던 자원 하나가 절반 아래로 줄면 뺀다
-        total = rel_e + rel_h
+        total = rel_e + rel_h - SELECT_MOVE_COST * sum(1 for i in orig if orig[i] != origin0.get(i))
         totals[id(orig)] = (total, orig, s, hv)
         if best is None or total > best[0]:
             best = (total, orig, s, hv)
@@ -751,13 +761,20 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         def front(o):
             L = Layout(grid, pieces, o)
             return sum(lane.get(c, 0.0) for i in laned.lane_ids if i in o for c in L.cells(i))
+
+        def tiles(o):
+            L = Layout(grid, pieces, o)
+            return sum(1 for i in laned.lane_tiles if i in o and any(lane.get(c, 0.0) > 0 for c in L.cells(i)))
         f0, f1 = front(origin0), front(orig)
         if f0 - f1 >= 1.0:
             notes.append(f"능력치·거처처럼 치여도 얻는 게 없는 건물을 발사대 앞에서 뒤·구석으로 "
                          f"(앞 구역 막음 {f0:.1f} → {f1:.1f})")
-    s = plain.score(lay)[0] if preset == "gold_u" else s
-    e0 = plain.score(Layout(grid, pieces, origin0))[0] if preset == "gold_u" else e0
-    _, d1 = plain.score(lay)
+        t0, t1 = tiles(origin0), tiles(orig)
+        if t1 - t0 >= 2:
+            notes.append(f"자원 타일을 발사대 앞으로 (앞 구역 자원 타일 {t0} → {t1}개 — 공을 던져 캐는 몫)")
+    # 보고는 범위 효과만 (앞 구역 점수는 배치를 고를 때만 쓴다)
+    e0, d0 = plain.score(Layout(grid, pieces, origin0))
+    s, d1 = plain.score(lay)
     moved = sum(1 for i in orig if orig[i] != origin0[i])
     return FullPlan(origin0, orig, {i: lay.center(i) for i in orig}, e0, s, d0, d1, h0, hv, moved, notes)
 

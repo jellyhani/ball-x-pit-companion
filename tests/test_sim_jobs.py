@@ -82,6 +82,13 @@ class RankTest(unittest.TestCase):
         self.assertTrue(all(v > 0 for v in sw2["reach"].values()), sw2["reach"])
         self.assertTrue(plan.swaps)
 
+    def test_layout_compares_with_full_tiles(self):
+        """오늘 이미 캐서 빈 타일(res 0)이어도 배치 비교는 가득 찬 타일로 — 아니면 모든 배치가 채집 0."""
+        out = sim_jobs.full_tiles({1: {"type": "kForest", "res": 0, "cap": 3, "can_harvest": False},
+                                   2: {"type": "kVilla", "res": 0}})
+        self.assertEqual((out[1]["res"], out[1]["can_harvest"]), (3, True))
+        self.assertEqual(out[2], {"type": "kVilla", "res": 0})
+
     def test_jobs_are_picklable_and_match_direct(self):
         fx = load()
         blds = {b["id"]: b for b in fx["buildings_before"]}

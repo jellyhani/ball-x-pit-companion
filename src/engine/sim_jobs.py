@@ -114,6 +114,13 @@ def gold_mine_spot(base: dict, blds: Dict[int, dict], team: Sequence[dict], dur:
     return ("kGoldMine", best[1], (w, h), float(best[0]), best[0], 0)
 
 
+def full_tiles(blds: Dict[int, dict]) -> Dict[int, dict]:
+    """자원 타일을 가득 찬 상태로 (배치는 오래 쓰는 것 — 오늘 이미 캐서 빈 타일로 비교하면 모든 배치가 0이 된다)."""
+    from .layout_opt import TILE_RES
+    return {i: (dict(b, res=int(b.get("cap") or b.get("res") or 1), can_harvest=True) if b.get("type") in TILE_RES else b)
+            for i, b in blds.items()}
+
+
 def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequence[dict],
                targets: Optional[Dict[int, int]] = None, need: int = 1, seconds: float = 12.0,
                prefer: Optional[Dict[int, tuple]] = None, char_levels: Optional[Dict[str, int]] = None):
@@ -124,7 +131,7 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
     import hashlib
     from . import layout_opt as lo
     from .layout import LayoutPlan, Move, buildings_from_base, grid_from_geo, plan_access, shape_masks, suggest_new
-    blds = {b["id"]: b for b in snap.get("buildings") or [] if "id" in b}
+    blds = full_tiles({b["id"]: b for b in snap.get("buildings") or [] if "id" in b})
     res_weight = {r: (1.5 if r == need else 1.0) for r in (1, 2, 3)}
 
     mines = [i for i, b in blds.items() if b.get("type") == "kGoldMine"]

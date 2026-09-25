@@ -94,7 +94,13 @@ class LayoutOptTest(unittest.TestCase):
         moved_base = lo.final_base(base, plan0)          # 건물 위치 + 충돌 모양을 함께 옮긴 기지
         worse = sc.score(lay)[1]["kIdleStoneMine"]
         self.assertLess(worse, before)
-        plan = lo.optimize(moved_base, None, None, seconds=3, restarts=2, seed=1)
+        # 채석장 둘레 채우기만 본다 — 발사대 앞 구역 점수는 채석장을 통째로 뒤로 빼는 배치를 고를 수 있어 끈다
+        keep = (lo.LANE_W, lo.LANE_TILE_W)
+        lo.LANE_W = lo.LANE_TILE_W = 0.0
+        try:
+            plan = lo.optimize(moved_base, None, None, seconds=3, restarts=2, seed=1)
+        finally:
+            lo.LANE_W, lo.LANE_TILE_W = keep
         self.assertGreaterEqual(plan.detail_after["kIdleStoneMine"], before)
 
     def test_suggest_buying_stones_for_empty_quarry_slots(self):
