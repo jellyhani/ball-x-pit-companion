@@ -77,6 +77,8 @@ class AppController(QObject):
         self.fusion_rec: Optional[FusionRecommendation] = None
         self.char_combo = None                    # 캐릭터 선택 화면의 조합 추천 (알선소가 있을 때)
         self._char_combo_key = None                # (state, char1, char2) — 바뀔 때만 다시 계산
+        self.base_advice = None                    # 기지에서 메뉴 없이 서 있을 때 뭘 지을지·철거할지
+        self._base_advice_key = None
 
         self.ocr_status = check_ocr()
         self.user_hidden = False
@@ -552,6 +554,43 @@ class AppController(QObject):
                  [(d.name(p_.a), d.name(p_.b), round(p_.score, 1)) for p_ in pairs])
         self.hud.render_view(v)
 
+    def _update_base_advice(self, base: Optional[dict], state: str):
+        """기지에서 딱히 메뉴 없이 서 있을 때(kNormal): 뭘 지을지·철거할지 HUD로 보여준다.
+        원래 F10 설정창에만 있던 추천이라 안 보인다는 지적을 받아 HUD 팝업으로 승격."""
+        want = state == "kNormal" and base is not None and self.meta is not None
+        if not want:
+            if self.base_advice is not None:
+                self.base_advice = None
+                self._base_advice_key = None
+                self.hud.hide()
+            return
+        todo = suggest_base(self.meta, self.data, limit=3)
+        demolish = list(getattr(self.layout_plan, "demolish", None) or [])[:2]
+        key = (tuple((sg.kind, sg.type) for sg in todo), tuple((t, s) for _, t, s in demolish))
+        if not todo and not demolish:
+            if self.base_advice is not None:
+                self.base_advice = None
+                self._base_advice_key = None
+            return
+        if key == self._base_advice_key:
+            return
+        self._base_advice_key = key
+        from .ui.hud import HudRow, HudView
+        d = self.data
+        verb = {"finish": "완성", "build": "짓기", "upgrade": "강화"}
+        items = [(f"{verb[sg.kind]}: {sg.name}", sg.status) for sg in todo]
+        items += [(f"철거 후보: {d.building_name(t)}", f"기여 {score:.1f}") for _i, t, score in demolish]
+        title, status = items[0]
+        v = HudView(title=title, subtitle="기지 조언", status=status,
+                    status_tone="warn" if "부족" in status else "accent")
+        if len(items) > 1:
+            v.section = "다른 항목"
+            v.rows = [HudRow((), t, s) for t, s in items[1:]]
+        v.footer = [("배치 효과·부족 자원 기준 — F10 설정창에서 더 자세히", "tertiary")]
+        self.base_advice = items
+        log.info("기지 조언: %s", items)
+        self.hud.render_view(v)
+
     def _update_fusion(self, obs: ScreenObservation):
         """융합 화면(진화·융합·무료 강화)이 열려 있으면 무엇과 무엇을 합칠지 추천한다."""
         if obs.kind != ScreenKind.FUSION:
@@ -764,6 +803,7 @@ class AppController(QObject):
             self._base_state = state
         self._base_snap = base
         self._update_char_combo(base, state)
+        self._update_base_advice(base, state)
         if base is not None:
             self._update_spa(base)
         if base and (base.get("geo") or {}).get("colliders") and self.meta is not None and not self._layout_busy                 and state != "kRearrangeBuildings":        # 옮기는 도중에는 다시 계산하지 않는다 (목표가 흔들리지 않게)
@@ -1147,7 +1187,8 @@ class AppController(QObject):
             want = False
         else:
             showing = ((self.tracker.session is not None and self.recommendation is not None)
-                       or self.fusion_rec is not None or self.expedition is not None or self.char_combo is not None)
+                       or self.fusion_rec is not None or self.expedition is not None or self.char_combo is not None
+                       or self.base_advice is not None)
             want = self._game_active() and (showing or hud.message_pending)
         if not want:
             if hud.isVisible():

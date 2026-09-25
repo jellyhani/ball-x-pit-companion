@@ -77,6 +77,19 @@ class ControllerFlowTest(unittest.TestCase):
         self.feed(after)
         self.assertTrue(any("선택: 냉동" in h for h in self.c.run.history), self.c.run.history)
 
+    def test_base_advice_shows_buildable_blueprint_as_hud(self):
+        """기지에서 메뉴 없이 서 있으면(kNormal) 지을 수 있는 설계도가 HUD 조언으로 뜬다 (원래 F10 창에만 있었음)."""
+        meta = {"resources": [500, 0, 0, 0], "buildings": [{"type": "kHome", "lvl": 0, "state": "kNormal"}],
+                "blueprints": [{"type": "kIdleFarm", "slug": "idlefarm", "cat": "kEconomy", "cost": [0, 0, 0, 0]}],
+                "chars": []}
+        self.feed({"meta": meta})
+        base = {"state": "kNormal", "buildings": [{"id": 1, "type": "kHome", "x": 0, "y": 0, "tw": 2, "th": 2}]}
+        self.c._update_base_advice(base, "kNormal")
+        self.assertIsNotNone(self.c.base_advice)
+        self.assertTrue(any("농장" in title for title, _ in self.c.base_advice), self.c.base_advice)
+        self.c._update_base_advice(None, "kNormal")           # 기지를 벗어나면 사라짐
+        self.assertIsNone(self.c.base_advice)
+
 
 class BaseAimFlowTest(unittest.TestCase):
     """기지 채집 조준: 계산은 별도 프로세스, 결과가 오면 안내를 다시 그린다. 미완성 건물이 먼저."""
