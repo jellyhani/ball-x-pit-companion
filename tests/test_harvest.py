@@ -48,5 +48,50 @@ class GoldBounceTipTest(unittest.TestCase):
         self.assertIsNotNone(gold_bounce_tip(base, [object()]))
 
 
+
+class _Names:
+    """advise_workers 가 쓰는 이름 함수만 (게임 문구 없이도 돌게)."""
+    def building_name(self, t):
+        return t
+
+    def name(self, cid):
+        return cid
+
+
+class WorkerAdviceTest(unittest.TestCase):
+    """건물 일꾼은 채집 때 발사되지 않는다 (실제 궤적: 13명 중 동시에 10~11명) → 발사 강화가 적은 캐릭터를 건물에."""
+
+    def test_empty_mine_gets_weakest_launcher(self):
+        from src.engine.harvest import advise_workers
+        chars = [{"type": "kStrong", "state": "kIdle", "harvest": {"kPierceStone": 1, "kFasterStone": 1}},
+                 {"type": "kWeak", "state": "kIdle"},
+                 {"type": "kMid", "state": "kIdle", "harvest": {"kFasterWheat": 1}}]
+        out = advise_workers(None, chars, ["kGoldMine", "kGoldMine"], _Names())
+        self.assertEqual([(a.building, a.char_id, a.action) for a in out],
+                         [("kGoldMine", "char:weak", "assign"), ("kGoldMine", "char:mid", "assign")])
+
+    def test_strong_harvester_in_building_is_swapped_out(self):
+        from src.engine.harvest import advise_workers
+        chars = [{"type": "kStrong", "state": "kWorking", "work": "kIdleStoneMine",
+                  "harvest": {"kPierceStone": 1, "kFasterStone": 1}},
+                 {"type": "kWeak", "state": "kIdle"}]
+        out = advise_workers(None, chars, ["kIdleStoneMine"], _Names())
+        self.assertEqual([(a.building, a.char_id, a.action, a.replace) for a in out],
+                         [("kIdleStoneMine", "char:weak", "swap", "char:strong")])
+
+    def test_building_upgrade_wins_the_slot(self):
+        from src.engine.harvest import advise_workers
+        chars = [{"type": "kWeak", "state": "kIdle"},
+                 {"type": "kFarmer", "state": "kIdle", "harvest": {"kFarmSpeed": 1, "kFasterWheat": 1}}]
+        out = advise_workers(None, chars, ["kIdleFarm"], _Names())
+        self.assertEqual([(a.building, a.char_id) for a in out], [("kIdleFarm", "char:farmer")])
+
+    def test_working_chars_are_not_launched(self):
+        from src.engine import harvest_sim as hs
+        team = hs.team_from_chars([{"type": "kA", "state": "kWorking", "work": "kGoldMine"},
+                                   {"type": "kB", "state": "kIdle"}])
+        self.assertEqual([m["type"] for m in team], ["kB"])
+
+
 if __name__ == "__main__":
     unittest.main()

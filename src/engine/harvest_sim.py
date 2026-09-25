@@ -406,8 +406,10 @@ LAUNCH_GAP = 0.26        # 작업자 발사 간격 (초, 실제 궤적 평균)
 
 
 def team_from_chars(chars_raw: Sequence[dict], order: Optional[Sequence[str]] = None) -> List[dict]:
-    """발사될 작업자: 캐릭터 채집 강화, 시작 속도(채집 속도 강화 +1 — 실제 궤적에서 5·6 확인)."""
-    chars = [c for c in chars_raw if c.get("type")]
+    """발사될 작업자: 캐릭터 채집 강화, 시작 속도(채집 속도 강화 +1 — 실제 궤적에서 5·6 확인).
+    건물에서 일하는 캐릭터(state kWorking)는 뺀다 — 실제 궤적 8건에서 13명 중 동시에 날아간 수가 10~11명
+    (= 13 − 건물 일꾼 2~3명, harvest_traces.jsonl 2026-09-25)."""
+    chars = [c for c in chars_raw if c.get("type") and c.get("state") != "kWorking"]
     if order:
         rank = {t: i for i, t in enumerate(order)}
         chars.sort(key=lambda c: rank.get(c["type"], 99))

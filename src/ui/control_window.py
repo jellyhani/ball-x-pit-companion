@@ -631,12 +631,15 @@ class ControlWindow(QWidget):
         if not todo:
             self.base_todo.add(row("지을 수 있는 설계도·올릴 수 있는 건물 없음"))
         self.base_workers.clear()
-        wa = advise_workers(meta, meta.chars_raw, [b.type for b in meta.buildings], d)
+        from ..engine.harvest import need_resource
+        need, _ = need_resource(meta, {})
+        wa = advise_workers(meta, meta.chars_raw, [b.type for b in meta.buildings], d, need)
         for a in wa:
             self.base_workers.add(row(d.building_name(a.building), chip(d.name(a.char_id), "accent"),
                                       f"{a.reason} · {a.current}", _portrait(a.char_id, 32)))
         if not wa:
-            self.base_workers.add(row("추천할 배치 없음", None, "생산 건물(유휴 농장·제재소·채석장·금광)이나 맞는 채집 강화가 없음"))
+            self.base_workers.add(row("바꿀 일꾼 없음", None, "빈 생산 건물이 없고, 발사 채집 강화가 많은 캐릭터가 "
+                                      "건물에서 일하고 있지도 않음 (건물 일꾼은 채집 때 발사되지 않음)"))
         plans = plan_levels(meta, d, self._history)
         self.base_bp.clear()
         targets = blueprint_targets(plans)

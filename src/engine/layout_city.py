@@ -97,10 +97,26 @@ def _place_block(tiles: list, order: Sequence[Cell], free: Set[Cell], out: Dict[
 
 
 def _place(item: _Item, order: Sequence[Cell], free: Set[Cell]) -> Optional[Cell]:
-    for c, r in order:
+    k = _place_idx(item, order, free)
+    return order[k] if k is not None else None
+
+
+def _place_idx(item: _Item, order: Sequence[Cell], free: Set[Cell]) -> Optional[int]:
+    for k, (c, r) in enumerate(order):
         if all((c + dx, r + dy) in free for dx, dy in item.cells):
-            return (c, r)
+            return k
     return None
+
+
+def _fit(p, order: Sequence[Cell], free: Set[Cell]):
+    """건물 하나를 지금 방향·가로세로 바꾼 방향 중 순서상 더 앞 자리에 들어가는 쪽으로. 돌려주는 값: (모양, 자리)."""
+    from .layout_opt import turned
+    best = None
+    for q in ([p, turned(p)] if p.w != p.h else [p]):
+        k = _place_idx(_single(q), order, free)
+        if k is not None and (best is None or k < best[0]):
+            best = (k, q)
+    return (best[1], order[best[0]]) if best else (p, None)
 
 
 def _put(item: _Item, at: Cell, free: Set[Cell], out: Dict[int, Cell]):
@@ -123,10 +139,12 @@ def _u_reserve(spots: List[Cell]) -> Set[Cell]:
 
 def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: Optional[Cell],
               gold_spots: List[Cell], scorer, pad: float = 0.0, hit: Set[int] = frozenset()
-              ) -> Tuple[Dict[int, Cell], List[str]]:
-    """계획도시 배치 (건물 → 왼쪽 아래 타일). scorer: 범위 효과 채점기 (발사대 앞 구역 포함 — 후보 비교용).
+              ) -> Tuple[Dict[int, Cell], List[str], Set[int]]:
+    """계획도시 배치 (건물 → 왼쪽 아래 타일, 가로·세로를 바꿔 놓을 건물). scorer: 범위 효과 채점기 (발사대 앞 구역 포함).
     hit: 쳐야 지어지는 건물 (공사 중 — 상태 값이 없는 옛 플러그인 자료에서도 알 수 있게 따로 받음)."""
     from .layout_opt import TILE_RES, Layout
+    # 건물 회전: 마을 건물·공사 중 건물·남는 금광은 가로·세로를 바꿔 넣어 볼 수 있다 (게임 재배치 모드의 회전 버튼).
+    # 생산 건물·자원 타일은 정사각형이라 바꿀 필요가 없다.
     tiles = grid.tiles
     fixed = {i for i, p in pieces.items() if not p.movable}
     base_free = set(tiles)
@@ -219,18 +237,19 @@ def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: O
         strip = [t for t in all_cells if c0 <= t[0] < c0 + w]
         town_order = sorted(strip, key=lambda t: (-depth(t[1]), t[0] if anchor != "right" else -t[0]))
         town_cells0: Set[Cell] = set()
+        shape_t: Dict[int, object] = {}
         late = []
         for p in town_sorts[k]:
-            it = _single(p)
-            at = _place(it, town_order, free_t)
+            q, at = _fit(p, town_order, free_t)
             if at is None:
                 late.append(p)
                 continue
-            _put(it, at, free_t, out_t)
-            town_cells0 |= _cells(p, at)
+            _put(_single(q), at, free_t, out_t)
+            shape_t[p.id] = q
+            town_cells0 |= _cells(q, at)
         for reserve in (True, False):
             for side, prod_order in prod_orders.items():
-                free, out, town_cells = set(free_t), dict(out_t), set(town_cells0)
+                free, out, town_cells, shape = set(free_t), dict(out_t), set(town_cells0), dict(shape_t)
                 miss = 0.0
                 # 2) 생산: 유닛 → 공사 중 건물 → 남는 금광 → 남는 타일 블록
                 units, blocks = items_by_reserve[reserve]
@@ -249,32 +268,36 @@ def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: O
                         _put(one, a1, free, out)
                         miss += 0.2
                 for p in extra + [pieces[m] for m in mines[len(spots):]]:
-                    it = _single(p)
-                    at = _place(it, prod_order, free)
+                    q, at = _fit(p, prod_order, free)
                     if at is not None:
-                        _put(it, at, free, out)
+                        _put(_single(q), at, free, out)
+                        shape[p.id] = q
                 for g in blocks:
                     _place_block(g, prod_order, free, out)
                 for p in late:                                  # 마을 띠에 못 넣은 건물: 아무 데나
-                    it = _single(p)
-                    at = _place(it, town_order + prod_order[::-1], free)
+                    q, at = _fit(p, town_order + prod_order[::-1], free)
                     if at is None:
                         break
-                    _put(it, at, free, out)
-                    town_cells |= _cells(p, at)
+                    _put(_single(q), at, free, out)
+                    shape[p.id] = q
+                    town_cells |= _cells(q, at)
                     miss += 0.2                                 # 띠 밖이라 조금 흐트러짐
                 if len(out) < len(movable):
                     continue                                    # 못 놓은 건물이 있으면 쓸 수 없는 배치
                 final = dict(origin0)
                 final.update(out)
+                shaped = dict(pieces)
+                shaped.update(shape)
                 waste = _waste(town_cells)
-                eff = scorer.score(Layout(grid, pieces, final))[0]
+                eff = scorer.score(Layout(grid, shaped, final))[0]
                 total = eff - WASTE_W * waste - MISS_W * miss
                 if best is None or total > best[0]:
-                    best = (total, final, (w, anchor, reserve, waste, miss))
+                    best = (total, final, (w, anchor, reserve, waste, miss), shaped)
     if best is None:
-        return dict(origin0), ["계획도시: 땅이 모자라 패턴대로 다시 짤 수 없음 — 지금 배치 유지"]
-    final = _polish_town(grid, pieces, best[1], {p.id for p in town}, scorer)
+        return dict(origin0), ["계획도시: 땅이 모자라 패턴대로 다시 짤 수 없음 — 지금 배치 유지"], set()
+    shaped = best[3]
+    final = _polish_town(grid, shaped, best[1], {p.id for p in town}, scorer)
+    turn = {i for i in shaped if shaped[i] is not pieces[i]}
     w, anchor, reserve, waste, miss = best[2]
     side = {"left": "왼쪽", "center": "가운데", "right": "오른쪽"}[anchor]
     notes = [f"계획도시: 생산 유닛 {len(prods)}개(건물 + 둘레 자원 타일)를 발사대 쪽에 격자로, "
@@ -285,7 +308,9 @@ def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: O
         notes.append("유닛 둘레 빈칸은 자원 타일을 사서 채울 자리로 비워 둠")
     if miss > 0:
         notes.append(f"땅이 모자라 {round(miss / 0.2)}개는 패턴 밖에 놓음")
-    return final, notes
+    if turn:
+        notes.append(f"{len(turn)}개는 회전해서(가로↔세로) 놓아야 빈틈 없이 들어감")
+    return final, notes, turn
 
 
 def _cells(p, o: Cell) -> Set[Cell]:

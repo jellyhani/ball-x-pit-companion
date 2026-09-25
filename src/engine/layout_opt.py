@@ -166,6 +166,13 @@ class Piece:
     unfinished: bool = False  # 공사 중·강화 공사 중 (강철 요새 건설 점수 대상)
 
 
+def turned(p: Piece) -> Piece:
+    """가로·세로를 바꾼(90° 회전한) 건물. 게임 회전 버튼이 어느 쪽으로 도는지 몰라서(ㄱ자 건물은 방향에 따라
+    모양이 달라짐) 바꾼 모양은 사각형 전체를 차지한다고 본다 — 어느 쪽으로 돌려도 그 안에 들어간다."""
+    return Piece(p.id, p.type, p.h, p.w, frozenset((dx, dy) for dx in range(p.h) for dy in range(p.w)),
+                 p.movable, p.range, p.factor, p.cap, p.unfinished)
+
+
 @dataclass
 class FullPlan:
     origin_before: Dict[int, Tuple[int, int]]
@@ -179,6 +186,7 @@ class FullPlan:
     harvest_after: Optional[List[int]] = None
     moved: int = 0
     notes: List[str] = field(default_factory=list)
+    turned: Set[int] = field(default_factory=set)   # 가로·세로를 바꿔(회전) 놓는 건물 (계획도시)
 
 
 class Layout:
@@ -601,20 +609,35 @@ def canonicalize(pieces: Dict[int, Piece], origin0: Dict[int, Tuple[int, int]],
 
 
 def move_sequence(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int, int]],
-                  target: Dict[int, Tuple[int, int]]) -> List[Tuple[int, Tuple[int, int], bool]]:
+                  target: Dict[int, Tuple[int, int]], turn: Set[int] = frozenset()
+                  ) -> List[Tuple[int, Tuple[int, int], bool]]:
     """지금 배치 → 목표 배치로 가는 옮기기 순서 (한 번에 한 건물, 항상 빈 자리로만).
 
     1) 목표 자리가 비어 있는 건물을 모두 옮긴다.
     2) 막히면 막는 건물이 가장 적은 목표 자리 하나를 골라, 막는 건물들을 다른 건물 목표가 아닌 빈 곳에 잠시 비켜 둔다.
        그 건물은 다음 차례에 제자리로 간다 — 매 단계 최소 한 건물이 목표 자리에 확정되므로 반드시 끝난다.
     목표 자리끼리는 겹치지 않으므로 목표 자리를 막는 건물은 항상 아직 안 옮긴 건물이다.
+    turn: 목표 자리에 가로·세로를 바꿔 놓을 건물 — 목표 자리로 가는 한 번에 회전도 한다 (비켜 두기는 그대로).
     돌려주는 값: [(건물, 옮길 자리(왼쪽 아래 타일), 잠시 비켜 두기인지)]."""
-    lay = Layout(grid, pieces, cur)
-    pending = [i for i in target if lay.origin.get(i) != target[i]]
+    lay = Layout(grid, dict(pieces), cur)
+    goal_piece = {i: (turned(pieces[i]) if i in turn else pieces[i]) for i in target}
+    pending = [i for i in target if lay.origin.get(i) != target[i] or i in turn]
     steps: List[Tuple[int, Tuple[int, int], bool]] = []
 
+    def goal_cells(i: int) -> List[Tuple[int, int]]:
+        return [(target[i][0] + dx, target[i][1] + dy) for dx, dy in goal_piece[i].rel]
+
     def blockers(i: int) -> Set[int]:
-        return {lay.occ[c] for c in lay.cells(i, target[i]) if lay.occ.get(c) not in (None, i)}
+        return {lay.occ[c] for c in goal_cells(i) if lay.occ.get(c) not in (None, i)}
+
+    def settle(i: int):
+        for c in lay.cells(i):
+            if lay.occ.get(c) == i:
+                del lay.occ[c]
+        lay.pieces[i] = goal_piece[i]
+        lay.origin[i] = target[i]
+        for c in lay.cells(i):
+            lay.occ[c] = i
 
     for _ in range(len(pieces) + 5):
         moved = True
@@ -622,18 +645,18 @@ def move_sequence(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int
             moved = False
             for i in list(pending):
                 if not blockers(i):
-                    lay.apply([(i, target[i])])
+                    settle(i)
                     steps.append((i, target[i], False))
                     pending.remove(i)
                     moved = True
         if not pending:
             break
         goal = min(pending, key=lambda i: (len(blockers(i)), sum(len(pieces[j].rel) for j in blockers(i))))
-        keep_clear = set(lay.cells(goal, target[goal]))
-        reserved = {c for j in pending for c in lay.cells(j, target[j])}
+        keep_clear = set(goal_cells(goal))
+        reserved = {c for j in pending for c in goal_cells(j)}
         for j in sorted(blockers(goal), key=lambda j: len(pieces[j].rel)):
-            p = pieces[j]
-            own = set(lay.cells(j, target[j]))
+            p = lay.pieces[j]
+            own = set(goal_cells(j))
             best = None
             for c, r in sorted(grid.tiles):
                 cells = {(c + dx, r + dy) for dx, dy in p.rel}
@@ -833,17 +856,19 @@ def _optimize_city(base: dict, grid: Grid, pieces: Dict[int, Piece], origin0: Di
     launcher = geo.get("launcher") or []
     lrc = (int((float(launcher[0]) - grid.ox) // grid.size), int((float(launcher[1]) - grid.oy) // grid.size)) \
         if len(launcher) >= 2 else None
-    orig, notes = plan_city(grid, pieces, origin0, lrc, gold_u_spots(geo, grid), scorer, pad, hit)
-    orig = canonicalize(pieces, origin0, orig)
+    orig, notes, turn = plan_city(grid, pieces, origin0, lrc, gold_u_spots(geo, grid), scorer, pad, hit)
+    shaped = {i: (turned(p) if i in turn else p) for i, p in pieces.items()}
+    orig = canonicalize(shaped, origin0, orig)
     e0, d0 = plain.score(Layout(grid, pieces, origin0))
-    lay = Layout(grid, pieces, orig)
+    lay = Layout(grid, shaped, orig)
     s, d1 = plain.score(lay)
+    centers = {i: lay.center(i) for i in orig}
     h0 = hv = None
     if harvest_eval:
         h0 = harvest_eval(geo)
-        hv = harvest_eval(final_base(base, FullPlan(origin0, orig, {i: lay.center(i) for i in orig}, 0, 0, {}, {})).get("geo") or {})
-    moved = sum(1 for i in orig if orig[i] != origin0[i])
-    return FullPlan(origin0, orig, {i: lay.center(i) for i in orig}, e0, s, d0, d1, h0, hv, moved, notes)
+        hv = harvest_eval(final_base(base, FullPlan(origin0, orig, centers, 0, 0, {}, {}, turned=turn)).get("geo") or {})
+    moved = sum(1 for i in orig if orig[i] != origin0[i] or i in turn)
+    return FullPlan(origin0, orig, centers, e0, s, d0, d1, h0, hv, moved, notes, turned=turn)
 
 
 RANGE_TARGETS = {1: WHEAT_T, 2: WOOD_T, 3: STONE_T}
@@ -1060,7 +1085,7 @@ def suggest_demolish(base: dict, res_weight: Optional[Dict[int, float]] = None, 
 
 def final_base(base: dict, plan: FullPlan) -> dict:
     """최적 배치를 적용한 기지 (건물 위치 + 충돌 모양)."""
-    from .layout import move_geo
+    from .layout import move_geo, turn_geo
     geo = base.get("geo") or {}
     grid = grid_from_geo(geo)
     blds = buildings_from_base(base)
@@ -1068,36 +1093,55 @@ def final_base(base: dict, plan: FullPlan) -> dict:
     cur = dict(blds)
     for b in base.get("buildings") or []:
         i = b.get("id")
-        if i in plan.centers_after and plan.origin_after.get(i) != plan.origin_before.get(i) and i in cur:
+        turn = i in plan.turned
+        if i in plan.centers_after and (plan.origin_after.get(i) != plan.origin_before.get(i) or turn) and i in cur:
             cx, cy = plan.centers_after[i]
-            g = move_geo(g, cur, i, (cx, cy))
             ob = cur[i]
-            cur[i] = Bld(ob.id, ob.type, cx, cy, ob.tw, ob.th, ob.rot, ob.range)
-            out_b.append(dict(b, x=round(cx, 3), y=round(cy, 3)))
+            if turn:
+                w, h = ob.footprint
+                g = turn_geo(g, i, (cx, cy), h * grid.size, w * grid.size)
+                rot = (ob.rot + 1) % 4
+            else:
+                g = move_geo(g, cur, i, (cx, cy))
+                rot = ob.rot
+            cur[i] = Bld(ob.id, ob.type, cx, cy, ob.tw, ob.th, rot, ob.range)
+            out_b.append(dict(b, x=round(cx, 3), y=round(cy, 3), rot=rot))
         else:
             out_b.append(b)
     return dict(base, buildings=out_b, geo=g)
 
 
-def remaining_moves(base: dict, final: Dict[int, Tuple[float, float]]) -> List[Move]:
-    """지금(재배치 도중) 배치에서 목표 배치(건물별 중심)까지 남은 옮기기. 사용자가 다른 순서로 옮겨도 다시 맞춘다."""
+def remaining_moves(base: dict, final: Dict[int, Tuple[float, float]],
+                    final_rot: Optional[Dict[int, int]] = None) -> List[Move]:
+    """지금(재배치 도중) 배치에서 목표 배치(건물별 중심)까지 남은 옮기기. 사용자가 다른 순서로 옮겨도 다시 맞춘다.
+    final_rot: 건물별 목표 회전(게임 rot 값). 가로·세로만 맞으면(짝홀이 같으면) 된 것으로 본다."""
     grid = grid_from_geo(base.get("geo") or {})
     if grid is None or not final:
         return []
     pieces, cur = pieces_from_base(base, grid, housing_types())
+    rots = {b["id"]: int(b.get("rot") or 0) for b in base.get("buildings") or [] if "id" in b}
+    turn = {i for i, r in (final_rot or {}).items() if i in pieces and (r - rots.get(i, 0)) % 2}
     target = {}
     for i, (x, y) in final.items():
         if i in pieces:
-            p = pieces[i]
+            p = turned(pieces[i]) if i in turn else pieces[i]
             target[i] = (round((x - p.w * grid.size / 2 - grid.ox) / grid.size),
                          round((y - p.h * grid.size / 2 - grid.oy) / grid.size))
     for i in cur:                     # 계획 뒤에 새로 지은 건물(계획에 없음)은 그 자리에 둔다 — 없으면 KeyError 로 기지 화면이 멈춤
         target.setdefault(i, cur[i])
+    return _moves(grid, pieces, cur, target, turn, rots)
+
+
+def _moves(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int, int]], target: Dict[int, Tuple[int, int]],
+           turn: Set[int], rots: Dict[int, int]) -> List[Move]:
     out = []
-    for i, o, park in move_sequence(grid, pieces, cur, target):
-        p = pieces[i]
+    for i, o, park in move_sequence(grid, pieces, cur, target, turn):
+        spin = i in turn and not park
+        p = turned(pieces[i]) if spin else pieces[i]
         out.append(Move(i, grid.center(o[0], o[1], p.w, p.h), 0.0,
-                        "잠시 비켜 두기 (자리 비우기)" if park else "최적 배치 자리로"))
+                        "잠시 비켜 두기 (자리 비우기)" if park else
+                        "회전(가로↔세로)해서 이 자리로" if spin else "최적 배치 자리로",
+                        rot=(rots.get(i, 0) + 1) % 4 if spin else -1))
     return out
 
 
@@ -1107,9 +1151,5 @@ def plan_moves(plan: FullPlan, base: dict) -> List[Move]:
     grid = grid_from_geo(geo)
     pieces, cur = pieces_from_base(base, grid, housing_types())
     target = {i: plan.origin_after.get(i, o) for i, o in cur.items()}
-    out = []
-    for i, o, park in move_sequence(grid, pieces, cur, target):
-        p = pieces[i]
-        out.append(Move(i, grid.center(o[0], o[1], p.w, p.h), 0.0,
-                        "잠시 비켜 두기 (자리 비우기)" if park else "최적 배치 자리로"))
-    return out
+    rots = {b["id"]: int(b.get("rot") or 0) for b in base.get("buildings") or [] if "id" in b}
+    return _moves(grid, pieces, cur, target, set(plan.turned) & set(cur), rots)

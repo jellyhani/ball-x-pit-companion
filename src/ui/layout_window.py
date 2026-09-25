@@ -270,7 +270,8 @@ class LayoutWindow(QWidget):
                 if isinstance(sw, Move) and sw.a in blds:
                     b = blds[sw.a]
                     blds = dict(blds)
-                    blds[sw.a] = Bld(b.id, b.type, sw.to[0], sw.to[1], b.tw, b.th, b.rot, b.range)
+                    rot = sw.rot if getattr(sw, "rot", -1) >= 0 else b.rot     # 회전해서 놓는 건물
+                    blds[sw.a] = Bld(b.id, b.type, sw.to[0], sw.to[1], b.tw, b.th, rot, b.range)
                 elif sw.a in blds and sw.b in blds:
                     blds = swap_positions(blds, sw.a, sw.b)
         names = {i: self.data.building_name(b.type)[:4] for i, b in blds.items()

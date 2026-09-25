@@ -11,6 +11,11 @@ from src.engine.layout import grid_from_geo
 FIX = os.path.join(os.path.dirname(__file__), "fixtures", "harvest_trace_48deg.json")
 
 
+def shaped(pieces, plan):
+    """계획의 회전(가로↔세로)을 반영한 건물 모양."""
+    return {i: (lo.turned(p) if i in plan.turned else p) for i, p in pieces.items()}
+
+
 def setup():
     with open(FIX, encoding="utf-8") as f:
         fx = json.load(f)
@@ -214,7 +219,7 @@ class LayoutOptTest(unittest.TestCase):
         fx, base, grid, pieces, o0 = setup()
         plan = lo.optimize(base, None, None, preset="plan")
         self.assertIsNotNone(plan)
-        lay = lo.Layout(grid, pieces, plan.origin_after)
+        lay = lo.Layout(grid, shaped(pieces, plan), plan.origin_after)
         cells = [c for i in plan.origin_after for c in lay.cells(i)]
         self.assertEqual(len(cells), len(set(cells)))                 # 겹침 없음
         self.assertTrue(set(cells) <= grid.tiles)                      # 산 땅 안
@@ -233,7 +238,7 @@ class LayoutOptTest(unittest.TestCase):
         plan = lo.optimize(base, None, None, preset="plan")
         again = lo.optimize(base, None, None, preset="plan")
         self.assertEqual(plan.origin_after, again.origin_after)
-        lay = lo.Layout(grid, pieces, plan.origin_after)
+        lay = lo.Layout(grid, shaped(pieces, plan), plan.origin_after)
         prod = {i for i, p in pieces.items() if p.type in lo.TILE_RES or p.type in lc.PRODUCERS}
         town = [i for i in pieces if i not in prod and pieces[i].movable]
         tcells = {c for i in town for c in lay.cells(i)}
@@ -253,10 +258,37 @@ class LayoutOptTest(unittest.TestCase):
         plan = lo.optimize(base2, None, None, preset="plan")
         spots = lo.gold_u_spots(base2["geo"], grid)
         self.assertEqual({plan.origin_after[900 + k] for k in range(3)}, set(spots[:3]))
-        lay = lo.Layout(grid, pieces, plan.origin_after)
+        lay = lo.Layout(grid, shaped(pieces, plan), plan.origin_after)
         left = min(s[0] for s in spots)
         corridor = {(left + 2 + dx, r) for dx in range(2) for r in range(min(s[1] for s in spots), max(s[1] for s in spots))}
         self.assertFalse(corridor & set(lay.occ))
+
+    def test_plan_turns_buildings_and_moves_reach_it(self):
+        """계획도시는 건물을 회전(가로↔세로)해 넣기도 한다. 목표 배치를 게임에 적용하면(rot 바뀜) 남은 옮기기가 0,
+        지금 배치에서 가는 옮기기 순서는 겹침 없이 목표에 닿는다."""
+        fx, base, grid, pieces, o0 = setup()
+        plan = lo.optimize(base, None, None, preset="plan")
+        self.assertTrue(plan.turned)                                   # 이 기지에서는 회전해야 더 빽빽함
+        fb = lo.final_base(base, plan)
+        rots = {b["id"]: b.get("rot", 0) for b in fb["buildings"]}
+        for i in plan.turned:
+            before = next(b for b in base["buildings"] if b["id"] == i).get("rot", 0)
+            self.assertEqual((rots[i] - before) % 2, 1)
+        final = {b["id"]: (b["x"], b["y"]) for b in fb["buildings"]}
+        self.assertEqual(lo.remaining_moves(fb, final, rots), [])
+        moves = lo.remaining_moves(base, final, rots)
+        self.assertTrue(any(m.rot >= 0 for m in moves))
+        # 순서대로 옮기면(회전 포함) 매 단계 겹치지 않는다
+        turn = {i for i in plan.turned}
+        cur = dict(o0)
+        live = dict(pieces)
+        for i, o, park in lo.move_sequence(grid, pieces, o0, plan.origin_after, turn):
+            if i in turn and not park:
+                live[i] = lo.turned(pieces[i])
+            cur[i] = o
+            cells = [c for j in cur for c in lo.Layout(grid, live, cur).cells(j)]
+            self.assertEqual(len(cells), len(set(cells)))
+        self.assertEqual(cur, {**o0, **plan.origin_after})
 
 
 if __name__ == "__main__":

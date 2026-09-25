@@ -260,31 +260,73 @@ class WorkerAdvice:
     building: str            # 게임 내부 이름
     reason: str
     current: str
+    action: str = "assign"   # assign(빈 건물에 배정) | swap(지금 일꾼과 교체)
+    replace: str = ""        # swap: 빼서 다시 발사에 쓸 캐릭터 ID
+
+
+# 건물에서 일하는 캐릭터는 채집 때 발사되지 않는다 — 실제 기록(harvest_traces.jsonl, 2026-09-25 8건):
+# 캐릭터 13명 중 동시에 날아간 작업자는 최대 10~11명 = 13 − (건물 일꾼 2~3명).
+# 그래서 발사 채집 강화(관통·빠른 채집 등)가 많은 캐릭터는 발사에 두고, 강화가 적은 캐릭터를 건물에 넣는다.
+# 건물 전용 강화(이름 추정 — 게임 문구로 확인 못 함)가 있으면 그 건물이 우선.
+BUILDING_UPGRADE = {"kFarmSpeed": "kIdleFarm", "kLumberyardSpeed": "kIdleLumberyard",
+                    "kStoneMineSpeed": "kIdleStoneMine", "kExtraGoldMined": "kGoldMine"}
+SWAP_MARGIN = 1.0        # 이만큼 이상 발사 가치가 차이 나야 교체를 권함 (강화 1개) — 근거 없이 정함
+
+
+def launch_value(c: dict, need: Optional[int] = None) -> float:
+    """발사될 때 쓸모: 발사 채집 강화 레벨 합 (지금 부족한 자원 강화는 1.5배). 건물 전용 강화는 빼고 센다."""
+    return sum(float(v or 0) * (1.5 if need is not None and UPGRADE_RES.get(k) == need else 1.0)
+               for k, v in (c.get("harvest") or {}).items() if k not in BUILDING_UPGRADE)
+
+
+def _affinity(c: dict) -> set:
+    return {BUILDING_UPGRADE[k] for k, v in (c.get("harvest") or {}).items() if k in BUILDING_UPGRADE and v}
 
 
 def advise_workers(meta: Optional[MetaState], chars_raw: List[dict], building_types: List[str],
-                   data: GameData, need: Optional[int] = None) -> List[WorkerAdvice]:
-    """생산 건물(유휴 농장·제재소·채석장·금광)에 채집 강화가 맞는 캐릭터를 권한다."""
+                   data: GameData, need: Optional[int] = None, limit: int = 6) -> List[WorkerAdvice]:
+    """생산 건물(농장·야적장·채석장·금광) 일꾼 배치: 빈 건물에는 발사 채집 강화가 적은 캐릭터를,
+    발사 채집 강화가 많은 캐릭터가 건물에서 일하고 있으면 쉬는(발사되는) 약한 캐릭터와 교체를 권한다.
+    빈 건물 수 = 건물 수 − 그 건물에서 일하는 캐릭터 수 (캐릭터의 work·state 로 셈)."""
+    chars = [c for c in chars_raw if c.get("type")]
+    working = [c for c in chars if c.get("state") == "kWorking" and c.get("work") in WORK_BUILDINGS]
+    idle = sorted((c for c in chars if c.get("state") != "kWorking"),
+                  key=lambda c: (launch_value(c, need), c.get("type")))
+    count = {t: 0 for t in WORK_BUILDINGS}
+    for t in building_types:
+        if t in count:
+            count[t] += 1
+    for c in working:
+        count[c["work"]] -= 1
+    # 빈 건물 순서: 전용 강화 가진 캐릭터가 있는 건물 → 부족한 자원 건물 → 금광 → 나머지 (순서 자체는 근거 없음)
+    empty = [t for t in WORK_BUILDINGS for _ in range(max(0, count[t]))]
+    aff_any = {t for c in idle for t in _affinity(c)}
+    empty.sort(key=lambda t: (t not in aff_any, WORK_BUILDINGS[t] != need, t != "kGoldMine", t))
+    cid = lambda c: f"char:{c['type'][1:].lower()}"
     out: List[WorkerAdvice] = []
-    work_blds = [t for t in building_types if t in WORK_BUILDINGS]
-    for t in dict.fromkeys(work_blds):
-        res = WORK_BUILDINGS[t]
-        best = None
-        for c in chars_raw:
-            ups = c.get("harvest") or {}
-            score = sum(v for k, v in ups.items() if UPGRADE_RES.get(k) == res)
-            if score and (best is None or score > best[0]):
-                best = (score, c)
-        if best is None:
+    pool = list(idle)
+    for t in empty:
+        if not pool:
+            break
+        c = next((c for c in pool if t in _affinity(c)), pool[0])
+        pool.remove(c)
+        lv = launch_value(c, need)
+        why = (f"{data.building_name(t)} 전용 강화 보유" if t in _affinity(c) else
+               "발사 채집 강화가 없어 발사에서 빠져도 손해 없음" if lv == 0 else
+               f"쉬는 캐릭터 중 발사 채집 강화가 가장 적음 ({lv:g})")
+        out.append(WorkerAdvice(cid(c), t, f"비어 있음 — {why}", "쉬는 중"))
+    for w in sorted(working, key=lambda c: -launch_value(c, need)):
+        t = w["work"]
+        if t in _affinity(w) or not pool:
             continue
-        c = best[1]
-        cid = f"char:{c['type'][1:].lower()}"
-        ups = [k[1:] for k, v in (c.get("harvest") or {}).items() if UPGRADE_RES.get(k) == res]
-        cur = "이미 여기서 일하는 중" if c.get("work") == t and c.get("state") == "kWorking" else \
-            (f"지금 {c.get('work', '')[1:]}에서 일함" if c.get("state") == "kWorking" else "쉬는 중")
-        out.append(WorkerAdvice(cid, t, f"{RESOURCES[res]} 채집 강화 보유 ({', '.join(ups)})"
-                                + (" · 지금 필요한 자원" if need == res else ""), cur))
-    return out
+        c = next((c for c in pool if t in _affinity(c)), pool[0])
+        lw, lc = launch_value(w, need), launch_value(c, need)
+        if t not in _affinity(c) and lw - lc < SWAP_MARGIN:
+            continue
+        pool.remove(c)
+        out.append(WorkerAdvice(cid(c), t, f"{data.name(cid(w))}(발사 채집 강화 {lw:g})는 발사에 쓰는 게 나음 — "
+                                           f"{data.name(cid(c))}({lc:g})로 교체", "쉬는 중", "swap", cid(w)))
+    return out[:limit]
 
 
 RES_BUILDING_LABEL = {"kIdleFarm": "농장", "kIdleLumberyard": "야적장", "kIdleStoneMine": "채석장"}

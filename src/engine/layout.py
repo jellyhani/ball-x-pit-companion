@@ -68,6 +68,7 @@ class Move:
     reason: str
     b: int = -1              # 자리 바꾸기와 같은 모양으로 다루기 위한 자리 (-1 = 빈 자리)
     target: int = -1         # 길 열기: 이 옮기기로 작업자가 닿게 되는 미완성 건물 id (gain = 예상 타격 수)
+    rot: int = -1            # 옮기면서 회전할 때 목표 회전 값(게임 rot, 가로·세로만 맞으면 됨). -1 = 회전 없음
 
 
 @dataclass
@@ -90,6 +91,7 @@ class LayoutPlan:
     harvest_after: Optional[List[int]] = None
     new_spots: List[NewSpot] = field(default_factory=list)
     final: Dict[int, Tuple[float, float]] = field(default_factory=dict)   # 전체 재배치: 건물별 목표 중심
+    final_rot: Dict[int, int] = field(default_factory=dict)               # 건물별 목표 회전 (게임 rot 값)
     notes: List[str] = field(default_factory=list)
     reach_after: Dict[int, int] = field(default_factory=dict)   # 최적 배치 뒤 미완성 건물별 최대 타격 수 (0 = 여전히 안 닿음)
     builds: List[tuple] = field(default_factory=list)            # 새로 지을 건물 추천 (종류, 중심, 크기, 늘어나는 점수, 대상 수)
@@ -252,6 +254,19 @@ def move_geo(geo: dict, blds: Dict[int, "Bld"], a: int, to: Tuple[float, float])
         if "c" in c:
             c2["c"] = [c["c"][0] + d[0], c["c"][1] + d[1]]
         cols.append(c2)
+    g = dict(geo)
+    g["colliders"] = cols
+    return g
+
+
+def turn_geo(geo: dict, a: int, to: Tuple[float, float], w: float, h: float) -> dict:
+    """한 건물을 가로·세로를 바꿔 새 중심에 놓는다: 충돌 모양을 새 크기(w×h, 월드 단위)의 상자로 바꾼다.
+    회전 방향을 모르므로(ㄱ자 모양은 방향에 따라 다름) 사각형 전체로 본다 — layout_opt.turned 와 같은 가정."""
+    hw, hh = w / 2, h / 2
+    cx, cy = to
+    box = {"id": a, "shape": "box",
+           "pts": [[cx - hw, cy - hh], [cx + hw, cy - hh], [cx + hw, cy + hh], [cx - hw, cy + hh]]}
+    cols = [c for c in geo.get("colliders") or [] if int(c.get("id", -1)) != a] + [box]
     g = dict(geo)
     g["colliders"] = cols
     return g

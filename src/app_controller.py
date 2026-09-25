@@ -588,8 +588,13 @@ class AppController(QObject):
             return
         todo = suggest_base(self.meta, self.data, limit=3)
         demolish = list(getattr(self.layout_plan, "demolish", None) or [])[:2]
-        key = (tuple((sg.kind, sg.type) for sg in todo), tuple((t, s) for _, t, s in demolish))
-        if not todo and not demolish:
+        from .engine.harvest import advise_workers
+        need, _ = need_resource(self.meta, self._shortfalls())
+        workers = advise_workers(self.meta, self.meta.chars_raw, [b.type for b in self.meta.buildings],
+                                 self.data, need)[:3]
+        key = (tuple((sg.kind, sg.type) for sg in todo), tuple((t, s) for _, t, s in demolish),
+               tuple((a.char_id, a.building, a.action) for a in workers))
+        if not todo and not demolish and not workers:
             if self.base_advice is not None:
                 self.base_advice = None
                 self._base_advice_key = None
@@ -602,6 +607,9 @@ class AppController(QObject):
         verb = {"finish": "완성", "build": "짓기", "upgrade": "강화"}
         items = [(f"{verb[sg.kind]}: {sg.name}", sg.status) for sg in todo]
         items += [(f"철거 후보: {d.building_name(t)}", f"기여 {score:.1f}") for _i, t, score in demolish]
+        items += [(f"일꾼: {d.building_name(a.building)} ← {d.name(a.char_id)}"
+                   + (f" ({d.name(a.replace)} 대신)" if a.action == "swap" else ""),
+                   "교체" if a.action == "swap" else "빈 건물") for a in workers]
         title, status = items[0]
         v = HudView(title=title, subtitle="기지 조언", status=status,
                     status_tone="warn" if "부족" in status else "accent")
@@ -872,7 +880,7 @@ class AppController(QObject):
         key = (layout_key(base), id(plan))
         if getattr(self, "_remain_key", None) != key:
             from .engine.layout_opt import remaining_moves
-            self._remain_key, self._remain = key, remaining_moves(base, final)
+            self._remain_key, self._remain = key, remaining_moves(base, final, getattr(plan, "final_rot", None))
         return self._remain
 
     def _mouse_angle(self, pl) -> Optional[float]:
@@ -940,6 +948,8 @@ class AppController(QObject):
                 b0 = buildings_from_base(base).get(remain[0].a)
                 if g is not None and b0 is not None:
                     fw, fh = b0.footprint
+                    if getattr(remain[0], "rot", -1) >= 0 and (remain[0].rot - b0.rot) % 2:
+                        fw, fh = fh, fw                          # 회전해서 놓는 건물: 가로·세로가 바뀐 목표 칸
                     cx, cy = remain[0].to
                     hw, hh = fw * g.size / 2, fh * g.size / 2
                     box = [hs.to_screen(hmat, x, y) for x, y in
