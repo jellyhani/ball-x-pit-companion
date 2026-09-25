@@ -285,3 +285,42 @@ def advise_workers(meta: Optional[MetaState], chars_raw: List[dict], building_ty
         out.append(WorkerAdvice(cid, t, f"{RESOURCES[res]} 채집 강화 보유 ({', '.join(ups)})"
                                 + (" · 지금 필요한 자원" if need == res else ""), cur))
     return out
+
+
+RES_BUILDING_LABEL = {"kIdleFarm": "농장", "kIdleLumberyard": "야적장", "kIdleStoneMine": "채석장"}
+
+
+def advise_resource_ratio(building_types: List[str], need: Optional[int]) -> Optional[str]:
+    """생산 건물(농장·야적장·채석장) 개수가 지금 부족한 자원 쪽으로 안 쏠려 있으면 한 줄 조언.
+
+    근거: Steam 가이드 'My Optimized Town Layout' — "생산량을 소비 속도에 맞추면 시간으로만 제한된다"는
+    원칙만 가져온다. 그 공략의 구체적 개수(예: 채석장 11·야적장 4·농장 3)는 그 사람 플레이 스타일(어떤 건물을
+    얼마나 강화하는지)에 따라 달라지는 값이라 그대로 쓰지 않고, 이 프로젝트가 이미 갖고 있는 실측 부족 자원
+    (need_resource — 블루프린트·강화 비용 기준)과 지금 지은 생산 건물 수를 비교하는 정도로만 쓴다.
+    """
+    if need not in (1, 2, 3):
+        return None
+    counts = {1: 0, 2: 0, 3: 0}
+    for t in building_types:
+        r = WORK_BUILDINGS.get(t)
+        if r in counts:
+            counts[r] += 1
+    mx = max(counts.values())
+    if mx < 2 or counts[need] > mx // 2:
+        return None
+    by_res = {v: RES_BUILDING_LABEL[k] for k, v in WORK_BUILDINGS.items() if v in counts}
+    return (f"{RESOURCES[need]} 생산 건물({by_res[need]})이 {counts[need]}개로 다른 자원보다 적음 "
+            f"(농장 {counts[1]}·야적장 {counts[2]}·채석장 {counts[3]}) — "
+            "생산량을 소비 속도에 맞추면 좋다는 공략 있음 (Steam 'My Optimized Town Layout')")
+
+
+def gold_bounce_tip(base: dict, unf: List) -> Optional[str]:
+    """미완성 건물이 있고 골드마인이 있으면 그쪽으로 조준하라는 커뮤니티 팁 (Steam 가이드
+    'My Optimized Town Layout' — 골드마인에 조준하면 촘촘히 튕기며 공사장을 여러 번 맞힌다는 얘기).
+    이 프로젝트는 아직 harvest_traces.jsonl 로 확인하지 못했으므로 조준점 자체는 바꾸지 않고
+    참고용 문구로만 보여준다."""
+    if not unf:
+        return None
+    if not any(b.get("type") == "kGoldMine" for b in base.get("buildings") or []):
+        return None
+    return "팁: 골드마인 쪽으로 조준하면 촘촘히 튕기며 미완성 건물이 한 번에 여러 개 진행되기도 함 (커뮤니티 팁, 미확인)"

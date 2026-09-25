@@ -608,12 +608,14 @@ class ControlWindow(QWidget):
             self.base_layout.add(row(f"{what}: {d.building_name(t)}", chip(f"범위 효과 +{gain:.1f}", "neutral"),
                                      "지금은 효과를 절반으로 계산 중"))
 
-    def set_meta(self, meta: MetaState):
+    def set_meta(self, meta: MetaState, resource_note: Optional[str] = None):
         self.meta = meta
         d = self.data
         self.base_res.clear()
         self.base_res.add(row(" · ".join(f"{RESOURCES[i]} {v:,}" for i, v in enumerate(meta.resources)
                                          if i < len(RESOURCES)) or "확인 전"))
+        if resource_note:
+            self.base_res.add(row(resource_note))
         self.base_todo.clear()
         todo = suggest_base(meta, d)
         for sg in todo:

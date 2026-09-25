@@ -50,7 +50,8 @@ from .ui.card_highlight import CardHighlight
 from .ui.dps_meter import DpsMeter
 from .ui.base_overlay import BaseOverlay
 from .ui.layout_window import LayoutWindow
-from .engine.harvest import AimRange, HarvestLog, advise_harvest, layout_key, need_resource, unfinished_buildings
+from .engine.harvest import (AimRange, HarvestLog, advise_harvest, advise_resource_ratio, gold_bounce_tip,
+                             layout_key, need_resource, unfinished_buildings)
 from .services.sim_worker import SimWorker
 from .engine.base_advisor import suggest as suggest_base
 from .ui.control_window import ControlWindow
@@ -299,7 +300,9 @@ class AppController(QObject):
                     log.info("채집 기록: 조준 %.0f° → 증가 %s", row["angle"], row["gain"])
             self.recommender.meta = self.meta
             self.fusion.meta = self.meta
-            self.control.set_meta(self.meta)
+            need, _ = need_resource(self.meta, self._shortfalls())
+            note = advise_resource_ratio([b.type for b in self.meta.buildings], need)
+            self.control.set_meta(self.meta, note)
             return
         if isinstance(snap.get("catalog"), dict):
             self.snapshots.set_catalog(snap)
@@ -906,6 +909,9 @@ class AppController(QObject):
             names = " · ".join(f"{self.data.building_name(u.type)}({u.label} {u.pct:.0%}, "
                                f"{'' if u.exact else '약 '}{u.hits_left}번 더)" for u in unf[:3])
             texts.append((f"미완성 먼저: {names}", (255, 159, 10, 255)))
+            tip = gold_bounce_tip(base, unf)
+            if tip:
+                texts.append((tip, (190, 190, 200, 255)))
             if self._stuck_text:
                 texts.append((self._stuck_text, (255, 159, 10, 255)))
         texts.append((f"필요한 자원: {adv.need_text}", (245, 245, 247, 255)))
