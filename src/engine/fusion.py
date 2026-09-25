@@ -124,6 +124,7 @@ class FusionAdvisor:
                 pick.score += 8
                 break
         self._character_fit(pick, result, run)
+        self._community(pick, result, run)
         # 게임 수치: 결과 볼의 1레벨 기본 피해와 재료들의 지금 피해 비교
         levels = {s.item_id: s.level for s in balls}
         res = d.damage_range(result, 1)
@@ -174,6 +175,25 @@ class FusionAdvisor:
         for item in (c.item1, c.item2):
             self._record(pick, item)
         return pick
+
+    EVO_TIER_W = {"S": 4, "A": 2, "B": 0, "C": -1, "D": -2}
+
+    def _community(self, pick: FusionPick, result: str, run: RunState):
+        """커뮤니티 평가: 진화 결과의 티어(Game Rant)와 캐릭터 추천 빌드 핵심 항목 (의견이라 작게 — 동점일 때 가르는 정도)."""
+        d = self.data
+        tier = d.community_tier(result) if d.community else None
+        if tier and self.EVO_TIER_W[tier]:
+            w = self.EVO_TIER_W[tier]
+            (pick.reasons if w > 0 else pick.warnings).append(
+                Reason("fz_tier", f"커뮤니티 평가 {tier}티어 진화", w, f"{tier}티어"))
+            pick.score += w
+        for cid in run.character_ids:
+            core, why = d.char_build_items(cid)
+            if result in core:
+                pick.reasons.append(Reason("fz_char_build", f"{d.name(cid)} 추천 빌드 핵심 (커뮤니티): {why}", 5,
+                                           "캐릭터 추천 빌드"))
+                pick.score += 5
+                break
 
     def _character_fit(self, pick: FusionPick, item_id: str, run: RunState):
         d = self.data

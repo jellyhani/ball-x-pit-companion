@@ -15,7 +15,21 @@
    "title": "Dexerto — Best <character> build in Ball x Pit",
    "url": "https://www.dexerto.com/wikis/ball-x-pit/",
    "date": "2026"
-  }
+  },
+  "char_pairs": [
+   {
+    "title": "Dexerto — Best Ball x Pit character combinations",
+    "url": "https://www.dexerto.com/wikis/ball-x-pit/best-ball-x-pit-character-combinations/"
+   },
+   {
+    "title": "Screen Rant — Best Character Combinations (Matchmaker)",
+    "url": "https://screenrant.com/ball-x-pit-best-character-combinations-matchmaker/"
+   },
+   {
+    "title": "Steam 토론 — What's the best dual character combo",
+    "url": "https://steamcommunity.com/app/2062430/discussions/0/624436409753066508/"
+   }
+  ]
  },
  "ball_tiers": {
   "S": [
@@ -230,5 +244,142 @@
    ],
    "why": "범위·상태 이상 4배 — 범위 지대를 겹치기"
   }
- }
+ },
+ "char_pairs": [
+  {
+   "pair": [
+    "char:itchyfinger",
+    "char:recaller"
+   ],
+   "src": [
+    "screenrant",
+    "steam"
+   ],
+   "why": "빠른 연사로 튕길수록 세지는 회한자 볼을 좁은 틈에 계속 튕김"
+  },
+  {
+   "pair": [
+    "char:cohabitants",
+    "char:flagellant"
+   ],
+   "src": [
+    "dexerto",
+    "screenrant",
+    "steam"
+   ],
+   "why": "볼 수가 크게 늘고 계속 튕겨 화면을 채움"
+  },
+  {
+   "pair": [
+    "char:shade",
+    "char:physicist"
+   ],
+   "src": [
+    "dexerto",
+    "steam"
+   ],
+   "why": "중력 볼이 빨리 내려와 뒤치기 치명타를 자주"
+  },
+  {
+   "pair": [
+    "char:tunneller",
+    "char:sisyphus"
+   ],
+   "src": [
+    "dexerto"
+   ],
+   "why": "모든 타격이 범위 피해라 시시포스 4배가 항상 적용"
+  },
+  {
+   "pair": [
+    "char:sisyphus",
+    "char:embedded"
+   ],
+   "src": [
+    "dexerto",
+    "screenrant"
+   ],
+   "why": "범위 피해·상태 이상 누적"
+  },
+  {
+   "pair": [
+    "char:emptynester",
+    "char:sisyphus"
+   ],
+   "src": [
+    "screenrant"
+   ],
+   "why": "특수 볼 두 배 + 범위 피해 4배"
+  },
+  {
+   "pair": [
+    "char:wimp",
+    "char:sisyphus"
+   ],
+   "src": [
+    "steam"
+   ],
+   "why": "원하는 자리에 범위 피해를 정확히 떨어뜨려 시시포스 효과를 최대로"
+  },
+  {
+   "pair": [
+    "char:carouser",
+    "char:recaller"
+   ],
+   "src": [
+    "dexerto"
+   ],
+   "why": "궤도 타격을 계속 유지하며 튕김 피해 누적"
+  },
+  {
+   "pair": [
+    "char:itchyfinger",
+    "char:brickhead"
+   ],
+   "src": [
+    "dexerto"
+   ],
+   "why": "빠른 연사 + 방패 반사로 화면을 채움"
+  },
+  {
+   "pair": [
+    "char:recaller",
+    "char:physicist"
+   ],
+   "src": [
+    "dexerto"
+   ],
+   "why": "튕김 위주 — 가속 효과를 여러 볼에"
+  },
+  {
+   "pair": [
+    "char:packrat",
+    "char:emptynester"
+   ],
+   "src": [
+    "dexerto"
+   ],
+   "why": "적은 볼 칸을 한 번에 여러 개 쏘는 것으로 보충"
+  },
+  {
+   "pair": [
+    "char:brickhead",
+    "char:spendthrift"
+   ],
+   "src": [
+    "screenrant"
+   ],
+   "why": "가까이 방패 반사 + 넓게 퍼지는 볼"
+  },
+  {
+   "pair": [
+    "char:default",
+    "char:brickhead"
+   ],
+   "src": [
+    "steam"
+   ],
+   "why": "처음 하기 좋은 조합 — 빠른 성장 + 생존"
+  }
+ ]
 }

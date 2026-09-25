@@ -989,6 +989,8 @@ def remaining_moves(base: dict, final: Dict[int, Tuple[float, float]]) -> List[M
             p = pieces[i]
             target[i] = (round((x - p.w * grid.size / 2 - grid.ox) / grid.size),
                          round((y - p.h * grid.size / 2 - grid.oy) / grid.size))
+    for i in cur:                     # 계획 뒤에 새로 지은 건물(계획에 없음)은 그 자리에 둔다 — 없으면 KeyError 로 기지 화면이 멈춤
+        target.setdefault(i, cur[i])
     out = []
     for i, o, park in move_sequence(grid, pieces, cur, target):
         p = pieces[i]
@@ -1002,7 +1004,7 @@ def plan_moves(plan: FullPlan, base: dict) -> List[Move]:
     geo = base.get("geo") or {}
     grid = grid_from_geo(geo)
     pieces, cur = pieces_from_base(base, grid, housing_types())
-    target = {i: o for i, o in plan.origin_after.items() if i in cur}
+    target = {i: plan.origin_after.get(i, o) for i, o in cur.items()}
     out = []
     for i, o, park in move_sequence(grid, pieces, cur, target):
         p = pieces[i]

@@ -74,6 +74,7 @@ class AppController(QObject):
         self.recommender = Recommender(self.data)
         self.fusion = FusionAdvisor(self.data)
         self.fusion_rec: Optional[FusionRecommendation] = None
+        self.char_combo = None                    # 캐릭터 선택 화면의 조합 추천 (알선소가 있을 때)
 
         self.ocr_status = check_ocr()
         self.user_hidden = False
@@ -357,7 +358,12 @@ class AppController(QObject):
         if isinstance(snap.get("cost_ms"), (int, float)):
             self._plugin_cost = float(snap["cost_ms"])          # 플러그인 1.7: 게임 프레임에서 읽기에 쓴 시간
         t0 = time.perf_counter()
-        self._on_base(snap.get("base") if isinstance(snap.get("base"), dict) else None)
+        try:
+            self._on_base(snap.get("base") if isinstance(snap.get("base"), dict) else None)
+        except Exception:                                   # noqa: BLE001 — 기지 화면 오류가 선택창·융합 처리를 막지 않게
+            if not getattr(self, "_base_error_logged", False):
+                log.exception("기지 화면 처리 오류 (한 번만 기록)")
+                self._base_error_logged = True
         self._base_ms = 0.9 * self._base_ms + 0.1 * (time.perf_counter() - t0) * 1000
         if st.battle is not None:
             self.battle_info = st.battle
@@ -469,13 +475,46 @@ class AppController(QObject):
         log.info("HUD %s", "간단히" if self.hud.compact else "자세히")
         self._update_hud()
 
+    def _update_char_combo(self, base: Optional[dict], state: str):
+        """캐릭터 선택 화면: 알선소가 지어져 있으면 두 캐릭터 조합을 추천한다 (커뮤니티 추천 + 내 기록)."""
+        want = (state == "kSelectingChar" and base is not None and self.meta is not None
+                and any(b.get("type") == "kMatchMaker" and b.get("state", "kNormal") == "kNormal"
+                        for b in base.get("buildings") or []))
+        if not want:
+            if self.char_combo is not None:
+                self.char_combo = None
+                self.hud.hide()
+            return
+        if self.char_combo is not None:
+            return
+        from .engine.char_combo import suggest_pairs
+        from .ui.hud import HudRow, HudView
+        d = self.data
+        pairs = suggest_pairs(d, self.meta.chars_raw, self.recommender.history, limit=4)
+        if not pairs:
+            return
+        best = pairs[0]
+        v = HudView(title=f"{d.name(best.a)} + {d.name(best.b)}", subtitle="캐릭터 조합 추천 (알선소)",
+                    status="추천", status_tone="accent")
+        v.lines = [(r, "secondary") for r in best.reasons[:2]]
+        v.section = "다른 조합"
+        v.rows = [HudRow((), f"{d.name(p_.a)} + {d.name(p_.b)}", p_.reasons[0] if p_.reasons else "") for p_ in pairs[1:]]
+        v.footer = [("커뮤니티 추천(Dexerto·Screen Rant·Steam)과 내 런 기록 기준 — 참고용", "tertiary")]
+        self.char_combo = pairs
+        log.info("캐릭터 조합 추천: %s", [(d.name(p_.a), d.name(p_.b), round(p_.score, 1)) for p_ in pairs])
+        self.hud.render_view(v)
+
     def _update_fusion(self, obs: ScreenObservation):
         """융합 화면(진화·융합·무료 강화)이 열려 있으면 무엇과 무엇을 합칠지 추천한다."""
         if obs.kind != ScreenKind.FUSION:
             if self.fusion_rec is not None:
                 self.fusion_rec = None
+                self._fusion_panel = None
                 self.hud.hide()
             return
+        # 융합 창 위치 (HUD 가 가리지 않게 — 강화 선택창과 같은 방식)
+        self._fusion_panel = (obs.frame.to_screen(obs.panel_rect)
+                              if obs.frame is not None and obs.panel_rect else None)
         rec = self.fusion.recommend(obs.fuser, obs.inventory, self.run)
         if self.fusion_rec is None or rec.headline != self.fusion_rec.headline:
             log.info("융합 추천(%s): %s | 진화 %s | 융합 %s", rec.status, rec.headline,
@@ -675,6 +714,7 @@ class AppController(QObject):
                     self._harvest_pending = True
             self._base_state = state
         self._base_snap = base
+        self._update_char_combo(base, state)
         if base is not None:
             self._update_spa(base)
         if base and (base.get("geo") or {}).get("colliders") and self.meta is not None and not self._layout_busy                 and state != "kRearrangeBuildings":        # 옮기는 도중에는 다시 계산하지 않는다 (목표가 흔들리지 않게)
@@ -1035,7 +1075,7 @@ class AppController(QObject):
             want = False
         else:
             showing = ((self.tracker.session is not None and self.recommendation is not None)
-                       or self.fusion_rec is not None or self.expedition is not None)
+                       or self.fusion_rec is not None or self.expedition is not None or self.char_combo is not None)
             want = self._game_active() and (showing or hud.message_pending)
         if not want:
             if hud.isVisible():
@@ -1079,6 +1119,8 @@ class AppController(QObject):
             cards = [geo.phys_to_logical_rect(s.frame.to_screen(c.rect)) for c in s.cards]
             if s.panel_rect:
                 panel = geo.phys_to_logical_rect(s.frame.to_screen(s.panel_rect))
+        elif self.fusion_rec is not None and getattr(self, "_fusion_panel", None):
+            panel = geo.phys_to_logical_rect(self._fusion_panel)
         p = geo.place_hud(game, cards, hud.width(), hud.height(),
                           offset=(self.settings.hud_offset_x, self.settings.hud_offset_y), panel=panel)
         hud.move(geo.clamp_to_screen(p, hud.width(), hud.height()))

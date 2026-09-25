@@ -28,7 +28,8 @@
 - **강화 선택창 추천**: 카드마다 순위(1위·2위·3위)와 확신도(확실·추천·근소·근거 약함), 진화 재료 준비도,
   패시브의 실제 수치 변화(예: 받는 피해 감소 10% → 20%), 덱 계열(화상·빙결·출혈·범위 …), 캐릭터 궁합(예: 밤그림자는 치명타,
   곡예사는 범위 피해, 살금발이는 생존 패시브)과 이 캐릭터로 한 내 기록, 새로고침·삭제 판단.
-- **융합 화면 추천**, 보스 뒤 원정 계속/복귀 판단, 초당 피해 창.
+- **융합 화면 추천**(진화 결과의 커뮤니티 티어 반영), 보스 뒤 원정 계속/복귀 판단, 초당 피해 창.
+- **캐릭터 조합 추천**: 알선소가 있으면 캐릭터 선택 화면에서 두 캐릭터 조합을 추천 (커뮤니티 추천 + 내 런 기록).
 - **기지 채집 조준**: 작업자 궤적 계산(실제 채집 기록과 맞춤)으로 추천 각도·예상 채집량을 게임 위에 그림.
   미완성 건물 먼저, 닿지 않으면 길을 여는 방법.
 - **최적 배치**: 건물마다 효과(생산 건물·거처·대저택·대위 막사·잔병의 오두막·강철 요새·수도원 …)를 계산해
@@ -99,7 +100,8 @@ PyInstaller onedir 빌드(Qt 라이브러리는 LGPL 조건대로 별도 파일)
 - Steam 가이드 [My Optimized Town Layout](https://steamcommunity.com/sharedfiles/filedetails/?id=3610566537),
   [100% Utilization Base Layout](https://steamcommunity.com/sharedfiles/filedetails/?id=3602389407) — 생산량 측정값, 배치 권장
 - 커뮤니티 평가(`data/community.json`, 순위·이름만 정리): [Game Rant 볼 진화 티어](https://gamerant.com/ball-x-pit-evolutions-tier-list-best-balls/) (2026-06),
-  [Dexerto 패시브 티어](https://www.dexerto.com/wikis/ball-x-pit/passive-tier-list/) (2026-08), Dexerto 캐릭터별 추천 빌드
+  [Dexerto 패시브 티어](https://www.dexerto.com/wikis/ball-x-pit/passive-tier-list/) (2026-08), Dexerto 캐릭터별 추천 빌드,
+  캐릭터 조합: [Dexerto](https://www.dexerto.com/wikis/ball-x-pit/best-ball-x-pit-character-combinations/), [Screen Rant](https://screenrant.com/ball-x-pit-best-character-combinations-matchmaker/), [Steam 토론](https://steamcommunity.com/app/2062430/discussions/0/624436409753066508/)
 - 기지 배치 공략: [Screen Rant](https://screenrant.com/ball-x-pit-base-layout-harvest-tips/) (공사 중인 건물을 채집 구역 가장자리로,
   잔병의 오두막 범위에 거처, 대저택 범위 채우기), [Dexerto](https://www.dexerto.com/wikis/ball-x-pit/best-base-layout/),
   [ballxpit.org](https://ballxpit.org/guides/base-layout/) (금광 7개 U자), 위키 [Veteran's Hut](https://ballxpit.wiki.gg/wiki/Veteran's_Hut)

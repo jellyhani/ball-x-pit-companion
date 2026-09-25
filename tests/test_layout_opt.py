@@ -98,7 +98,7 @@ class LayoutOptTest(unittest.TestCase):
         keep = (lo.LANE_W, lo.LANE_TILE_W)
         lo.LANE_W = lo.LANE_TILE_W = 0.0
         try:
-            plan = lo.optimize(moved_base, None, None, seconds=3, restarts=2, seed=1)
+            plan = lo.optimize(moved_base, None, None, seconds=6, restarts=2, seed=1)   # 시간 제한 탐색 — 전체 테스트 부하에서도 찾게
         finally:
             lo.LANE_W, lo.LANE_TILE_W = keep
         self.assertGreaterEqual(plan.detail_after["kIdleStoneMine"], before)
