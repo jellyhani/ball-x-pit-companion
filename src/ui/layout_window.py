@@ -146,6 +146,9 @@ class LayoutWindow(QWidget):
         right.addWidget(section_title("새로 지을 건물 · 강화 추천 (배치 효과 기준)"))
         self.builds = Group()
         right.addWidget(self.builds)
+        right.addWidget(section_title("철거 후보 (배치 효과 기준)"))
+        self.demolish = Group()
+        right.addWidget(self.demolish)
         right.addWidget(section_title("효과"))
         self.effects = Group()
         right.addWidget(self.effects)
@@ -239,6 +242,14 @@ class LayoutWindow(QWidget):
                                 "지금은 효과를 절반으로 계산 중 — " + ("일꾼을 배정하면" if what == "일꾼 배정" else "강화하면") + " 전부 켜짐"))
         if plan is not None and not (getattr(plan, "builds", None) or getattr(plan, "activations", None)):
             self.builds.add(row("추천할 새 건물·강화 없음", None, "지을 수 있는 설계도 중 범위 효과 건물이 없음"))
+        self.demolish.clear()
+        dem = (getattr(plan, "demolish", None) or []) if plan else []
+        for _i, t, score in dem:
+            self.demolish.add(row(f"철거 후보: {d.building_name(t)}", value_label(f"기여 {score:.1f}"),
+                                  "범위 안에 캘 자원 타일이 없어 지금 자리에서 거의 도움이 안 됨 — 옮기거나 철거 고려 "
+                                  "(환불량은 게임에서 확인)"))
+        if plan is not None and not dem:
+            self.demolish.add(row("철거 후보 없음", None, "생산 건물이 다 자기 몫을 하고 있음"))
         cal = getattr(plan, "calibration", (0.0, 0, 0)) if plan else (0.0, 0, 0)
         if cal[2]:
             self.effects_note.setText(f"범위 판정 검증: 게임이 센 '범위 안 자원 타일 수'와 {cal[1]}/{cal[2]}개 건물 일치 "

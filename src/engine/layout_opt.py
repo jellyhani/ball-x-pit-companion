@@ -1039,6 +1039,41 @@ def activation_gains(base: dict, res_weight: Optional[Dict[int, float]] = None, 
     return out
 
 
+# 철거 후보 대상: 여러 개 지어도 되고, Scorer 가 값을 제대로 아는 생산 건물만.
+# 뺀 것들 — 잘못 추천하면 되돌릴 수 없는 손해라 안전하게 좁힘:
+#   금광(kGoldMine): Scorer 는 범위 효과만 보고 채집 발사 가치를 모름 (harvest_sim 이 따로 계산) — 항상 0으로 보여 잘못 추천함.
+#   거처(주택 6종): 캐릭터 한 명에 고정 배정(house_characters)이라 보통 하나뿐이고, 철거하면 그 캐릭터 보너스를 통째로 잃음.
+#   능력치·무한 강화 건물: 보통 하나뿐이고 레벨 투자가 크다.
+DEMOLISH_CANDIDATE_TYPES = {"kIdleFarm", "kIdleLumberyard", "kIdleStoneMine"}
+DEMOLISH_MAX_SCORE = 0.5   # 이 밑으로 기여하면 후보 (범위 안에 캘 타일이 없다는 뜻) — 근거 없이 임의로 정함
+
+
+def suggest_demolish(base: dict, res_weight: Optional[Dict[int, float]] = None, pad: float = 0.0,
+                     limit: int = 5) -> List[Tuple[int, str, float]]:
+    """지금 배치에서 있으나 마나 한 생산 건물(범위 안에 캘 타일이 없어 점수에 거의 안 보탬) 철거 후보.
+    돌려주는 값: [(건물 id, 종류, 지금 기여하는 점수)] — 점수가 낮을수록 위.
+    공사 중인 건물은 빼고(방금 짓기 시작한 걸 철거하라고 하면 안 됨), DEMOLISH_CANDIDATE_TYPES 만 본다."""
+    grid = grid_from_geo(base.get("geo") or {})
+    if grid is None:
+        return []
+    housing = housing_types()
+    stats = _stat_types(base)
+    pieces, origin = pieces_from_base(base, grid, housing)
+    s0 = Scorer(pieces, stats, housing, res_weight, pad).score(Layout(grid, pieces, origin))[0]
+    out = []
+    for i, p in pieces.items():
+        if p.type not in DEMOLISH_CANDIDATE_TYPES or p.unfinished:
+            continue
+        pcs = {k: v for k, v in pieces.items() if k != i}
+        org = {k: v for k, v in origin.items() if k != i}
+        s1 = Scorer(pcs, stats, housing, res_weight, pad).score(Layout(grid, pcs, org))[0] if pcs else 0.0
+        marginal = round(s0 - s1, 2)
+        if marginal < DEMOLISH_MAX_SCORE:
+            out.append((i, p.type, marginal))
+    out.sort(key=lambda x: x[2])
+    return out[:limit]
+
+
 def final_base(base: dict, plan: FullPlan) -> dict:
     """최적 배치를 적용한 기지 (건물 위치 + 충돌 모양)."""
     from .layout import move_geo

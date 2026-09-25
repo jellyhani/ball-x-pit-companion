@@ -94,6 +94,7 @@ class LayoutPlan:
     reach_after: Dict[int, int] = field(default_factory=dict)   # 최적 배치 뒤 미완성 건물별 최대 타격 수 (0 = 여전히 안 닿음)
     builds: List[tuple] = field(default_factory=list)            # 새로 지을 건물 추천 (종류, 중심, 크기, 늘어나는 점수, 대상 수)
     activations: List[tuple] = field(default_factory=list)       # 강화·일꾼 배정으로 켜지는 효과 (id, 종류, 할 일, 점수)
+    demolish: List[tuple] = field(default_factory=list)           # 철거 후보 (id, 종류, 지금 기여 점수) — 점수 낮은 순
     calibration: Tuple[float, int, int] = (0.0, 0, 0)            # 범위 판정 게임 값 비교 (여유, 맞음, 비교 수)
     preset: str = "effect"                                       # effect(효과 최대) | gold_u(금광 U자)
     alternatives: Dict[str, "LayoutPlan"] = field(default_factory=dict)   # 다른 프리셋으로 계산한 배치

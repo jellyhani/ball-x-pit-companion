@@ -295,6 +295,7 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
         if gm:
             plan.builds.append(gm)
     plan.activations = lo.activation_gains(final_base, res_weight, pad)
+    plan.demolish = lo.suggest_demolish(final_base, res_weight, pad)
     from .layout import NewSpot
     plan.new_spots = [NewSpot(t, c, sz, n, f"범위 효과 +{g:.1f} (지은 뒤 강화·일꾼 배정 기준)")
                       for t, c, sz, g, n, *_ in plan.builds[:3]]

@@ -207,6 +207,26 @@ class LayoutOptTest(unittest.TestCase):
         plain = lo.Scorer(pieces, set(), set())
         self.assertAlmostEqual(plain.score(same_row)[0], 0.0)
 
+    def test_suggest_demolish_flags_isolated_idle_building(self):
+        """근처에 캘 바위가 없는 채석장은 철거 후보 — 실제 채석장(id 49)과 같은 range 로 아주 먼 자리에 하나 더 놓는다."""
+        fx, base, grid, pieces, o0 = setup()
+        new_id = max(b["id"] for b in base["buildings"]) + 1000
+        far = grid.center(1000, 1000, 2, 2)
+        far_bld = dict(id=new_id, type="kIdleStoneMine", x=far[0], y=far[1], tw=2, th=2, rot=0, range=2.25)
+        base2 = dict(base, buildings=base["buildings"] + [far_bld])
+        out = lo.suggest_demolish(base2)
+        self.assertIn(new_id, [i for i, _, _ in out])
+        for i, t, score in out:
+            self.assertIn(t, lo.DEMOLISH_CANDIDATE_TYPES)
+            self.assertLess(score, lo.DEMOLISH_MAX_SCORE)
+
+    def test_suggest_demolish_never_flags_excluded_types(self):
+        """금광·거처·능력치 건물은 Scorer 가 가치를 제대로 모르므로(또는 보통 하나뿐이라) 절대 후보에 안 나온다."""
+        _, base, *_ = setup()
+        out = lo.suggest_demolish(base)
+        types = {t for _, t, _ in out}
+        self.assertFalse(types & {"kGoldMine", "kVeteranHut", "kMansion", "kSingleFamilyHome"})
+
     def test_plan_preset_trades_effect_for_tidiness(self):
         """'계획도시' 프리셋: 효율(범위 효과)이 조금 줄더라도 같은 행·열에 줄 세우는 배치를 고른다."""
         fx, base, grid, pieces, o0 = setup()
