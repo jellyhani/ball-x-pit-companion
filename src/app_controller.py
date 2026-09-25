@@ -987,8 +987,19 @@ class AppController(QObject):
         dur = self._harvest_dur
         # 배치·남은 자원·필요 자원·미완성 건물이 바뀔 때만 각도 탐색을 다시 한다
         lo, hi = self.aim_range.limits
-        key = (layout_key(base), tuple(sorted((b, blds[b].get("res")) for b in blds)), need, len(team),
-               tuple(sorted(targets.items())), dur, round(lo), round(hi))
+        base_key = (layout_key(base), tuple(sorted((b, blds[b].get("res")) for b in blds)), need, len(team),
+                    tuple(sorted(targets.items())), dur, round(lo), round(hi))
+        # 발사 시작점 = 캐릭터 위치 (조준 중에 옆으로 움직인다) — 0.1 단위로 키에 넣어 움직이면 다시 계산
+        lxy = geo_.get("launcher") or [0.0, 0.0]
+        launch = (round(float(lxy[0]), 1), round(float(lxy[1]), 1))
+        key = base_key + (launch,)
+
+        def follow(res_key, path):
+            """새 계산이 오기 전: 이전 결과의 경로를 캐릭터가 움직인 만큼 옮겨 그린다 (배치가 같을 때만)."""
+            if not res_key or res_key[:-1] != base_key:
+                return None
+            dx, dy = launch[0] - res_key[-1][0], launch[1] - res_key[-1][1]
+            return [hs.to_screen(h, x + dx, y + dy) for x, y in path or []]
         if self._sim_req.get("sweep") != key:
             self._sim_req["sweep"] = key
             self.sim.submit("sweep", key, sim_jobs.job_sweep, geo_, blds, team, dur, need, targets, lo, hi)
@@ -1002,13 +1013,15 @@ class AppController(QObject):
                 self._sim_req["now"] = (ang, key)
                 self.sim.submit("now", (ang, key), sim_jobs.job_now, geo_, blds, team, ang, dur, targets)
             got = self._sim_res.get("now")
-            if got and got[1] and got[0][1] == key:      # 각도가 한두 번 늦어도 같은 배치면 보여 준다
+            moved = follow(got[0][1], got[1].get("path")) if got and got[1] else None
+            if moved is not None:                         # 각도·위치가 한두 번 늦어도 같은 배치면 따라 그린다
                 r = got[1]
-                now_path = [hs.to_screen(h, x, y) for x, y in r.get("path") or []]
+                now_path = moved
                 lines.append((f"지금 조준 {r['angle']:.0f}°: {self._yield_text(r)}", (255, 255, 255, 230)))
         best_path: list = []
         got = self._sim_res.get("sweep")
-        if got and got[1] and got[0] == key and got[1].get("top"):
+        if got and got[1] and got[0][:-1] == base_key and got[1].get("top"):
+            sweep_key = got[0]
             top, reach = got[1]["top"], got[1].get("reach") or {}
             # 어떤 각도로도 닿지 않는 미완성 건물: 배치도의 '길 열기'로 안내
             stuck = [u for u in unf if u.id in reach and not reach[u.id]]
@@ -1024,11 +1037,11 @@ class AppController(QObject):
             cur = math.degrees(math.atan2(pl[3], pl[2])) if len(pl) >= 4 else 90.0
             if len(similar) > 1:
                 show = min(similar, key=lambda r: abs(r["angle"] - cur))
-                best_path = [hs.to_screen(h, x, y) for x, y in show.get("path") or []]
+                best_path = follow(sweep_key, show.get("path")) or []
                 lines.append((f"각도 차이 거의 없음 ({len(similar)}곳 비슷) — 지금 조준에 가까운 {show['angle']:.0f}° "
                               f"(파란 선): {self._yield_text(show)}", (120, 180, 255, 255)))
             else:
-                best_path = [hs.to_screen(h, x, y) for x, y in best.get("path") or []]
+                best_path = follow(sweep_key, best.get("path")) or []
                 lines.append((f"1위 {best['angle']:.0f}° (파란 선): {self._yield_text(best)}", (120, 180, 255, 255)))
                 alts = " / ".join(f"{i}위 {r['angle']:.0f}° {self._yield_text(r)}" for i, r in enumerate(top[1:3], 2))
                 if alts:
