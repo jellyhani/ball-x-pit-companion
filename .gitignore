@@ -24,3 +24,6 @@ tests/fixtures/*.png
 # exe 빌드 결과물 (GitHub Releases 로 배포)
 build/
 dist/
+
+# 이 PC 전용 Claude 메모
+CLAUDE.local.md
