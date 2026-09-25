@@ -121,8 +121,10 @@ def convert(snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_
         passives_raw = battle.get("passives") or []
         slots = []
         for e in balls_raw + passives_raw:
+            # 퓨전 리액터에서 합쳐 넣은 볼(예: 산사태 안의 피뢰침) — 옛 플러그인(1.11 미만)은 이 필드가 없다
+            combined = tuple(x for x in (item(t) for t in e.get("combined") or []) if x)
             slots.append(InventorySlot(len(slots), (0, 0, 0, 0), True, item(e.get("type")), _shown(e.get("lvl")),
-                                       at_max=e.get("max")))
+                                       at_max=e.get("max"), combined=combined))
             if e.get("max") is True and _shown(e.get("lvl")):
                 max_level = max(max_level or 0, _shown(e.get("lvl")))
         inventory = tuple(slots)

@@ -32,6 +32,17 @@ class ArchetypeTest(unittest.TestCase):
         run.owned["ball:bleed"] = Owned("ball:bleed", "ball", 1, "game")
         self.assertEqual(detect(run, self.d).top, [])
 
+    def test_combined_ball_axes_are_counted(self):
+        # 산사태(범위)에 빙하(빙결)를 합쳐 넣으면 산사태는 없어진 빙하의 계열도 갖는다
+        self.assertIn("aoe", axes_of(self.d, "ball:landslide"))
+        self.assertEqual(axes_of(self.d, "ball:glacier"), ["freeze"])
+        run = RunState()
+        run.start_run()
+        run.owned["ball:landslide"] = Owned("ball:landslide", "ball", 1, "game", combined=("ball:glacier",))
+        arch = detect(run, self.d)
+        self.assertIn("freeze", arch.scores)      # 합쳐 넣어 사라진 빙하의 계열도 점수에 들어간다
+        self.assertIn("aoe", arch.scores)         # 산사태 자신의 계열은 그대로 유지
+
 
 if __name__ == "__main__":
     unittest.main()

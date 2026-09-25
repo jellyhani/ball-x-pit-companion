@@ -87,6 +87,24 @@ class AdapterTest(unittest.TestCase):
         self.assertEqual(infer_pick(before.inventory, convert(dup, d).observation.inventory, before.cards).item_id,
                          "ball:laserhorz")
 
+    def test_combined_balls_are_parsed(self):
+        # 실제 기록(companion.log, 2026-09-25 19:xx): 산사태(kLandslide)에 피뢰침(kLightningRod)을 합쳐 넣음
+        snap = json.loads(json.dumps(LEVELUP))
+        snap["battle"]["balls"] = [{"idx": 0, "type": "kLandslide", "lvl": 1, "combined": ["kLightningRod"]},
+                                   {"idx": 1, "type": "kHeavy", "lvl": 0}]
+        snap["levelup"] = None
+        obs = convert(snap, game_data()).observation
+        self.assertEqual(obs.inventory[0].item_id, "ball:landslide")
+        self.assertEqual(obs.inventory[0].combined, ("ball:lightningrod",))
+        self.assertEqual(obs.inventory[1].combined, ())   # 합친 게 없으면 빈 튜플
+
+    def test_combined_field_missing_is_backward_compatible(self):
+        # 옛 플러그인(1.11 미만)은 볼 항목에 combined 자체가 없다
+        snap = json.loads(json.dumps(LEVELUP))
+        snap["levelup"] = None
+        obs = convert(snap, game_data()).observation
+        self.assertTrue(all(s.combined == () for s in obs.inventory))
+
     def test_tracker_opens_and_closes_immediately(self):
         d = game_data()
         tr = ChoiceTracker()

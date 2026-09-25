@@ -31,6 +31,7 @@ class Owned:
     updated_at: float = field(default_factory=time.time)
     copies: int = 1                 # 같은 볼을 따로 여러 개 가질 수 있다 (실제 화면 확인)
     at_max: Optional[bool] = None   # 게임이 알려 준 최대 레벨 여부 (게임 연동)
+    combined: Tuple[str, ...] = ()  # 이 볼에 합쳐 넣은 볼들 — 그 볼들은 더 이상 따로 보유하지 않는다 (게임 연동)
 
 
 @dataclass
@@ -102,8 +103,11 @@ class RunState:
                     o.level = level
                 if s.at_max:
                     o.at_max = True
+                if s.combined:
+                    o.combined = tuple(dict.fromkeys(o.combined + s.combined))
             else:
-                seen[s.item_id] = Owned(s.item_id, data.items[s.item_id].kind, level, "screen", at_max=s.at_max)
+                seen[s.item_id] = Owned(s.item_id, data.items[s.item_id].kind, level, "screen", at_max=s.at_max,
+                                        combined=s.combined)
         notes = []
         added = [i for i in seen if i not in self.owned]
         removed = [i for i in self.owned if i not in seen]

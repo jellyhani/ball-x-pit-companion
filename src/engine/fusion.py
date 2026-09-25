@@ -71,6 +71,9 @@ class FusionAdvisor:
         if fz is None:
             return FusionRecommendation("none", "융합 후보를 받지 못했습니다", None, [], [],
                                         ["게임 연동 플러그인을 최신으로 설치하면 후보를 받습니다"])
+        # 합쳐 넣어진 볼(InventorySlot.combined)은 자기 칸이 없어져 이 목록에 안 나온다 — evos/combos 도
+        # 게임이 남은 볼만으로 준 후보라 따로 걸러낼 게 없다. 합친 볼을 다시 재료로 쓸 수 있는지는 모름(추정 아님,
+        # 미확인) — 게임이 그런 후보를 준 적이 없어 지금은 판단할 자료가 없다.
         balls = [s for s in (inventory or ()) if s.item_id and s.item_id.startswith("ball:")]
         evos = [self._evo(e, balls, run) for e in fz.evos]
         combos = [self._combo(c, run) for c in fz.combos]

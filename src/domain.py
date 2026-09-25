@@ -108,6 +108,7 @@ class InventorySlot:
     icon_error: Optional[float] = None
     icon_margin: Optional[float] = None
     at_max: Optional[bool] = None      # 게임이 알려 준 최대 레벨 여부
+    combined: Tuple[str, ...] = ()     # 퓨전 리액터에서 이 볼에 합쳐 넣은(인벤토리에서 사라진) 볼들 (게임 연동 1.11+)
 
 
 @dataclass(frozen=True)

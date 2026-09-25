@@ -54,7 +54,11 @@ def detect(run: RunState, data: GameData) -> Archetype:
     scores: Dict[str, float] = {}
     total_dmg = sum(v for k, v in run.damage.items() if k.startswith("ball:")) or 0
     for iid, owned in run.owned.items():
-        axes = axes_of(data, iid)
+        axes = set(axes_of(data, iid))
+        for c in owned.combined:
+            # 퓨전 리액터에서 합쳐 넣은 볼(피뢰침 등)은 인벤토리에서 사라졌지만 효과는 이 볼에 남는다 →
+            # 그 볼의 계열도 이 볼의 정체성으로 센다 (예: 산사태 + 피뢰침 → 산사태가 범위 계열에 더해 시너지도 가짐)
+            axes.update(axes_of(data, c))
         if not axes:
             continue
         lvl = owned.level or 1

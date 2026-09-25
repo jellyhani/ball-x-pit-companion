@@ -147,6 +147,28 @@ class RecommenderTest(unittest.TestCase):
         self.assertTrue(any("용암" in x.text for x in quake.reasons))
         self.assertTrue(any("유황" in x.text for x in r.evals[1].reasons))
 
+    def test_combined_ball_axis_reflected_in_archetype(self):
+        # 산사태에 빙하를, 번개벌레에 냉동을 합쳐 넣음 — 둘 다 원래 범위(aoe) 계열이지만 합친 볼로 빙결 계열도 갖는다
+        from src.domain import InventorySlot
+        inv = (InventorySlot(0, (0, 0, 0, 0), True, "ball:landslide", 1, combined=("ball:glacier",)),
+              InventorySlot(1, (0, 0, 0, 0), True, "ball:lightningbug", 1, combined=("ball:freeze",)))
+        self.run.apply_inventory(inv, self.d)
+        r = self.rec.recommend(session([card(0, "ball:freeze", CardLabel.NEW)]), self.run)
+        self.assertIn("archetype", [x.rule_id for x in r.evals[0].reasons])
+
+    def test_combined_away_ball_is_not_still_owned_for_evolution(self):
+        # 피뢰침을 무쇠에 합쳐 넣으면 피뢰침은 인벤토리에서 사라진다 — '피뢰침 진화 가능'처럼
+        # 이미 없어진 볼을 재료로 하는 진화를 '가능'이라고 잘못 보면 안 됨 (실제로 그렇게 되는지는 미확인)
+        self.with_known_max(3)
+        from src.domain import InventorySlot
+        inv = (InventorySlot(0, (0, 0, 0, 0), True, "ball:heavy", 3, at_max=True, combined=("ball:bleed",)),)
+        self.run.apply_inventory(inv, self.d)
+        self.assertNotIn("ball:bleed", self.run.owned)     # 합쳐 넣은 볼은 따로 보유하지 않는다
+        ev = self.rec.recommend(session([card(0, "ball:heavy", CardLabel.UPGRADE, 3)]), self.run).evals[0]
+        ids = [x.rule_id for x in ev.reasons]
+        self.assertNotIn("evo_ready", ids)
+        self.assertNotIn("evo_path", ids)
+
 
 class ProgressTest(unittest.TestCase):
     """런 진행 상황(게임 연동 값)에 따른 판단 — 합성 입력."""
