@@ -668,7 +668,8 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     stats = {b.get("type") for b in base.get("buildings") or []
              if b.get("stat") and not any(x in b["stat"] for x in ("None", "Invalid", "Count", "Max"))}
     stat_types = stats or STAT_FALLBACK
-    pieces, origin0 = pieces_from_base(base, grid, housing, fixed)
+    # 계획도시는 '쳐야 지어지는' 건물(fixed 로 넘어온 공사 중 건물)을 제자리에 묶지 않고 발사대 쪽으로 옮긴다
+    pieces, origin0 = pieces_from_base(base, grid, housing, () if preset == "plan" else fixed)
     if not pieces:
         return None
     preset_spots = gold_u_spots(geo, grid) if preset == "gold_u" else []
@@ -679,7 +680,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     # 실제 기지 3곳에서 앞 구역을 넣은 쪽이 채집 발사 계산·범위 효과 모두 좋았다 (53.2 → 56.2, 49.8 → 52.1).
     laned = scorer
     if preset == "plan":
-        return _optimize_city(base, grid, pieces, origin0, scorer, plain, harvest_eval, pad)
+        return _optimize_city(base, grid, pieces, origin0, scorer, plain, harvest_eval, pad, set(fixed))
     if preset == "gold_u":
         prefer = None                                                  # 사용자가 고른 틀이므로 이전 목표를 고집하지 않음
     lay0 = Layout(grid, pieces, origin0)
@@ -825,14 +826,14 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
 
 def _optimize_city(base: dict, grid: Grid, pieces: Dict[int, Piece], origin0: Dict[int, Tuple[int, int]],
                    scorer: Scorer, plain: Scorer, harvest_eval: Optional[Callable[[dict], List[int]]],
-                   pad: float) -> FullPlan:
+                   pad: float, hit: Set[int] = frozenset()) -> FullPlan:
     """계획도시 프리셋: 담금질 대신 구역을 나눠 반복 패턴으로 다시 짠다 (layout_city — 실험적, 근거 없음)."""
     from .layout_city import plan_city
     geo = base.get("geo") or {}
     launcher = geo.get("launcher") or []
     lrc = (int((float(launcher[0]) - grid.ox) // grid.size), int((float(launcher[1]) - grid.oy) // grid.size)) \
         if len(launcher) >= 2 else None
-    orig, notes = plan_city(grid, pieces, origin0, lrc, gold_u_spots(geo, grid), scorer, pad)
+    orig, notes = plan_city(grid, pieces, origin0, lrc, gold_u_spots(geo, grid), scorer, pad, hit)
     orig = canonicalize(pieces, origin0, orig)
     e0, d0 = plain.score(Layout(grid, pieces, origin0))
     lay = Layout(grid, pieces, orig)

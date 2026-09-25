@@ -112,7 +112,6 @@ class MapCanvas(QWidget):
 
 class LayoutWindow(QWidget):
     recalc_requested = Signal()
-    preset_chosen = Signal(str)          # effect | gold_u | plan
 
     def __init__(self, data: GameData):
         super().__init__(None)
@@ -122,10 +121,6 @@ class LayoutWindow(QWidget):
         self.setStyleSheet(f"background: {tk.css(tk.BG_SOLID)}; color: {tk.css(tk.TEXT)};")
         root = QHBoxLayout(self)
         left = QVBoxLayout()
-        self.preset_view = Segmented(["효과 최대", "금광 U자 (공략)", "계획도시"], 0)
-        self.preset_view.changed.connect(self._on_preset)
-        self.preset_view.setVisible(False)
-        left.addWidget(self.preset_view)
         self.view = Segmented(["지금 배치", "최적 배치"], 0)
         self.view.changed.connect(lambda _i: self._redraw())
         left.addWidget(self.view)
@@ -169,23 +164,11 @@ class LayoutWindow(QWidget):
         scroll.setWidget(panel)
         root.addWidget(scroll, 2)
         self.base: Optional[dict] = None
-        self.plan_all: Optional[LayoutPlan] = None
         self.plan: Optional[LayoutPlan] = None
         self.sweeps: Dict[int, list] = {}
 
-    def _on_preset(self, i: int):
-        name = {1: "gold_u", 2: "plan"}.get(i, "effect")
-        self.preset_chosen.emit(name)
-        if self.base is not None:
-            self.set_result(self.base, self.plan_all, self.sweeps, name)
-
-    def set_result(self, base: dict, plan: Optional[LayoutPlan], sweeps: Dict[int, list], preset: str = "effect"):
-        """plan: 기본(효과 최대) 배치. 다른 프리셋은 plan.alternatives 에 있다."""
-        self.plan_all = plan
-        has_alt = bool(plan is not None and getattr(plan, "alternatives", None))
-        self.preset_view.setVisible(has_alt)
-        if has_alt and preset in plan.alternatives:
-            plan = plan.alternatives[preset]
+    def set_result(self, base: dict, plan: Optional[LayoutPlan], sweeps: Dict[int, list]):
+        """plan: 계획도시 배치 (layout_city)."""
         self.base, self.plan, self.sweeps = base, plan, sweeps
         d = self.data
         blds = buildings_from_base(base)

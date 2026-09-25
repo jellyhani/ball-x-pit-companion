@@ -160,9 +160,6 @@ class AppController(QObject):
         self._layout_busy = False
         self.control.layout_requested.connect(self.open_layout)
         self.layout_win.recalc_requested.connect(lambda: self.compute_layout(force=True))
-        self.layout_preset = "effect"          # 배치도 창에서 고른 공략 프리셋 (effect | gold_u)
-        self._layout_all = None
-        self.layout_win.preset_chosen.connect(self._on_preset_chosen)
         self.hud.compact = self.settings.hud_compact
         self.inputs = InputWatcher()
         self.inputs.resync.connect(lambda: self.scan_now(forced=True))
@@ -988,10 +985,10 @@ class AppController(QObject):
         targets = {u.id: u.hits_left for u in unfinished_buildings(base, self.meta)}
         need, _ = need_resource(self.meta, self._shortfalls())
         self._layout_busy = True
-        prefer = dict(getattr(self._layout_all, "final", {}) or {}) if self._layout_all is not None else None
         char_levels = {c.get("type"): c.get("lvl") for c in self.meta.chars_raw if c.get("type")}
+        # 계획도시 배치는 정해진 규칙이라 재배치 도중 다시 계산해도 목표가 같다 → 이전 목표(prefer)를 넘길 필요 없음
         self.sim.submit("layout", snap, sim_jobs.job_layout, snap, team, self._harvest_dur, bps, targets, need, 12.0,
-                        prefer, char_levels)
+                        None, char_levels)
 
     def _update_spa(self, base: dict):
         """스파 재채집 손익: 게임이 알려 준 비용과 내 채집 기록 평균을 비교 (비용·기록이 바뀔 때만)."""
@@ -1009,14 +1006,6 @@ class AppController(QObject):
         if adv is not None:
             log.info("스파: %s", adv.text)
 
-    def _on_preset_chosen(self, name: str):
-        self.layout_preset = name
-        allp = self._layout_all
-        self.layout_plan = allp.alternatives.get(name, allp) if allp is not None and name != "effect" else allp
-        self._remain_key = None                              # 재배치 안내를 새 목표로 다시 계산
-        self.control.set_layout_plan(self.layout_plan, getattr(self, "_unmanned", ()))
-        log.info("배치 프리셋: %s", name)
-
     def _on_sim_done(self, channel: str, key, result):
         self._sim_res[channel] = (key, result)
         if channel == "layout":
@@ -1029,11 +1018,8 @@ class AppController(QObject):
     def _on_layout_done(self, snap: dict, result):
         self._layout_busy = False
         plan, sweeps = result if result else (None, {})
-        self._layout_all = plan
-        if plan is not None and self.layout_preset in getattr(plan, "alternatives", {}):
-            plan = plan.alternatives[self.layout_preset]      # 재배치 안내·기지 탭은 고른 프리셋을 따른다
         self.layout_plan = plan
-        self.layout_win.set_result(snap, self._layout_all, sweeps, self.layout_preset)
+        self.layout_win.set_result(snap, plan, sweeps)
         # 일꾼이 없으면 생산이 0인 건물 (금광·농장·야적장·채석장·채집가의 오두막 — 위키: 광마다 일꾼 1명)
         idle = [b.get("type", "") for b in (snap or {}).get("buildings") or []
                 if b.get("type") in ("kGoldMine", "kIdleFarm", "kIdleLumberyard", "kIdleStoneMine", "kIdleLauncher")

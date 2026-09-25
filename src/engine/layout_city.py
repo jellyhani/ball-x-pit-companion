@@ -122,8 +122,10 @@ def _u_reserve(spots: List[Cell]) -> Set[Cell]:
 
 
 def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: Optional[Cell],
-              gold_spots: List[Cell], scorer, pad: float = 0.0) -> Tuple[Dict[int, Cell], List[str]]:
-    """계획도시 배치 (건물 → 왼쪽 아래 타일). scorer: 범위 효과 채점기 (발사대 앞 구역 포함 — 후보 비교용)."""
+              gold_spots: List[Cell], scorer, pad: float = 0.0, hit: Set[int] = frozenset()
+              ) -> Tuple[Dict[int, Cell], List[str]]:
+    """계획도시 배치 (건물 → 왼쪽 아래 타일). scorer: 범위 효과 채점기 (발사대 앞 구역 포함 — 후보 비교용).
+    hit: 쳐야 지어지는 건물 (공사 중 — 상태 값이 없는 옛 플러그인 자료에서도 알 수 있게 따로 받음)."""
     from .layout_opt import TILE_RES, Layout
     tiles = grid.tiles
     fixed = {i for i, p in pieces.items() if not p.movable}
@@ -151,7 +153,7 @@ def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: O
         v.sort(key=lambda p: origin0[p.id])
     prods = sorted((pieces[i] for i in movable if pieces[i].type in PRODUCERS), key=lambda p: (PRODUCERS[p.type], origin0[p.id]))
     # 공사 중인 건물은 쳐야 지어지므로 마을이 아니라 생산 구역(발사대 쪽)에
-    extra = [pieces[i] for i in movable if pieces[i].unfinished and pieces[i].type not in PRODUCERS
+    extra = [pieces[i] for i in movable if (pieces[i].unfinished or i in hit) and pieces[i].type not in PRODUCERS
              and pieces[i].type not in TILE_RES and pieces[i].type != "kGoldMine"]
     used = {p.id for p in prods} | {p.id for v in by_res.values() for p in v} | set(mines) | {p.id for p in extra}
     town = [pieces[i] for i in movable if i not in used]

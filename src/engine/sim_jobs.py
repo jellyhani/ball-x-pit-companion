@@ -6,7 +6,6 @@
 """
 from __future__ import annotations
 
-import json
 import math
 from typing import Dict, List, Optional, Sequence
 
@@ -138,11 +137,11 @@ def REACH_ANGLES():
 def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequence[dict],
                targets: Optional[Dict[int, int]] = None, need: int = 1, seconds: float = 12.0,
                prefer: Optional[Dict[int, tuple]] = None, char_levels: Optional[Dict[str, int]] = None):
-    """최적 배치(전체 재배치, layout_opt) → 닿지 않는 미완성 건물로 길 열기 → 새 건물 자리. 자원별 추천 각도.
+    """계획도시 배치(전체 재배치, layout_city) → 닿지 않는 미완성 건물로 길 열기 → 새 건물 자리. 자원별 추천 각도.
+    seconds·prefer 는 예전 담금질용 — 지금은 쓰지 않는다 (호출 쪽 호환용).
 
     돌려주는 값: (LayoutPlan, 자원별 각도 순위). LayoutPlan.swaps 는 게임에서 할 옮기기 순서(잠시 비켜 두기 포함),
     LayoutPlan.final 은 건물별 목표 중심(월드 좌표)."""
-    import hashlib
     from . import layout_opt as lo
     from .layout import LayoutPlan, Move, buildings_from_base, grid_from_geo, plan_access, shape_masks, suggest_new
     blds = full_tiles({b["id"]: b for b in snap.get("buildings") or [] if "id" in b})
@@ -178,67 +177,53 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
                     out[b] = max(out.get(b, 0), v)
         return out
 
-    seed = int(hashlib.md5(json.dumps(sorted((b.get("id"), b.get("x"), b.get("y")) for b in blds.values())).encode())
-               .hexdigest()[:8], 16)
     calib = lo.calibrate_range(snap)                  # 게임이 직접 센 범위 안 타일 수와 맞춤 (플러그인 1.9)
     pad = calib[0] if calib[2] else 0.0
-    full = lo.optimize(snap, hv if team else None, None, seconds=seconds, restarts=4, res_weight=res_weight, seed=seed,
-                       fixed=list(targets or {}), pad=pad, prefer=prefer)
+    # 배치 추천은 계획도시 하나 (사용자 결정 2026-09-25): 생산 유닛 격자 + 빽빽한 마을 + 금광 U자 (layout_city).
+    # 담금질이 아니라 정해진 규칙으로 짜서 1초 안팎, 재배치 도중 다시 계산해도 목표가 같다.
+    full = lo.optimize(snap, hv if team else None, None, res_weight=res_weight,
+                       fixed=list(targets or {}), pad=pad, preset="plan")
     grid = grid_from_geo(snap.get("geo") or {})
     if full is None or grid is None:
         return None, {}
     plan = _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib)
-    # 공략 프리셋: 금광 U자 (금광이 있거나 지을 수 있을 때)
-    if mines or any(bp.get("type") == "kGoldMine" for bp in blueprints):
-        alt = lo.optimize(snap, hv if team else None, None, seconds=seconds * 0.6, restarts=3, res_weight=res_weight,
-                          seed=seed + 1, fixed=list(targets or {}), pad=pad, preset="gold_u")
-        if alt is not None:
-            ap = _plan_from(snap, alt, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib)
-            ap.preset = "gold_u"
-            spots = lo.gold_u_spots(snap.get("geo") or {}, grid)
-            ap.preset_spots = [grid.center(c, r, 2, 2) for c, r in spots]
-            filled = {alt.origin_after.get(i) for i in mines}
-            missing = [s for s in spots if s not in filled]
-            if missing:
-                from .layout import NewSpot
-                ap.builds = [("kGoldMine", grid.center(missing[0][0], missing[0][1], 2, 2), (2, 2), 0.0, len(missing), 0)] + \
-                    [b for b in ap.builds if b[0] != "kGoldMine"]
-                ap.new_spots = [NewSpot("kGoldMine", grid.center(c, r, 2, 2), (2, 2), 0, "금광 U자 빈 자리") for c, r in missing]
-                ap.notes.append(f"금광 {len(missing)}개를 더 지으면 U자 완성 (초록 점선, 광마다 일꾼 1명)")
-                # 완성했을 때의 채집 골드 추정: 빈 자리에 금광 충돌 상자를 넣고 궤적 계산 (튕김 × 1.5, 광마다 최대 100번)
-                if team:
-                    fb = lo.final_base(snap, alt)
-                    g2 = dict(fb.get("geo") or {})
-                    b2 = dict(blds)
-                    extra = []
-                    for k, (c, r) in enumerate(missing):
-                        cx, cy = grid.center(c, r, 2, 2)
-                        hw = grid.size
-                        nid = -300 - k
-                        extra.append(nid)
-                        g2["colliders"] = list(g2.get("colliders") or []) + [
-                            {"id": nid, "shape": "box",
-                             "pts": [[cx - hw, cy - hw], [cx + hw, cy - hw], [cx + hw, cy + hw], [cx - hw, cy + hw]]}]
-                        b2[nid] = {"id": nid, "type": "kGoldMine", "res": 0}
-                    w2 = hs.world_from_geo(g2, 0.03)
-                    if w2:
-                        best_gold = 0
-                        for ang in range(24, 157, 6):
-                            counts: Dict[int, int] = {}
-                            hs.run_angle(w2, b2, team, ang, dur, counts)
-                            gold = sum(min(counts.get(m, 0), 100) for m in extra + mines) * 1.5
-                            best_gold = max(best_gold, gold)
-                        ap.notes.append(f"U자 완성 시 채집 한 번에 골드 약 {best_gold:,.0f} 예상 (궤적 계산, 튕길 때 1~2골드 평균)")
-            plan.alternatives["gold_u"] = ap
-    # 계획도시: 효율 대신 구역을 나눠 반복 패턴으로 다시 짠 배치 (layout_city — 사용자 취향 기반 실험적 프리셋).
-    # 담금질이 아니라 정해진 규칙으로 짜므로 1초 안팎.
-    alt2 = lo.optimize(snap, hv if team else None, None, res_weight=res_weight,
-                       fixed=list(targets or {}), pad=pad, preset="plan")
-    if alt2 is not None:
-        ap2 = _plan_from(snap, alt2, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib)
-        ap2.preset = "plan"
-        ap2.notes.append("계획도시는 보기 좋게 정돈하는 실험적 프리셋 — 범위 효과는 '효과 최대'보다 낮을 수 있음")
-        plan.alternatives["plan"] = ap2
+    plan.preset = "plan"
+    if mines:
+        # 금광 U자 빈 자리: 금광을 더 지으면 채울 곳 (정석: 발사대 앞 7개, 광마다 일꾼 1명 — 위키·커뮤니티)
+        spots = lo.gold_u_spots(snap.get("geo") or {}, grid)
+        plan.preset_spots = [grid.center(c, r, 2, 2) for c, r in spots]
+        filled = {full.origin_after.get(i) for i in mines}
+        missing = [s for s in spots if s not in filled]
+        if missing:
+            from .layout import NewSpot
+            plan.builds = [("kGoldMine", grid.center(missing[0][0], missing[0][1], 2, 2), (2, 2), 0.0, len(missing), 0)] + \
+                [b for b in plan.builds if b[0] != "kGoldMine"]
+            plan.new_spots = [NewSpot("kGoldMine", grid.center(c, r, 2, 2), (2, 2), 0, "금광 U자 빈 자리") for c, r in missing]
+            plan.notes.append(f"금광 {len(missing)}개를 더 지으면 U자 완성 (초록 점선, 광마다 일꾼 1명)")
+            # 완성했을 때의 채집 골드 추정: 빈 자리에 금광 충돌 상자를 넣고 궤적 계산 (튕김 × 1.5, 광마다 최대 100번)
+            if team:
+                fb = lo.final_base(snap, full)
+                g2 = dict(fb.get("geo") or {})
+                b2 = dict(blds)
+                extra = []
+                for k, (c, r) in enumerate(missing):
+                    cx, cy = grid.center(c, r, 2, 2)
+                    hw = grid.size
+                    nid = -300 - k
+                    extra.append(nid)
+                    g2["colliders"] = list(g2.get("colliders") or []) + [
+                        {"id": nid, "shape": "box",
+                         "pts": [[cx - hw, cy - hw], [cx + hw, cy - hw], [cx + hw, cy + hw], [cx - hw, cy + hw]]}]
+                    b2[nid] = {"id": nid, "type": "kGoldMine", "res": 0}
+                w2 = hs.world_from_geo(g2, 0.03)
+                if w2:
+                    best_gold = 0
+                    for ang in range(24, 157, 6):
+                        counts: Dict[int, int] = {}
+                        hs.run_angle(w2, b2, team, ang, dur, counts)
+                        gold = sum(min(counts.get(m, 0), 100) for m in extra + mines) * 1.5
+                        best_gold = max(best_gold, gold)
+                    plan.notes.append(f"U자 완성 시 채집 한 번에 골드 약 {best_gold:,.0f} 예상 (궤적 계산, 튕길 때 1~2골드 평균)")
     world = hs.world_from_geo(lo.final_base(snap, full).get("geo") or {}, 0.03)
     sweeps = {}
     if world and team:

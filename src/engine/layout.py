@@ -97,7 +97,6 @@ class LayoutPlan:
     demolish: List[tuple] = field(default_factory=list)           # 철거 후보 (id, 종류, 지금 기여 점수) — 점수 낮은 순
     calibration: Tuple[float, int, int] = (0.0, 0, 0)            # 범위 판정 게임 값 비교 (여유, 맞음, 비교 수)
     preset: str = "effect"                                       # effect(효과 최대) | gold_u(금광 U자) | plan(계획도시)
-    alternatives: Dict[str, "LayoutPlan"] = field(default_factory=dict)   # 다른 프리셋으로 계산한 배치
     preset_spots: List[Tuple[float, float]] = field(default_factory=list) # 프리셋 자리 중심 (금광 U자)
 
 
