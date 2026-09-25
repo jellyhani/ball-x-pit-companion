@@ -77,6 +77,8 @@ class AppController(QObject):
         self.fusion_rec: Optional[FusionRecommendation] = None
         self.char_combo = None                    # 캐릭터 선택 화면의 조합 추천 (알선소가 있을 때)
         self._char_combo_key = None                # (state, char1, char2) — 바뀔 때만 다시 계산
+        self._loadout_seen = (None, None)           # 로드아웃 화면이 잠깐 비활성화돼 char1/char2 를 못 받은 폴링을 버틴다
+        self._loadout_miss = 0
         self.base_advice = None                    # 기지에서 메뉴 없이 서 있을 때 뭘 지을지·철거할지
         self._base_advice_key = None
 
@@ -496,19 +498,42 @@ class AppController(QObject):
         플러그인 1.12: 로드아웃 화면의 두 캐릭터 패널로 '이미 고른 캐릭터'를 안다 (base.loadout.char1/char2).
         하나만 골랐으면 그 캐릭터와 맞는 조합만 추리고, 둘 다 골랐으면 그 조합의 궁합을 보여준다."""
         loadout = (base or {}).get("loadout") or {}
-        char1, char2 = loadout.get("char1"), loadout.get("char2")
+        raw1, raw2 = loadout.get("char1"), loadout.get("char2")
         has_matchmaker = base is not None and any(
             b.get("type") == "kMatchMaker" and b.get("state", "kNormal") == "kNormal"
             for b in base.get("buildings") or [])
-        want = (self.meta is not None and has_matchmaker
-                and (state == "kSelectingChar" or (state == "kSelectingLoadout" and char1 and char2)))
-        key = (state, char1, char2) if want else None
+        in_flow = self.meta is not None and has_matchmaker and state in ("kSelectingChar", "kSelectingLoadout")
+        if not in_flow:
+            self._loadout_seen = (None, None)
+            self._loadout_miss = 0
+            if self.char_combo is not None:
+                self.char_combo = None
+                self._char_combo_key = None
+                self.hud.hide()
+            return
+        if raw1 or raw2:
+            self._loadout_seen = (raw1, raw2)
+            self._loadout_miss = 0
+            char1, char2 = raw1, raw2
+        else:
+            # 실제 확인: 캐릭터 고르는 화면이 떠 있는 동안 로드아웃 화면(LoadoutUI)이 몇 폴링에 한 번씩
+            # 잠깐 비활성화돼 char1/char2 가 통째로 안 잡힌다 — 그때마다 '고정' 추천이 풀렸다가 방금 고른
+            # 캐릭터를 무시한 일반 추천으로 돌아가는 깜빡임이 있었다(로그로 확인). 몇 번 정도는 방금 본
+            # 값을 그대로 쓰고, 계속 비면(정말 다시 고르는 중으로 보고) 놓는다.
+            self._loadout_miss += 1
+            if self._loadout_miss <= 5:
+                char1, char2 = self._loadout_seen
+            else:
+                self._loadout_seen = (None, None)
+                char1, char2 = None, None
+        want = state == "kSelectingChar" or (state == "kSelectingLoadout" and char1 and char2)
         if not want:
             if self.char_combo is not None:
                 self.char_combo = None
                 self._char_combo_key = None
                 self.hud.hide()
             return
+        key = (state, char1, char2)
         if key == self._char_combo_key:
             return
         self._char_combo_key = key

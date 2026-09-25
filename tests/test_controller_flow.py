@@ -90,6 +90,32 @@ class ControllerFlowTest(unittest.TestCase):
         self.c._update_base_advice(None, "kNormal")           # 기지를 벗어나면 사라짐
         self.assertIsNone(self.c.base_advice)
 
+    def test_char_combo_survives_loadout_flicker(self):
+        """실제 확인(2026-09-25): 캐릭터 고르는 화면이 떠 있는 동안 로드아웃 값(char1/char2)이 몇 폴링에
+        한 번씩 통째로 빠진다 — 그때마다 방금 고른 캐릭터를 잊고 일반 추천으로 돌아가는 깜빡임이 있었다."""
+        meta = {"resources": [0, 0, 0, 0], "buildings": [{"type": "kHome", "lvl": 0, "state": "kNormal"}],
+                "blueprints": [], "chars": [{"type": "kItchyFinger", "lvl": 20}, {"type": "kRecaller", "lvl": 20},
+                                            {"type": "kSisyphus", "lvl": 1}, {"type": "kEmbedded", "lvl": 1}]}
+        self.feed({"meta": meta})
+        mm = [{"type": "kMatchMaker", "state": "kNormal"}]
+        base = {"buildings": mm, "loadout": {"char1": "kSisyphus"}}
+        self.c._update_char_combo(base, "kSelectingChar")
+        self.assertTrue(self.c.char_combo)
+        best = self.c.char_combo[0]
+        self.assertIn("char:sisyphus", (best.a, best.b), self.c.char_combo)
+
+        # 다음 폴링: 로드아웃 화면이 잠깐 비활성화돼 loadout 키 자체가 안 온다 — 직전 고정 추천을 유지해야 함
+        flicker = {"buildings": mm}
+        self.c._update_char_combo(flicker, "kSelectingChar")
+        best = self.c.char_combo[0]
+        self.assertIn("char:sisyphus", (best.a, best.b), self.c.char_combo)
+
+        # 계속(6번 넘게) 비면 정말 다시 고르는 중으로 보고 고정을 놓는다
+        for _ in range(6):
+            self.c._update_char_combo(flicker, "kSelectingChar")
+        best = self.c.char_combo[0]
+        self.assertNotIn("char:sisyphus", (best.a, best.b), self.c.char_combo)
+
 
 class BaseAimFlowTest(unittest.TestCase):
     """기지 채집 조준: 계산은 별도 프로세스, 결과가 오면 안내를 다시 그린다. 미완성 건물이 먼저."""
