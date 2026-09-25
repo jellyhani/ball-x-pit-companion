@@ -199,13 +199,28 @@ class LayoutOptTest(unittest.TestCase):
         scorer = lo.Scorer(pieces, set(), set(), tidy=True)
         same_row = lo.Layout(grid, pieces, {1: (0, 0), 2: (2, 0), 3: (4, 0)})
         scattered = lo.Layout(grid, pieces, {1: (0, 0), 2: (20, 6), 3: (40, 12)})
-        # 한 행에 3개(서로 다른 열) → 행 가산 (3-1); 그 중 숲 2개가 같은 종류 → 추가 (2-1). 열은 다 달라 열 가산 0.
-        expected = lo.TIDY_ROW_W * 2 + lo.TIDY_TYPE_W * 1
+        # 한 행에 3개(서로 다른 열) → 행 가산 (3-1); 그 중 숲 2개가 같은 종류 → 추가 (2-1).
+        # 셋 다 자원 타일이라 구역(zone)도 같음(resource) → 구역 가산 (3-1) 도 더해짐. 열은 다 달라 열 가산 0.
+        expected = lo.TIDY_ROW_W * 2 + lo.TIDY_TYPE_W * 1 + lo.TIDY_ZONE_W * 2
         self.assertAlmostEqual(scorer.score(same_row)[0], expected)
         self.assertAlmostEqual(scorer.score(scattered)[0], 0.0)
         # tidy=False (기본) 이면 이 가산이 아예 없다
         plain = lo.Scorer(pieces, set(), set())
         self.assertAlmostEqual(plain.score(same_row)[0], 0.0)
+
+    def test_tidy_zone_groups_unique_service_buildings(self):
+        """알선소·시장처럼 보통 하나뿐인 서비스 건물은 종류로는 못 묶이지만 구역(service)으로는 묶여야 한다
+        (실제 배치도로 확인: 이게 없으면 서비스 건물들이 뒤섞인 것처럼 보임)."""
+        _, _, grid, _, _ = setup()
+        sq = frozenset((x, y) for x in range(2) for y in range(2))
+        pieces = {1: lo.Piece(1, "kMatchMaker", 2, 2, sq, True, 0.0),
+                  2: lo.Piece(2, "kMarket", 2, 2, sq, True, 0.0)}
+        scorer = lo.Scorer(pieces, set(), set(), tidy=True)
+        same_row = lo.Layout(grid, pieces, {1: (0, 0), 2: (2, 0)})
+        apart = lo.Layout(grid, pieces, {1: (0, 0), 2: (20, 6)})
+        self.assertGreater(scorer.score(same_row)[0], scorer.score(apart)[0])
+        self.assertAlmostEqual(scorer.score(same_row)[0], lo.TIDY_ROW_W * 1 + lo.TIDY_ZONE_W * 1)
+        self.assertAlmostEqual(scorer.score(apart)[0], 0.0)
 
     def test_suggest_demolish_flags_isolated_idle_building(self):
         """근처에 캘 바위가 없는 채석장은 철거 후보 — 실제 채석장(id 49)과 같은 range 로 아주 먼 자리에 하나 더 놓는다."""
