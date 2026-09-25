@@ -25,6 +25,7 @@ from PySide6.QtWidgets import QFrame, QGridLayout, QHBoxLayout, QLabel, QVBoxLay
 from ..engine.fusion import FusionRecommendation
 from ..engine.recommender import ActionEval, Recommendation, card_badge, card_rank, card_verdict
 from ..gamedata import DATA_DIR, GameData
+from ..i18n import tr
 from ..services import game_window as gw
 from . import tokens as tk
 
@@ -33,7 +34,8 @@ log = logging.getLogger(__name__)
 W = QFont.Weight
 SHADOW = 14          # 그림자 여백 (px, 배율 1 기준)
 
-STATUS_TEXT = {"recommend": "추천", "close": "차이 작음", "hold": "판단 보류", "auto": "자동 선택", "none": "미확인"}
+STATUS_TEXT = {"recommend": tr("추천"), "close": tr("차이 작음"), "hold": tr("판단 보류"), "auto": tr("자동 선택"),
+              "none": tr("미확인")}
 
 
 @lru_cache(maxsize=256)
@@ -456,6 +458,9 @@ class RecommendationHud(QWidget):
         if best is None and rec.limitations:
             v.footer.append((rec.limitations[0], "tertiary"))
         v.footer = v.footer[:2]
+        # 고정한 덱 목표는 경고 두 줄에 밀려 안 보이면 안 된다 — 경고 하나를 양보한다
+        if rec.plan_text and rec.plan_locked and (rec.plan_text, "secondary") not in v.footer:
+            v.footer = v.footer[:1] + [(rec.plan_text, "secondary")]
         self.render_view(v)
 
     def _row(self, e: ActionEval, rec: Recommendation) -> HudRow:

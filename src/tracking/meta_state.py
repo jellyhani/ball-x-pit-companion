@@ -9,8 +9,9 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
 from ..gamedata import GameData
+from ..i18n import tr
 
-RESOURCES = ("골드", "밀", "나무", "돌")
+RESOURCES = (tr("골드"), tr("밀"), tr("나무"), tr("돌"))
 
 
 @dataclass(frozen=True)

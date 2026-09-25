@@ -11,11 +11,15 @@ from dataclasses import dataclass
 from typing import List, Tuple
 
 from ..gamedata import GameData
+from ..i18n import tr
 from ..tracking.meta_state import MetaState
 
+# 게임 설명(desc_ko)에서 이 낱말이 있으면 런에 직접 영향 주는 건물로 본다 — 게임 원문과 대조하는 것이라
+# 번역하면 안 된다(다국어 게임 문구 지원(gamedata.py) 은 아직 desc_ko 가 감지된 언어로 바뀌는 걸 반영 못 함 —
+# 한국어가 아닌 언어에서는 이 매칭이 안 먹는다는 뜻. 알려진 제한, CLAUDE.local.md 참고).
 RUN_WORDS = ("레벨 업", "강화", "삭제", "새로고침", "부활", "선택지", "볼 칸", "패시브 칸", "보스 격퇴", "원정")
 CAT_ORDER = {"kWarfare": 0, "kEconomy": 1, "kHousing": 2}
-CAT_LABEL = {"kWarfare": "전투", "kEconomy": "경제", "kHousing": "주거"}
+CAT_LABEL = {"kWarfare": tr("전투"), "kEconomy": tr("경제"), "kHousing": tr("주거")}
 
 
 @dataclass
@@ -34,7 +38,7 @@ class BaseSuggestion:
 
     @property
     def status(self) -> str:
-        return "지금 가능" if self.affordable else f"부족: {self.missing_text}"
+        return tr("지금 가능") if self.affordable else f"부족: {self.missing_text}"
 
 
 def _desc(data: GameData, type_name: str) -> str:

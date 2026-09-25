@@ -1,0 +1,42 @@
+{
+  "현재 런": "Current Run",
+  "진화": "Evolution",
+  "기록": "History",
+  "기지": "Base",
+  "백과사전": "Encyclopedia",
+  "진단": "Diagnostics",
+  "설정": "Settings",
+
+  "추천": "Recommended",
+  "차이 작음": "Close call",
+  "판단 보류": "Undecided",
+  "자동 선택": "Auto-picked",
+  "미확인": "Unconfirmed",
+
+  "골드": "Gold",
+  "밀": "Wheat",
+  "나무": "Wood",
+  "돌": "Stone",
+
+  "전투": "Combat",
+  "경제": "Economy",
+  "주거": "Housing",
+
+  "볼": "Ball",
+  "패시브": "Passive",
+  "펫": "Pet",
+  "베이비볼": "Baby Ball",
+
+  "추가": "Add",
+  "빼기": "Remove",
+  "고정": "Lock",
+  "해제": "Unlock",
+  "다시 계산": "Recalculate",
+
+  "지금 가능": "Available now",
+
+  "창 열기": "Open window",
+  "HUD 숨기기 / 보이기": "Show / hide HUD",
+  "지금 다시 읽기": "Read again now",
+  "종료": "Quit"
+}

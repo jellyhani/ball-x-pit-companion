@@ -5,6 +5,7 @@ from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QAction, QIcon, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
+from ..i18n import tr
 from . import tokens as tk
 
 
@@ -42,13 +43,14 @@ class Tray(QSystemTrayIcon):
         super().__init__(app_icon())
         self.setToolTip("BALL x PIT 도우미")
         menu = QMenu()
-        for text, sig in (("창 열기  (F10)", self.open_requested), ("HUD 숨기기 / 보이기  (F9)", self.hud_toggle_requested),
-                          ("지금 다시 읽기  (F8)", self.scan_requested)):
+        for text, sig in ((tr("창 열기") + "  (F10)", self.open_requested),
+                          (tr("HUD 숨기기 / 보이기") + "  (F9)", self.hud_toggle_requested),
+                          (tr("지금 다시 읽기") + "  (F8)", self.scan_requested)):
             a = QAction(text, menu)
             a.triggered.connect(sig.emit)
             menu.addAction(a)
         menu.addSeparator()
-        q = QAction("종료", menu)
+        q = QAction(tr("종료"), menu)
         q.triggered.connect(self.quit_requested.emit)
         menu.addAction(q)
         self._menu = menu

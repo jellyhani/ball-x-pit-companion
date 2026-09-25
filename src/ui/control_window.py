@@ -1,6 +1,6 @@
 """사용자가 직접 여는 설정·상태 창(F10). macOS 시스템 설정처럼 왼쪽 목록 + 오른쪽 둥근 그룹 목록.
 
-페이지: 현재 런 / 진화 / 도감 / 진단 / 설정. 플레이 중 추천은 HUD가 맡고, 이 창은 자동으로 뜨지 않는다.
+페이지: 현재 런 / 진화 / 백과사전 / 진단 / 설정. 플레이 중 추천은 HUD가 맡고, 이 창은 자동으로 뜨지 않는다.
 """
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from ..engine.planning import blueprint_targets, plan_levels
 from ..engine.harvest import advise_workers
 from ..engine.roadmap import browsable_targets, build_roadmap, fusion_pairs
 from ..gamedata import DATA_DIR, GameData
+from ..i18n import tr
 from ..services.settings import APP_DIR, Settings
 from ..tracking.meta_state import RESOURCES, MetaState
 from ..tracking.run_history import RunRecord, describe as describe_run, item_summary
@@ -26,8 +27,12 @@ from . import tokens as tk
 from .hud import icon_tile
 from .widgets import Group, Segmented, Toggle, chip, row, section_title, value_label
 
-KIND_LABEL = {"ball": "볼", "passive": "패시브", "pet": "펫", "baby": "베이비볼"}
-PAGES = ["현재 런", "진화", "기록", "기지", "도감", "진단", "설정"]
+KIND_LABEL = {"ball": tr("볼"), "passive": tr("패시브"), "pet": tr("펫"), "baby": tr("베이비볼")}
+# 내부 식별용 키 (번역 안 함 — 화면에 보이는 이름은 PAGES). "백과사전"은 게임 자체 화면 이름 그대로 씀
+# (게임 파일에서 확인: Encyclopedia/百科事典/百科全书/百科全書 — 우리 말로 지어낸 "도감" 대신 이 이름을 쓰면
+# 다른 언어 번역도 게임 것을 그대로 재사용할 수 있다).
+PAGE_KEYS = ["현재 런", "진화", "기록", "기지", "백과사전", "진단", "설정"]
+PAGES = [tr(k) for k in PAGE_KEYS]
 STAT_LABEL = {
     "crit_chance": "치명타 확률", "crit_mult": "치명타 배율", "fire_rate": "발사 속도", "reload": "재장전 시간",
     "ball_speed": "볼 속도", "move_speed": "이동 속도", "damage_reduction": "피해 감소", "dodge": "회피",
@@ -215,11 +220,12 @@ class ControlWindow(QWidget):
 
     def _on_page(self, i: int):
         self.stack.setCurrentIndex(i)
-        if PAGES[i] in ("현재 런", "진화"):
+        if PAGE_KEYS[i] in ("현재 런", "진화"):
             self.refresh_run()
 
     def select_page(self, name: str):
-        self.sidebar.setCurrentRow(PAGES.index(name))
+        """name: PAGE_KEYS 의 내부 키(한국어, 번역 안 됨) — 화면에 보이는 번역된 이름이 아니다."""
+        self.sidebar.setCurrentRow(PAGE_KEYS.index(name))
 
     def apply_scale(self, scale: float):
         self.setStyleSheet(_stylesheet(tk.Type(scale)))
@@ -259,7 +265,7 @@ class ControlWindow(QWidget):
         self.add_combo.setCurrentIndex(-1)
         self.add_combo.lineEdit().setPlaceholderText("항목 이름으로 찾기")
         h.addWidget(self.add_combo, 1)
-        b = QPushButton("추가")
+        b = QPushButton(tr("추가"))
         b.clicked.connect(self._add)
         h.addWidget(b)
         add_group.add(box)
@@ -308,7 +314,7 @@ class ControlWindow(QWidget):
                     bt.setObjectName("mini")
                     bt.clicked.connect(lambda _=False, i=o.item_id, dd=delta: self._bump(i, dd))
                     hl.addWidget(bt)
-                rm = QPushButton("빼기")
+                rm = QPushButton(tr("빼기"))
                 rm.setObjectName("mini")
                 rm.clicked.connect(lambda _=False, i=o.item_id: self._remove(i))
                 hl.addWidget(rm)
@@ -419,7 +425,7 @@ class ControlWindow(QWidget):
         self.target_combo.setCurrentIndex(-1)
         self.target_combo.lineEdit().setPlaceholderText("목표로 삼을 진화 찾기")
         h.addWidget(self.target_combo, 1)
-        lock_btn = QPushButton("고정")
+        lock_btn = QPushButton(tr("고정"))
         lock_btn.clicked.connect(self._lock_target)
         h.addWidget(lock_btn)
         target_add_group.add(box)
@@ -480,7 +486,7 @@ class ControlWindow(QWidget):
         d, run = self.data, self.run
         self.target_group.clear()
         if run.locked_target:
-            btn = QPushButton("해제")
+            btn = QPushButton(tr("해제"))
             btn.setObjectName("mini")
             btn.clicked.connect(self._clear_target)
             self.target_group.add(row(d.name(run.locked_target), btn, "고정된 덱 목표 — 추천이 이쪽으로 맞춰집니다",
@@ -719,13 +725,13 @@ class ControlWindow(QWidget):
             self.base_bonus.add(row("보스 격퇴 후 원정 계속", value_label("해금" if b["endless"] else "잠김")))
         self._refresh_meta_records()
 
-    # ---- 도감 ----
+    # ---- 백과사전 ----
     def _build_pedia_page(self) -> QWidget:
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(24, 20, 24, 24)
         v.setSpacing(12)
-        t = QLabel("도감")
+        t = QLabel(tr("백과사전"))
         t.setObjectName("pageTitle")
         v.addWidget(t)
         self.search = QLineEdit()

@@ -95,6 +95,7 @@ class Recommendation:
     banish_card: Optional[Card] = None
     situation: str = ""               # 진행 상황 한 줄 (체력·보스·칸)
     plan_text: str = ""               # 덱 방향 한 줄 (목표 진화·단계)
+    plan_locked: bool = False         # 사용자가 고정한 덱 목표가 있음 (HUD 가 이 줄을 밀어내지 않게)
     reroll_odds: Optional[Tuple[float, int, int]] = None   # (목표 카드 확률, 후보 수, 목표 카드 수) — 추정
     fallback: Optional[ActionEval] = None     # 판단 보류일 때 무난한 선택 (근거 약함, 참고용)
     limitations: List[str] = field(default_factory=list)
@@ -235,7 +236,7 @@ class Recommender:
             reroll_status=rs, reroll_text=rt, banish_text=banish_text, banish_card=banish_card,
             situation=situation, plan_text=self._plan_line(plan, best if status != "hold" else None),
             reroll_odds=odds, fallback=best if status == "hold" and best.score > 0 and not best.warnings else None,
-            limitations=limitations, ranked=ranked, confidence=confidence,
+            limitations=limitations, ranked=ranked, confidence=confidence, plan_locked=plan.locked,
         )
 
     # ---- 카드 하나 평가 ----

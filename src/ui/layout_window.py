@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QScrollA
 from ..engine.layout import TILE_TYPES, Bld, LayoutPlan, Move, buildings_from_base, swap_positions
 from ..engine.layout_opt import EFFECTS
 from ..gamedata import GameData
+from ..i18n import tr
 from ..tracking.meta_state import RESOURCES
 from . import tokens as tk
 from .widgets import Group, Segmented, row, section_title, value_label
@@ -154,7 +155,7 @@ class LayoutWindow(QWidget):
         right.addWidget(section_title("채집 발사 조준 (궤적 계산)"))
         self.angles = Group()
         right.addWidget(self.angles)
-        btn = QPushButton("다시 계산")
+        btn = QPushButton(tr("다시 계산"))
         btn.clicked.connect(self.recalc_requested.emit)
         right.addWidget(btn)
         right.addStretch(1)
