@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from itertools import combinations
-from typing import List
+from typing import List, Optional, Set
 
 from ..gamedata import GameData, Recipe
 from ..tracking.run_state import RunState
@@ -42,16 +42,24 @@ class RoadmapEntry:
         return 20 + len(self.missing)
 
 
-def build_roadmap(run: RunState, data: GameData) -> List[RoadmapEntry]:
+def build_roadmap(run: RunState, data: GameData, include: Optional[Set[str]] = None) -> List[RoadmapEntry]:
+    """include: 이 결과로 가는 레시피는 '재료 1개 이상 보유·1개까지만 부족' 조건 없이도 넣는다
+    (사용자가 처음부터 목표로 고정한 진화 — 재료가 하나도 없어도 방향을 보여줘야 함)."""
     out: List[RoadmapEntry] = []
     for r in data.recipes:
         have = [i for i in r.ingredients if i in run.owned]
         missing = [i for i in r.ingredients if i not in run.owned]
-        if not have or len(missing) > 1 or r.result in run.owned:
+        forced = include is not None and r.result in include
+        if r.result in run.owned or (not forced and (not have or len(missing) > 1)):
             continue
         kind = data.items[r.result].kind
         owned = [run.owned[i] for i in have]
-        if all(o.at_max is not None for o in owned):
+        if not have:
+            # forced 목표: 재료를 하나도 안 가졌다 — all([]) 이 참으로 나와 '진화 가능'처럼 보이는 걸 막는다
+            known = data.max_level_known(kind)
+            ready = False
+            left = data.max_level(kind) * len(missing) if known else 0
+        elif all(o.at_max is not None for o in owned):
             # 게임 연동: 게임이 알려 준 최대 레벨 여부를 그대로 쓴다
             ready = all(o.at_max for o in owned)
             known = True
@@ -67,6 +75,11 @@ def build_roadmap(run: RunState, data: GameData) -> List[RoadmapEntry]:
         out.append(RoadmapEntry(r, have, missing, ready, known, left))
     out.sort(key=lambda e: (e.rank, data.name(e.recipe.result)))
     return out
+
+
+def browsable_targets(data: GameData) -> List[Recipe]:
+    """덱 목표 지정 UI 용 — 재료 보유 여부와 상관없이 고를 수 있는 진화 목표 전체 (이름순)."""
+    return sorted(data.recipes, key=lambda r: data.name(r.result))
 
 
 def fusion_pairs(run: RunState, data: GameData) -> List[tuple]:

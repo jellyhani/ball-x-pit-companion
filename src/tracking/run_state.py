@@ -48,6 +48,7 @@ class RunState:
     offered: Dict[str, int] = field(default_factory=dict)   # 이번 런에 선택지로 나온 횟수 (삭제 판단용)
     damage: Dict[str, int] = field(default_factory=dict)    # 이번 런 항목별 피해 (게임 연동 통계)
     picks: List[str] = field(default_factory=list)          # 이번 런에 고른 항목 순서 (기록용)
+    locked_target: Optional[str] = None   # 사용자가 직접 고른 목표 진화 결과 (없으면 자동 감지, deck_plan.py)
     _applied: Set[int] = field(default_factory=set)
     _last_offer: tuple = ()
 
@@ -82,6 +83,18 @@ class RunState:
         self._last_offer = ()
         self.damage.clear()
         self.picks.clear()
+        self.locked_target = None
+
+    # ---- 사용자가 직접 고른 덱 목표 ----
+    def lock_target(self, item_id: str, data: GameData):
+        self.locked_target = item_id
+        self._log(f"덱 목표 고정: {data.name(item_id)}")
+
+    def clear_target(self, data: GameData):
+        if self.locked_target is None:
+            return
+        self._log(f"덱 목표 해제: {data.name(self.locked_target)}")
+        self.locked_target = None
 
     # ---- 화면에서 읽은 권위 있는 정보 ----
     def apply_inventory(self, slots: Tuple[InventorySlot, ...], data: GameData) -> List[str]:

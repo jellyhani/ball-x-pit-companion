@@ -25,6 +25,7 @@ class DeckPlan:
     passive_free: Optional[int] = None
     target_text: str = ""       # 목표 진화 한 줄
     phase_text: str = ""        # 단계별 방침 한 줄
+    locked: bool = False        # targets[0] 이 자동 감지가 아니라 사용자가 고정한 목표인지
 
     @property
     def text(self) -> str:
@@ -55,7 +56,19 @@ def build_plan(run: RunState, data: GameData, p: Optional[RunProgress]) -> DeckP
             plan.ball_free = p.max_balls - p.balls
         if p.max_passives is not None and p.passives is not None:
             plan.passive_free = p.max_passives - p.passives
-    for e in build_roadmap(run, data):
+    locked = run.locked_target
+    roadmap = build_roadmap(run, data, include={locked} if locked else None)
+    locked_entry = next((e for e in roadmap if e.recipe.result == locked), None) if locked else None
+    if locked_entry is not None:
+        plan.locked = True
+        plan.targets.append(locked_entry)
+        name = data.name(locked_entry.recipe.result)
+        for m in locked_entry.missing:
+            plan.wanted.setdefault(m, name)
+        plan.core.update(locked_entry.have)
+    for e in roadmap:
+        if e is locked_entry:
+            continue
         if e.missing:
             m = e.missing[0]
             free = plan.free_slots(data.items[m].kind)
@@ -78,12 +91,14 @@ def _plan_text(plan: DeckPlan, data: GameData):
     if plan.targets:
         e = plan.targets[0]
         name = data.name(e.recipe.result)
+        label = "고정 목표" if plan.locked else "목표"
         if e.missing:
-            target = f"목표 {name} ({data.name(e.missing[0])} 필요)"
+            need = ", ".join(data.name(m) for m in e.missing)
+            target = f"{label} {name} ({need} 필요)"
         elif e.levels_ready:
             target = f"{name} 진화 가능 — 융합 화면에서"
         else:
-            target = f"목표 {name} (재료 강화 중)"
+            target = f"{label} {name} (재료 강화 중)"
     if plan.phase == "endless":
         phase = "무한의 심연: 새 항목보다 강화·진화·융합"
     elif plan.phase == "boss_soon":
