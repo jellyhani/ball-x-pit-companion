@@ -104,13 +104,18 @@ PyInstaller onedir 빌드(Qt 라이브러리는 LGPL 조건대로 별도 파일)
 게임 규칙·수치 중 게임에서 직접 읽지 못한 것은 아래 공개 자료를 참고해 **사실만** 옮겼습니다(글·데이터 복사 없음).
 - [BALL x PIT Wiki (wiki.gg)](https://ballxpit.wiki.gg/wiki/Buildings) — 거처 효과는 캐릭터 레벨 4부터, 수도원 튕김당 +0.07초 등
 - Steam 가이드 [My Optimized Town Layout](https://steamcommunity.com/sharedfiles/filedetails/?id=3610566537),
-  [100% Utilization Base Layout](https://steamcommunity.com/sharedfiles/filedetails/?id=3602389407) — 생산량 측정값, 배치 권장
+  [100% Utilization Base Layout](https://steamcommunity.com/sharedfiles/filedetails/?id=3602389407),
+  [Base Layout (Naturalist Update)](https://steamcommunity.com/sharedfiles/filedetails/?id=3796785943) — 생산량 측정값,
+  목표 자원 비율(밀 1.5 : 나무 1.25 : 돌 1), 대위 막사·잔병의 오두막·강철 요새 범위, 채집 거처는 자원 옆에,
+  전쟁 회의실·채집가의 오두막은 안 지음
+- 진화표: Steam 가이드 [Ultimate Guide of Evolutions](https://steamcommunity.com/sharedfiles/filedetails/?id=3749789365)
+  (게임에서 읽은 레시피와 개수 대조용)
 - 커뮤니티 평가(`data/community.json`, 순위·이름만 정리): [Game Rant 볼 진화 티어](https://gamerant.com/ball-x-pit-evolutions-tier-list-best-balls/) (2026-06),
   [Dexerto 패시브 티어](https://www.dexerto.com/wikis/ball-x-pit/passive-tier-list/) (2026-08), Dexerto 캐릭터별 추천 빌드,
   캐릭터 조합: [Dexerto](https://www.dexerto.com/wikis/ball-x-pit/best-ball-x-pit-character-combinations/), [Screen Rant](https://screenrant.com/ball-x-pit-best-character-combinations-matchmaker/), [Steam 토론](https://steamcommunity.com/app/2062430/discussions/0/624436409753066508/)
 - 기지 배치 공략: [Screen Rant](https://screenrant.com/ball-x-pit-base-layout-harvest-tips/) (공사 중인 건물을 채집 구역 가장자리로,
   잔병의 오두막 범위에 거처, 대저택 범위 채우기), [Dexerto](https://www.dexerto.com/wikis/ball-x-pit/best-base-layout/),
-  [ballxpit.org](https://ballxpit.org/guides/base-layout/) (금광 7개 U자), 위키 [Veteran's Hut](https://ballxpit.wiki.gg/wiki/Veteran's_Hut)
+  위키 [Veteran's Hut](https://ballxpit.wiki.gg/wiki/Veteran's_Hut)
   (레벨 4·7·9 에서 20·25·30%), [Iron Fortress](https://ballxpit.wiki.gg/wiki/Iron_Fortress) (근처 공사장 건설 점수 +4),
   Steam 토론 [Max Iron Fortress + Veterans Hut + Captains Quarters](https://steamcommunity.com/app/2062430/discussions/0/595163560549778862/)
 - [StonedModder/BallxPitxApp](https://github.com/StonedModder/BallxPitxApp) 연구 문서 — 생산 주기·타일 용량·건설 비용,

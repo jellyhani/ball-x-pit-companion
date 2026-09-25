@@ -260,7 +260,7 @@ class WorkerAdvice:
     building: str            # 게임 내부 이름
     reason: str
     current: str
-    action: str = "assign"   # assign(빈 건물에 배정) | swap(지금 일꾼과 교체)
+    action: str = "assign"   # assign(빈 건물에 배정) | swap(지금 일꾼과 교체) | remove(빼서 발사에)
     replace: str = ""        # swap: 빼서 다시 발사에 쓸 캐릭터 ID
 
 
@@ -271,6 +271,9 @@ class WorkerAdvice:
 BUILDING_UPGRADE = {"kFarmSpeed": "kIdleFarm", "kLumberyardSpeed": "kIdleLumberyard",
                     "kStoneMineSpeed": "kIdleStoneMine", "kExtraGoldMined": "kGoldMine"}
 SWAP_MARGIN = 1.0        # 이만큼 이상 발사 가치가 차이 나야 교체를 권함 (강화 1개) — 근거 없이 정함
+# 금광은 쓰지 않는다 (사용자 결정 2026-09-26: 무한 모드로 골드가 모자라지 않음) — 빈 금광을 채우라고 하지 않고,
+# 금광에서 일하는 캐릭터는 빼서 발사에 쓰라고 한다 (철거 후보는 layout_opt.GUIDE_DEMOLISH).
+SKIP_WORK = {"kGoldMine"}
 
 
 def launch_value(c: dict, need: Optional[int] = None) -> float:
@@ -299,7 +302,7 @@ def advise_workers(meta: Optional[MetaState], chars_raw: List[dict], building_ty
     for c in working:
         count[c["work"]] -= 1
     # 빈 건물 순서: 전용 강화 가진 캐릭터가 있는 건물 → 부족한 자원 건물 → 금광 → 나머지 (순서 자체는 근거 없음)
-    empty = [t for t in WORK_BUILDINGS for _ in range(max(0, count[t]))]
+    empty = [t for t in WORK_BUILDINGS if t not in SKIP_WORK for _ in range(max(0, count[t]))]
     aff_any = {t for c in idle for t in _affinity(c)}
     empty.sort(key=lambda t: (t not in aff_any, WORK_BUILDINGS[t] != need, t != "kGoldMine", t))
     cid = lambda c: f"char:{c['type'][1:].lower()}"
@@ -315,9 +318,13 @@ def advise_workers(meta: Optional[MetaState], chars_raw: List[dict], building_ty
                "발사 채집 강화가 없어 발사에서 빠져도 손해 없음" if lv == 0 else
                f"쉬는 캐릭터 중 발사 채집 강화가 가장 적음 ({lv:g})")
         out.append(WorkerAdvice(cid(c), t, f"비어 있음 — {why}", "쉬는 중"))
+    for w in working:
+        if w["work"] in SKIP_WORK:
+            out.append(WorkerAdvice(cid(w), w["work"], "금광은 안 씀 (골드 충분) — 빼서 채집 때 발사되게",
+                                    "금광에서 일함", "remove"))
     for w in sorted(working, key=lambda c: -launch_value(c, need)):
         t = w["work"]
-        if t in _affinity(w) or not pool:
+        if t in SKIP_WORK or t in _affinity(w) or not pool:
             continue
         c = next((c for c in pool if t in _affinity(c)), pool[0])
         lw, lc = launch_value(w, need), launch_value(c, need)
@@ -332,30 +339,49 @@ def advise_workers(meta: Optional[MetaState], chars_raw: List[dict], building_ty
 RES_BUILDING_LABEL = {"kIdleFarm": "농장", "kIdleLumberyard": "야적장", "kIdleStoneMine": "채석장"}
 
 
-def advise_resource_ratio(building_types: List[str], need: Optional[int]) -> Optional[str]:
-    """생산 건물(농장·야적장·채석장) 개수가 지금 부족한 자원 쪽으로 안 쏠려 있으면 한 줄 조언.
+# 목표 자원 비율 (밀 : 나무 : 돌) — 두 Steam 가이드가 거의 같다:
+#   Drake Ravenwolf 'My Optimized Town Layout': 밀 0.4037 · 나무 0.3303 · 돌 0.2661 (무한 강화 건물 6개 소비량 기준)
+#   apo 'Base Layout (Naturalist Update)': 대략 밀 1.5 : 나무 1.25 : 돌 1 (= 0.40 · 0.33 · 0.27)
+TARGET_SHARE = {1: 0.4037, 2: 0.3303, 3: 0.2661}
+# 건물 하나의 분당 생산량 (Drake 가이드 측정값): 일꾼 있는 농장 24 밀 · 야적장 13.714 나무 · 채석장 4.5 돌,
+# 거처 자동 채집 외딴 집 6 밀 · 아늑한 집 7.667 나무 · 극장 6 돌
+PER_MINUTE = {"kIdleFarm": (1, 24.0), "kIdleLumberyard": (2, 13.714), "kIdleStoneMine": (3, 4.5),
+              "kSingleFamilyHome": (1, 6.0), "kCozyHome": (2, 7.667), "kHovel": (3, 6.0)}
+RATIO_SLACK = 0.8        # 목표 비율의 80% 밑이면 조언 — 근거 없이 정함 (조금 모자란 건 넘어감)
 
-    근거: Steam 가이드 'My Optimized Town Layout' — "생산량을 소비 속도에 맞추면 시간으로만 제한된다"는
-    원칙만 가져온다. 그 공략의 구체적 개수(예: 채석장 11·야적장 4·농장 3)는 그 사람 플레이 스타일(어떤 건물을
-    얼마나 강화하는지)에 따라 달라지는 값이라 그대로 쓰지 않고, 이 프로젝트가 이미 갖고 있는 실측 부족 자원
-    (need_resource — 블루프린트·강화 비용 기준)과 지금 지은 생산 건물 수를 비교하는 정도로만 쓴다.
-    """
-    if need not in (1, 2, 3):
-        return None
-    counts = {1: 0, 2: 0, 3: 0}
+
+def resource_ratio_gap(building_types: List[str], need: Optional[int]
+                       ) -> Optional[Tuple[int, str, Dict[int, float]]]:
+    """분당 생산량이 목표 비율(밀 1.5 : 나무 1.25 : 돌 1)의 80% 밑인 자원 → (자원, 더 지을 건물 이름, 자원별 분당 생산).
+    여럿이면 지금 부족한 자원(need)을 먼저, 아니면 가장 모자란 것. 생산 건물이 2개 미만이면(초반) None."""
+    prod = {1: 0.0, 2: 0.0, 3: 0.0}
+    n = 0
     for t in building_types:
-        r = WORK_BUILDINGS.get(t)
-        if r in counts:
-            counts[r] += 1
-    mx = max(counts.values())
-    # 실제 기록 확인: 중반까지도 생산 건물이 하나씩(1)만 있는 게 흔해서 '최대 2개 이상'을 요구하면 거의 안 뜬다.
-    # 그래서 개수 비율 대신 '부족한 자원만 0개' 또는 '차이가 2개 이상'일 때만 (초반 노이즈는 그래도 걸러짐).
-    if mx == 0 or (counts[need] > 0 and mx - counts[need] < 2):
+        if t in PER_MINUTE:
+            r, v = PER_MINUTE[t]
+            prod[r] += v
+            n += t in RES_BUILDING_LABEL
+    total = sum(prod.values())
+    if n < 2 or total <= 0:
         return None
-    by_res = {v: RES_BUILDING_LABEL[k] for k, v in WORK_BUILDINGS.items() if v in counts}
-    return (f"{RESOURCES[need]} 생산 건물({by_res[need]})이 {counts[need]}개로 다른 자원보다 적음 "
-            f"(농장 {counts[1]}·야적장 {counts[2]}·채석장 {counts[3]}) — "
-            "생산량을 소비 속도에 맞추면 좋다는 공략 있음 (Steam 'My Optimized Town Layout')")
+    ratio = {r: prod[r] / total / TARGET_SHARE[r] for r in prod}
+    low = [r for r in prod if ratio[r] < RATIO_SLACK]
+    if not low:
+        return None
+    r = need if need in low else min(low, key=lambda k: ratio[k])
+    label = {v: k for k, v in WORK_BUILDINGS.items() if k in RES_BUILDING_LABEL}
+    return r, RES_BUILDING_LABEL[label[r]], prod
+
+
+def advise_resource_ratio(building_types: List[str], need: Optional[int]) -> Optional[str]:
+    """resource_ratio_gap 을 한 줄 조언으로 (근거: Steam 가이드 Drake·apo)."""
+    gap = resource_ratio_gap(building_types, need)
+    if gap is None:
+        return None
+    r, bld, prod = gap
+    return (f"{RESOURCES[r]} 생산이 목표 비율보다 적음 — {bld} 더 짓기 "
+            f"(분당 약 밀 {prod[1]:.0f}·나무 {prod[2]:.0f}·돌 {prod[3]:.0f}, 목표 밀 1.5 : 나무 1.25 : 돌 1 — "
+            "Steam 가이드 Drake·apo)" + (" · 지금 부족한 자원" if r == need else ""))
 
 
 def gold_bounce_tip(base: dict, unf: List) -> Optional[str]:

@@ -38,7 +38,7 @@ from .services.recognition_worker import RecognitionService, ScanResult
 from .services.settings import APP_DIR, Settings
 from .tracking.bridge_adapter import BridgeState, catalog_recipes, catalog_schedules, convert, infer_pick
 from .tracking.choice_tracker import ChoiceTracker, TrackerEvent
-from .tracking.meta_state import MetaState, parse_meta
+from .tracking.meta_state import RESOURCES, MetaState, parse_meta
 from .tracking.draw_stats import DrawStats
 from .tracking.run_history import RunRecorder
 from .tracking.snapshot_log import SnapshotLog
@@ -587,14 +587,17 @@ class AppController(QObject):
                 self.hud.hide()
             return
         todo = suggest_base(self.meta, self.data, limit=3)
-        demolish = list(getattr(self.layout_plan, "demolish", None) or [])[:2]
+        demolish = list(getattr(self.layout_plan, "demolish", None) or [])[:3]
         from .engine.harvest import advise_workers
+        from .engine.layout_opt import GUIDE_DEMOLISH
         need, _ = need_resource(self.meta, self._shortfalls())
         workers = advise_workers(self.meta, self.meta.chars_raw, [b.type for b in self.meta.buildings],
                                  self.data, need)[:3]
-        key = (tuple((sg.kind, sg.type) for sg in todo), tuple((t, s) for _, t, s in demolish),
-               tuple((a.char_id, a.building, a.action) for a in workers))
-        if not todo and not demolish and not workers:
+        from .engine.harvest import resource_ratio_gap
+        gap = resource_ratio_gap([b.type for b in self.meta.buildings], need)
+        key = (tuple((sg.kind, sg.type) for sg in todo), tuple((t, s) for _, t, s, *_r in demolish),
+               tuple((a.char_id, a.building, a.action) for a in workers), gap[:2] if gap else None)
+        if not todo and not demolish and not workers and not gap:
             if self.base_advice is not None:
                 self.base_advice = None
                 self._base_advice_key = None
@@ -606,10 +609,14 @@ class AppController(QObject):
         d = self.data
         verb = {"finish": "완성", "build": "짓기", "upgrade": "강화"}
         items = [(f"{verb[sg.kind]}: {sg.name}", sg.status) for sg in todo]
-        items += [(f"철거 후보: {d.building_name(t)}", f"기여 {score:.1f}") for _i, t, score in demolish]
-        items += [(f"일꾼: {d.building_name(a.building)} ← {d.name(a.char_id)}"
+        if gap:
+            items.append((f"짓기: {gap[1]} ({RESOURCES[gap[0]]} 생산이 목표 비율보다 적음)", "가이드"))
+        items += [(f"철거 후보: {d.building_name(t)}", "가이드" if t in GUIDE_DEMOLISH else f"기여 {score:.1f}")
+                  for _i, t, score, *_r in demolish]
+        items += [(f"일꾼 빼기: {d.building_name(a.building)}의 {d.name(a.char_id)} → 발사로" if a.action == "remove" else
+                   f"일꾼: {d.building_name(a.building)} ← {d.name(a.char_id)}"
                    + (f" ({d.name(a.replace)} 대신)" if a.action == "swap" else ""),
-                   "교체" if a.action == "swap" else "빈 건물") for a in workers]
+                   {"swap": "교체", "remove": "금광 안 씀"}.get(a.action, "빈 건물")) for a in workers]
         title, status = items[0]
         v = HudView(title=title, subtitle="기지 조언", status=status,
                     status_tone="warn" if "부족" in status else "accent")

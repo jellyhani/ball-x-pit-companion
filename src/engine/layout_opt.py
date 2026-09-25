@@ -861,7 +861,7 @@ def _optimize_city(base: dict, grid: Grid, pieces: Dict[int, Piece], origin0: Di
     launcher = geo.get("launcher") or []
     lrc = (int((float(launcher[0]) - grid.ox) // grid.size), int((float(launcher[1]) - grid.oy) // grid.size)) \
         if len(launcher) >= 2 else None
-    orig, notes, turn = plan_city(grid, pieces, origin0, lrc, gold_u_spots(geo, grid), scorer, pad, hit)
+    orig, notes, turn = plan_city(grid, pieces, origin0, lrc, scorer, pad, hit)
     shaped = {i: rotated(p, turn.get(i, 0)) for i, p in pieces.items()}
     orig = canonicalize(shaped, origin0, orig)
     e0, d0 = plain.score(Layout(grid, pieces, origin0))
@@ -1060,12 +1060,19 @@ def activation_gains(base: dict, res_weight: Optional[Dict[int, float]] = None, 
 #   능력치·무한 강화 건물: 보통 하나뿐이고 레벨 투자가 크다.
 DEMOLISH_CANDIDATE_TYPES = {"kIdleFarm", "kIdleLumberyard", "kIdleStoneMine"}
 DEMOLISH_MAX_SCORE = 0.5   # 이 밑으로 기여하면 후보 (범위 안에 캘 타일이 없다는 뜻) — 근거 없이 임의로 정함
+# 있기만 하면 철거 후보 — Steam 가이드·사용자 결정 (자리를 차지하고, 금광은 일꾼 캐릭터를 발사에서 뺀다)
+GUIDE_DEMOLISH = {
+    "kWarRoom": "쓸모없음 — 30분에 골드 1천·돌 100, 게임을 끄면 멈춤 (Steam 가이드 Zarcos·apo·Drake 모두)",
+    "kIdleLauncher": "효과가 별로라 안 지음 (Steam 가이드 Drake)",
+    "kGoldMine": "무한 모드로 골드가 모자라지 않음 — 금광은 권하지 않음 (Zarcos), 일꾼을 발사에 돌릴 수 있음",
+}
+TILE_DEMOLISH_REASON = "범위 안에 캘 자원 타일이 없어 지금 자리에서 거의 도움이 안 됨 — 옮기거나 철거 고려"
 
 
 def suggest_demolish(base: dict, res_weight: Optional[Dict[int, float]] = None, pad: float = 0.0,
-                     limit: int = 5) -> List[Tuple[int, str, float]]:
+                     limit: int = 8) -> List[Tuple[int, str, float, str]]:
     """지금 배치에서 있으나 마나 한 생산 건물(범위 안에 캘 타일이 없어 점수에 거의 안 보탬) 철거 후보.
-    돌려주는 값: [(건물 id, 종류, 지금 기여하는 점수)] — 점수가 낮을수록 위.
+    돌려주는 값: [(건물 id, 종류, 지금 기여하는 점수, 이유)] — 가이드 철거 후보(GUIDE_DEMOLISH)가 먼저, 나머지는 점수가 낮을수록 위.
     공사 중인 건물은 빼고(방금 짓기 시작한 걸 철거하라고 하면 안 됨), DEMOLISH_CANDIDATE_TYPES 만 본다."""
     grid = grid_from_geo(base.get("geo") or {})
     if grid is None:
@@ -1074,7 +1081,8 @@ def suggest_demolish(base: dict, res_weight: Optional[Dict[int, float]] = None, 
     stats = _stat_types(base)
     pieces, origin = pieces_from_base(base, grid, housing)
     s0 = Scorer(pieces, stats, housing, res_weight, pad).score(Layout(grid, pieces, origin))[0]
-    out = []
+    out = [(i, p.type, 0.0, GUIDE_DEMOLISH[p.type]) for i, p in sorted(pieces.items())
+           if p.type in GUIDE_DEMOLISH and not p.unfinished]
     for i, p in pieces.items():
         if p.type not in DEMOLISH_CANDIDATE_TYPES or p.unfinished:
             continue
@@ -1083,8 +1091,8 @@ def suggest_demolish(base: dict, res_weight: Optional[Dict[int, float]] = None, 
         s1 = Scorer(pcs, stats, housing, res_weight, pad).score(Layout(grid, pcs, org))[0] if pcs else 0.0
         marginal = round(s0 - s1, 2)
         if marginal < DEMOLISH_MAX_SCORE:
-            out.append((i, p.type, marginal))
-    out.sort(key=lambda x: x[2])
+            out.append((i, p.type, marginal, TILE_DEMOLISH_REASON))
+    out.sort(key=lambda x: (x[1] not in GUIDE_DEMOLISH, x[2]))
     return out[:limit]
 
 

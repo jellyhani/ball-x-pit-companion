@@ -202,17 +202,29 @@ class LayoutOptTest(unittest.TestCase):
         far_bld = dict(id=new_id, type="kIdleStoneMine", x=far[0], y=far[1], tw=2, th=2, rot=0, range=2.25)
         base2 = dict(base, buildings=base["buildings"] + [far_bld])
         out = lo.suggest_demolish(base2)
-        self.assertIn(new_id, [i for i, _, _ in out])
-        for i, t, score in out:
-            self.assertIn(t, lo.DEMOLISH_CANDIDATE_TYPES)
+        self.assertIn(new_id, [i for i, *_ in out])
+        for i, t, score, why in out:
+            self.assertIn(t, lo.DEMOLISH_CANDIDATE_TYPES | set(lo.GUIDE_DEMOLISH))
             self.assertLess(score, lo.DEMOLISH_MAX_SCORE)
+            self.assertTrue(why)
 
     def test_suggest_demolish_never_flags_excluded_types(self):
         """금광·거처·능력치 건물은 Scorer 가 가치를 제대로 모르므로(또는 보통 하나뿐이라) 절대 후보에 안 나온다."""
         _, base, *_ = setup()
         out = lo.suggest_demolish(base)
-        types = {t for _, t, _ in out}
-        self.assertFalse(types & {"kGoldMine", "kVeteranHut", "kMansion", "kSingleFamilyHome"})
+        types = {t for _, t, *_ in out}
+        self.assertFalse(types & {"kVeteranHut", "kMansion", "kSingleFamilyHome"})
+
+    def test_guide_demolish_candidates(self):
+        """전쟁 회의실·채집가의 오두막(Steam 가이드)·금광(사용자 결정: 골드 충분)은 있기만 하면 철거 후보, 맨 위."""
+        fx, base, grid, pieces, o0 = setup()
+        extra = []
+        for k, t in enumerate(("kWarRoom", "kGoldMine")):
+            x, y = grid.center(8 + 2 * k, 0, 2, 2)
+            extra.append(dict(id=950 + k, type=t, x=x, y=y, tw=2, th=2, rot=0, range=0.0))
+        out = lo.suggest_demolish(dict(base, buildings=base["buildings"] + extra))
+        self.assertEqual({t for _, t, *_ in out[:2]}, {"kWarRoom", "kGoldMine"})
+        self.assertIn("가이드", out[0][3] + out[1][3])
 
     def test_plan_preset_builds_production_units(self):
         """계획도시: 생산 건물마다 둘레를 자원 타일로 두른 유닛 — 채석장 둘레 바위 12개, 농장 둘레 밀밭 8개가 모두 범위 안."""
@@ -239,15 +251,17 @@ class LayoutOptTest(unittest.TestCase):
         again = lo.optimize(base, None, None, preset="plan")
         self.assertEqual(plan.origin_after, again.origin_after)
         lay = lo.Layout(grid, shaped(pieces, plan), plan.origin_after)
+        # 마을 = 생산 구역에 가는 것(자원 타일·생산 건물·채집 거처·발사대 쪽 건물·금광)과 잔병의 오두막을 뺀 나머지
+        away = lc._harvest_houses() | lc.FRONT_TYPES | lo.STATUE_TYPES | {lc.VETERAN, "kGoldMine"}
         prod = {i for i, p in pieces.items() if p.type in lo.TILE_RES or p.type in lc.PRODUCERS}
-        town = [i for i in pieces if i not in prod and pieces[i].movable]
+        town = [i for i in pieces if i not in prod and pieces[i].movable and pieces[i].type not in away]
         tcells = {c for i in town for c in lay.cells(i)}
         mean = lambda ids: sum(lay.center(i)[1] for i in ids) / len(ids)
         self.assertGreater(mean(town), mean(prod))                     # 발사대는 아래(행 0 쪽)
         self.assertLess(lc._waste(tcells), len(tcells) * 0.3)          # ㄱ자 건물의 빈 모서리 때문에 0 은 안 됨
 
-    def test_plan_preset_keeps_gold_u(self):
-        """계획도시: 금광은 금광 U자 자리로, U자 가운데 통로는 비워 둔다."""
+    def test_plan_puts_unused_gold_mines_at_the_back(self):
+        """계획도시: 금광은 쓰지 않으니(사용자 결정) U자 자리를 비워 두지 않고 발사대에서 먼 쪽에 모아 둔다."""
         fx, base, grid, *_ = setup()
         extra = []
         for k, c in enumerate((8, 10, 12)):
@@ -256,12 +270,14 @@ class LayoutOptTest(unittest.TestCase):
         base2 = dict(base, buildings=base["buildings"] + extra)
         pieces, _ = lo.pieces_from_base(base2, grid, lo.housing_types())
         plan = lo.optimize(base2, None, None, preset="plan")
-        spots = lo.gold_u_spots(base2["geo"], grid)
-        self.assertEqual({plan.origin_after[900 + k] for k in range(3)}, set(spots[:3]))
+        spots = set(lo.gold_u_spots(base2["geo"], grid))
+        mines = [plan.origin_after[900 + k] for k in range(3)]
+        self.assertFalse(spots & set(mines))                          # U자 자리가 아님
         lay = lo.Layout(grid, shaped(pieces, plan), plan.origin_after)
-        left = min(s[0] for s in spots)
-        corridor = {(left + 2 + dx, r) for dx in range(2) for r in range(min(s[1] for s in spots), max(s[1] for s in spots))}
-        self.assertFalse(corridor & set(lay.occ))
+        rows = [r for _, r in grid.tiles]
+        mean_all = sum(lay.center(i)[1] for i in plan.origin_after) / len(plan.origin_after)
+        self.assertGreater(sum(lay.center(900 + k)[1] for k in range(3)) / 3, mean_all)   # 발사대(아래)에서 먼 쪽
+        self.assertTrue(any("금광" in n for n in plan.notes))
 
     def test_rotated_mask_matches_rotated_collider(self):
         """ㄱ·ㅜ 자 건물: 충돌 모양을 시계 방향으로 돌린 게임 자료에서 읽은 모양 == 칸 모양을 돌린 것 (rot +1 = 시계 90°)."""

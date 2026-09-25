@@ -188,42 +188,6 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
         return None, {}
     plan = _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib)
     plan.preset = "plan"
-    if mines:
-        # 금광 U자 빈 자리: 금광을 더 지으면 채울 곳 (정석: 발사대 앞 7개, 광마다 일꾼 1명 — 위키·커뮤니티)
-        spots = lo.gold_u_spots(snap.get("geo") or {}, grid)
-        plan.preset_spots = [grid.center(c, r, 2, 2) for c, r in spots]
-        filled = {full.origin_after.get(i) for i in mines}
-        missing = [s for s in spots if s not in filled]
-        if missing:
-            from .layout import NewSpot
-            plan.builds = [("kGoldMine", grid.center(missing[0][0], missing[0][1], 2, 2), (2, 2), 0.0, len(missing), 0)] + \
-                [b for b in plan.builds if b[0] != "kGoldMine"]
-            plan.new_spots = [NewSpot("kGoldMine", grid.center(c, r, 2, 2), (2, 2), 0, "금광 U자 빈 자리") for c, r in missing]
-            plan.notes.append(f"금광 {len(missing)}개를 더 지으면 U자 완성 (초록 점선, 광마다 일꾼 1명)")
-            # 완성했을 때의 채집 골드 추정: 빈 자리에 금광 충돌 상자를 넣고 궤적 계산 (튕김 × 1.5, 광마다 최대 100번)
-            if team:
-                fb = lo.final_base(snap, full)
-                g2 = dict(fb.get("geo") or {})
-                b2 = dict(blds)
-                extra = []
-                for k, (c, r) in enumerate(missing):
-                    cx, cy = grid.center(c, r, 2, 2)
-                    hw = grid.size
-                    nid = -300 - k
-                    extra.append(nid)
-                    g2["colliders"] = list(g2.get("colliders") or []) + [
-                        {"id": nid, "shape": "box",
-                         "pts": [[cx - hw, cy - hw], [cx + hw, cy - hw], [cx + hw, cy + hw], [cx - hw, cy + hw]]}]
-                    b2[nid] = {"id": nid, "type": "kGoldMine", "res": 0}
-                w2 = hs.world_from_geo(g2, 0.03)
-                if w2:
-                    best_gold = 0
-                    for ang in range(24, 157, 6):
-                        counts: Dict[int, int] = {}
-                        hs.run_angle(w2, b2, team, ang, dur, counts)
-                        gold = sum(min(counts.get(m, 0), 100) for m in extra + mines) * 1.5
-                        best_gold = max(best_gold, gold)
-                    plan.notes.append(f"U자 완성 시 채집 한 번에 골드 약 {best_gold:,.0f} 예상 (궤적 계산, 튕길 때 1~2골드 평균)")
     world = hs.world_from_geo(lo.final_base(snap, full).get("geo") or {}, 0.03)
     sweeps = {}
     if world and team:
@@ -277,12 +241,8 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
     plan.builds = lo.suggest_builds(final_base, list(blueprints) + more, res_weight, pad)
     plan.builds += lo.suggest_tiles(final_base, res_weight, pad)
     plan.builds.sort(key=lambda x: -x[3])
-    if team and (any(bp.get("type") == "kGoldMine" for bp in blueprints) or "kGoldMine" in have):
-        # 금광은 여러 개 지을 수 있다 (정석: 발사대 앞 U자 7개, 광마다 일꾼 1명 — 위키·커뮤니티)
-        gm = gold_mine_spot(final_base, blds, team, dur, need,
-                            next((bp for bp in blueprints if bp.get("type") == "kGoldMine"), {"type": "kGoldMine"}))
-        if gm:
-            plan.builds.append(gm)
+    # 금광은 추천하지 않는다 (사용자 결정 2026-09-26: 무한 모드로 골드 충분 — 철거 후보는 suggest_demolish)
+    plan.builds = [b for b in plan.builds if b[0] != "kGoldMine"]
     plan.activations = lo.activation_gains(final_base, res_weight, pad)
     plan.demolish = lo.suggest_demolish(final_base, res_weight, pad)
     from .layout import NewSpot
