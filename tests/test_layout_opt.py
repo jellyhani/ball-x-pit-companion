@@ -189,39 +189,6 @@ class LayoutOptTest(unittest.TestCase):
             s1, s2 = self.full_score(base, p1.origin_after), self.full_score(base, p2.origin_after)
             self.assertTrue(p2.origin_after == p1.origin_after or s2 > s1, (s1, s2, p2.notes))
 
-    def test_tidy_scores_rows_and_type_grouping(self):
-        """계획도시(tidy): 같은 행에 있으면 가산, 그 중 같은 종류끼리면 더 가산 (근거 없는 실험적 정의, 값은 임의)."""
-        _, _, grid, _, _ = setup()
-        sq = frozenset((x, y) for x in range(2) for y in range(2))
-        pieces = {1: lo.Piece(1, "kForest", 2, 2, sq, True, 0.0),
-                  2: lo.Piece(2, "kForest", 2, 2, sq, True, 0.0),
-                  3: lo.Piece(3, "kBoulder", 2, 2, sq, True, 0.0)}
-        scorer = lo.Scorer(pieces, set(), set(), tidy=True)
-        same_row = lo.Layout(grid, pieces, {1: (0, 0), 2: (2, 0), 3: (4, 0)})
-        scattered = lo.Layout(grid, pieces, {1: (0, 0), 2: (20, 6), 3: (40, 12)})
-        # 한 행에 3개(서로 다른 열) → 행 가산 (3-1); 그 중 숲 2개가 같은 종류 → 추가 (2-1).
-        # 셋 다 자원 타일이라 구역(zone)도 같음(resource) → 구역 가산 (3-1) 도 더해짐. 열은 다 달라 열 가산 0.
-        expected = lo.TIDY_ROW_W * 2 + lo.TIDY_TYPE_W * 1 + lo.TIDY_ZONE_W * 2
-        self.assertAlmostEqual(scorer.score(same_row)[0], expected)
-        self.assertAlmostEqual(scorer.score(scattered)[0], 0.0)
-        # tidy=False (기본) 이면 이 가산이 아예 없다
-        plain = lo.Scorer(pieces, set(), set())
-        self.assertAlmostEqual(plain.score(same_row)[0], 0.0)
-
-    def test_tidy_zone_groups_unique_service_buildings(self):
-        """알선소·시장처럼 보통 하나뿐인 서비스 건물은 종류로는 못 묶이지만 구역(service)으로는 묶여야 한다
-        (실제 배치도로 확인: 이게 없으면 서비스 건물들이 뒤섞인 것처럼 보임)."""
-        _, _, grid, _, _ = setup()
-        sq = frozenset((x, y) for x in range(2) for y in range(2))
-        pieces = {1: lo.Piece(1, "kMatchMaker", 2, 2, sq, True, 0.0),
-                  2: lo.Piece(2, "kMarket", 2, 2, sq, True, 0.0)}
-        scorer = lo.Scorer(pieces, set(), set(), tidy=True)
-        same_row = lo.Layout(grid, pieces, {1: (0, 0), 2: (2, 0)})
-        apart = lo.Layout(grid, pieces, {1: (0, 0), 2: (20, 6)})
-        self.assertGreater(scorer.score(same_row)[0], scorer.score(apart)[0])
-        self.assertAlmostEqual(scorer.score(same_row)[0], lo.TIDY_ROW_W * 1 + lo.TIDY_ZONE_W * 1)
-        self.assertAlmostEqual(scorer.score(apart)[0], 0.0)
-
     def test_suggest_demolish_flags_isolated_idle_building(self):
         """근처에 캘 바위가 없는 채석장은 철거 후보 — 실제 채석장(id 49)과 같은 range 로 아주 먼 자리에 하나 더 놓는다."""
         fx, base, grid, pieces, o0 = setup()
@@ -242,16 +209,54 @@ class LayoutOptTest(unittest.TestCase):
         types = {t for _, t, _ in out}
         self.assertFalse(types & {"kGoldMine", "kVeteranHut", "kMansion", "kSingleFamilyHome"})
 
-    def test_plan_preset_trades_effect_for_tidiness(self):
-        """'계획도시' 프리셋: 효율(범위 효과)이 조금 줄더라도 같은 행·열에 줄 세우는 배치를 고른다."""
+    def test_plan_preset_builds_production_units(self):
+        """계획도시: 생산 건물마다 둘레를 자원 타일로 두른 유닛 — 채석장 둘레 바위 12개, 농장 둘레 밀밭 8개가 모두 범위 안."""
         fx, base, grid, pieces, o0 = setup()
-        plan = lo.optimize(base, None, None, seconds=2.0, restarts=1, seed=5, preset="plan")
+        plan = lo.optimize(base, None, None, preset="plan")
         self.assertIsNotNone(plan)
-        tidy_scorer = lo.Scorer(pieces, lo._stat_types(base), lo.housing_types(),
-                                lane=lo.lane_values(base["geo"], grid), tidy=True)
-        before = tidy_scorer.score(lo.Layout(grid, pieces, plan.origin_before))[0]
-        after = tidy_scorer.score(lo.Layout(grid, pieces, plan.origin_after))[0]
-        self.assertGreater(after, before)                 # 정렬 점수는 실제로 올라감
+        lay = lo.Layout(grid, pieces, plan.origin_after)
+        cells = [c for i in plan.origin_after for c in lay.cells(i)]
+        self.assertEqual(len(cells), len(set(cells)))                 # 겹침 없음
+        self.assertTrue(set(cells) <= grid.tiles)                      # 산 땅 안
+        self.assertEqual(set(plan.origin_after), set(pieces))          # 빠진 건물 없음
+        for prod, kind, n in (("kIdleStoneMine", lo.STONE_T, 12), ("kIdleFarm", lo.WHEAT_T, 8)):
+            e = next(i for i, p in pieces.items() if p.type == prod)
+            ex, ey = lay.center(e)
+            near = [i for i, p in pieces.items() if p.type in kind
+                    and lo.in_range(lay.center(i)[0] - ex, lay.center(i)[1] - ey, pieces[e].range)]
+            self.assertEqual(len(near), n, prod)
+
+    def test_plan_preset_packs_town_away_from_launcher(self):
+        """계획도시: 마을 건물은 발사대에서 먼 쪽에 빽빽하게 (테두리 사각형 안 빈칸이 적게), 결과는 늘 같다."""
+        from src.engine import layout_city as lc
+        fx, base, grid, pieces, o0 = setup()
+        plan = lo.optimize(base, None, None, preset="plan")
+        again = lo.optimize(base, None, None, preset="plan")
+        self.assertEqual(plan.origin_after, again.origin_after)
+        lay = lo.Layout(grid, pieces, plan.origin_after)
+        prod = {i for i, p in pieces.items() if p.type in lo.TILE_RES or p.type in lc.PRODUCERS}
+        town = [i for i in pieces if i not in prod and pieces[i].movable]
+        tcells = {c for i in town for c in lay.cells(i)}
+        mean = lambda ids: sum(lay.center(i)[1] for i in ids) / len(ids)
+        self.assertGreater(mean(town), mean(prod))                     # 발사대는 아래(행 0 쪽)
+        self.assertLess(lc._waste(tcells), len(tcells) * 0.3)          # ㄱ자 건물의 빈 모서리 때문에 0 은 안 됨
+
+    def test_plan_preset_keeps_gold_u(self):
+        """계획도시: 금광은 금광 U자 자리로, U자 가운데 통로는 비워 둔다."""
+        fx, base, grid, *_ = setup()
+        extra = []
+        for k, c in enumerate((8, 10, 12)):
+            x, y = grid.center(c, 0, 2, 2)
+            extra.append(dict(id=900 + k, type="kGoldMine", x=x, y=y, tw=2, th=2, rot=0, range=0.0))
+        base2 = dict(base, buildings=base["buildings"] + extra)
+        pieces, _ = lo.pieces_from_base(base2, grid, lo.housing_types())
+        plan = lo.optimize(base2, None, None, preset="plan")
+        spots = lo.gold_u_spots(base2["geo"], grid)
+        self.assertEqual({plan.origin_after[900 + k] for k in range(3)}, set(spots[:3]))
+        lay = lo.Layout(grid, pieces, plan.origin_after)
+        left = min(s[0] for s in spots)
+        corridor = {(left + 2 + dx, r) for dx in range(2) for r in range(min(s[1] for s in spots), max(s[1] for s in spots))}
+        self.assertFalse(corridor & set(lay.occ))
 
 
 if __name__ == "__main__":
