@@ -7,6 +7,9 @@
 - 진화는 결과 볼이 다시 다음 진화 재료가 되는지, 캐릭터 특성·회복 수단과 맞는지를 본다.
 - 진화에는 기본 가산(칸이 비고 더 강한 볼)을 주고, 게임 수치(레벨별 기본 피해)·이번 런 실측 피해·내 누적 기록을
   더해 진화와 융합을 한 줄로 비교한다. 수치가 없으면 가산만으로 진화를 먼저 권하고 그렇게 밝힌다.
+- 분열(무료 강화)도 진화·융합과 같은 점수 척도로 비교한다. 커뮤니티 공략(dood.gg 메타 가이드: "초반엔 분열로
+  볼을 먼저 레벨업하고, 재료가 갖춰지면 그때 융합·진화를 노려라")에 따라 아직 최대 레벨이 안 된 볼이 많을수록
+  분열 점수를 올린다. 플러그인은 분열로 어떤 볼이 오르는지는 안 알려줘서(가능 여부만 bool) 이 정도 추정까지만 가능.
 """
 from __future__ import annotations
 
@@ -40,6 +43,7 @@ class FusionRecommendation:
     evos: List[FusionPick]
     combos: List[FusionPick]
     notes: List[str] = field(default_factory=list)
+    free: Optional[FusionPick] = None
 
 
 class FusionAdvisor:
@@ -72,33 +76,53 @@ class FusionAdvisor:
         combos = [self._combo(c, run) for c in fz.combos]
         evos.sort(key=lambda p: -p.score)
         combos.sort(key=lambda p: -p.score)
+        free_pick = self._free(balls) if fz.free_upgrades else None
         notes = []
         if d.recipe_source != "game":
             notes.append("진화 레시피는 위키 기준")
 
-        # 진화 기본 가산 + 수치·실측·기록. 모두 같은 점수 척도로 한 번에 비교한다
+        # 진화 기본 가산 + 수치·실측·기록. 분열(무료 강화)도 같은 점수 척도로 한 번에 비교한다
         best: Optional[FusionPick] = None
-        ranked = sorted([p for p in evos + combos if not any(w.rule_id == "combo_bad" for w in p.warnings)],
+        all_picks = evos + combos + ([free_pick] if free_pick else [])
+        ranked = sorted([p for p in all_picks if not any(w.rule_id == "combo_bad" for w in p.warnings)],
                         key=lambda p: -p.score)
         if ranked:
             best = ranked[0]
-            if evos and combos:
-                measured = any(r.rule_id.startswith(("fz_", "evo_dmg")) for p in evos + combos for r in p.reasons)
+            if sum(1 for group in (evos, combos, [free_pick] if free_pick else []) if group) > 1:
+                measured = any(r.rule_id.startswith(("fz_", "evo_dmg")) for p in all_picks for r in p.reasons)
                 notes.append("진화 기본 가산 + 게임 수치·실측 피해로 비교" if measured
                              else "진화를 먼저 권함 (비교할 수치가 아직 없음)")
         if best is None:
-            if fz.free_upgrades:
-                best = FusionPick("free", "무료 강화", "보유 장비 레벨이 무작위로 오름", score=1)
-                best.reasons.append(Reason("fuser_free", "고를 만한 진화·융합이 없어 무료 강화가 무난", 1))
-            else:
-                return FusionRecommendation("hold", "권할 조합이 없음", None, evos, combos, notes)
+            return FusionRecommendation("hold", "권할 조합이 없음", None, evos, combos, notes, free_pick)
 
-        close = [p for p in evos + combos if p is not best and best.score - p.score < 4
+        close = [p for p in all_picks if p is not best and best.score - p.score < 4
                  and not any(w.rule_id == "combo_bad" for w in p.warnings)]
         status = "close" if close else "recommend"
         verb = {"evo": "진화", "combo": "융합", "free": ""}[best.kind]
         headline = f"{best.title} {verb}".strip()
-        return FusionRecommendation(status, headline, best, evos, combos, notes)
+        return FusionRecommendation(status, headline, best, evos, combos, notes, free_pick)
+
+    # ---- 분열(무료 강화) 평가 ----
+    FREE_BASE = 8            # 융합 기본(10)보다 살짝 낮게 시작 — 슬롯을 안 비우는 대신 유연성을 남김
+    FREE_UNLEVELED_W = 3     # 최대 레벨이 안 된 볼 하나당 가산 (최대 +18, 6개까지만 셈)
+
+    def _free(self, balls: List[InventorySlot]) -> FusionPick:
+        d = self.data
+        pick = FusionPick("free", "무료 강화", "보유 볼 레벨이 1~2회 오름", score=self.FREE_BASE)
+        pick.reasons.append(Reason("free_base", "다음 진화·융합 재료가 될 볼들을 먼저 레벨업 (분열)", self.FREE_BASE, "분열"))
+        maxlv = d.max_level("ball")
+        unleveled = [s for s in balls if s.level is not None and s.level < maxlv]
+        if unleveled:
+            n = min(len(unleveled), 6)
+            bonus = n * self.FREE_UNLEVELED_W
+            pick.reasons.append(Reason("free_unleveled", f"아직 최대 레벨이 아닌 볼 {len(unleveled)}개 — 레벨업 여지 큼",
+                                       bonus, "레벨업 여지"))
+            pick.score += bonus
+        elif balls:
+            pick.warnings.append(Reason("free_all_maxed", "보유 볼이 대부분 이미 최대 레벨 — 강화 효율 낮음", -6,
+                                        "레벨업 여지 적음"))
+            pick.score -= 6
+        return pick
 
     # ---- 진화 한 개 평가 ----
     def _evo(self, e: FuserEvo, balls: List[InventorySlot], run: RunState) -> FusionPick:

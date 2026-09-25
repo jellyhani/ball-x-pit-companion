@@ -24,7 +24,7 @@ namespace BallxPitBridge
     [BepInPlugin("dev.ballxpit.bridge", "BALL x PIT Bridge", Plugin.Version)]
     public class Plugin : BasePlugin
     {
-        public const string Version = "1.11.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
+        public const string Version = "1.12.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
         internal static ManualLogSource L;
 
         public override void Load()
@@ -554,6 +554,20 @@ namespace BallxPitBridge
             }
             w.WriteStartObject("base");
             try { var st = bm.CurState.ToString(); Aiming = st == "kAimWorkers"; w.WriteString("state", st); } catch { }
+            // 알선소로 2명 원정: 로드아웃 화면의 두 캐릭터 패널이 지금까지 고른 캐릭터를 담고 있다
+            // (kSelectingChar 로 캐릭터 고르는 화면이 열려 있는 동안에도 로드아웃 화면은 뒤에 그대로 있다).
+            try
+            {
+                var lo = LoadoutUI.I;
+                if (lo != null && lo.gameObject.activeInHierarchy)
+                {
+                    w.WriteStartObject("loadout");
+                    try { w.WriteString("char1", lo.CharPanel?._tgtChar?.Type.ToString()); } catch { }
+                    try { w.WriteString("char2", lo.Char2Panel?._tgtChar?.Type.ToString()); } catch { }
+                    w.WriteEndObject();
+                }
+            }
+            catch { }
             try { w.WriteNumber("harvest_secs_left", Math.Round(bm.RemainingHarvestSecs, 1)); } catch { }
             try { w.WriteBoolean("harvested_today", m.DidHarvestToday); } catch { }
             // 스파(목욕탕): 골드를 내고 바로 한 번 더 채집 — 비용·오늘 쓴 횟수 (앱이 지난 채집량과 비교해 손익을 보여 준다)

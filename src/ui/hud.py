@@ -505,11 +505,11 @@ class RecommendationHud(QWidget):
         else:
             v = HudView(title=rec.headline, status=STATUS_TEXT.get(rec.status, ""), status_tone=tone)
         rows = []
-        for p in rec.evos + rec.combos:
+        for p in rec.evos + rec.combos + ([rec.free] if rec.free else []):
             if p is best:
                 continue
             icons = (p.result_id,) if p.kind == "evo" else tuple(p.parts)
-            verb = "진화" if p.kind == "evo" else "융합"
+            verb = {"evo": "진화", "combo": "융합", "free": "강화"}[p.kind]
             note, tone2 = ((p.warnings[0].short, "warn") if p.warnings else
                            (next((r.short for r in p.reasons if r.rule_id in ("combo_ai", "evo_chain")), ""), "tertiary"))
             rows.append(HudRow(icons, f"{p.title}  {verb}", note, tone2))

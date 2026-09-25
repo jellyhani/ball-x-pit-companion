@@ -75,6 +75,7 @@ class AppController(QObject):
         self.fusion = FusionAdvisor(self.data)
         self.fusion_rec: Optional[FusionRecommendation] = None
         self.char_combo = None                    # 캐릭터 선택 화면의 조합 추천 (알선소가 있을 때)
+        self._char_combo_key = None                # (state, char1, char2) — 바뀔 때만 다시 계산
 
         self.ocr_status = check_ocr()
         self.user_hidden = False
@@ -489,32 +490,63 @@ class AppController(QObject):
         self._ui_avoid = [frame.to_screen(r) for r in rects if r] if frame is not None else []
 
     def _update_char_combo(self, base: Optional[dict], state: str):
-        """캐릭터 선택 화면: 알선소가 지어져 있으면 두 캐릭터 조합을 추천한다 (커뮤니티 추천 + 내 기록)."""
-        want = (state == "kSelectingChar" and base is not None and self.meta is not None
-                and any(b.get("type") == "kMatchMaker" and b.get("state", "kNormal") == "kNormal"
-                        for b in base.get("buildings") or []))
+        """캐릭터 선택 화면: 알선소가 지어져 있으면 캐릭터 조합을 추천한다 (커뮤니티 추천 + 내 기록).
+        플러그인 1.12: 로드아웃 화면의 두 캐릭터 패널로 '이미 고른 캐릭터'를 안다 (base.loadout.char1/char2).
+        하나만 골랐으면 그 캐릭터와 맞는 조합만 추리고, 둘 다 골랐으면 그 조합의 궁합을 보여준다."""
+        loadout = (base or {}).get("loadout") or {}
+        char1, char2 = loadout.get("char1"), loadout.get("char2")
+        has_matchmaker = base is not None and any(
+            b.get("type") == "kMatchMaker" and b.get("state", "kNormal") == "kNormal"
+            for b in base.get("buildings") or [])
+        want = (self.meta is not None and has_matchmaker
+                and (state == "kSelectingChar" or (state == "kSelectingLoadout" and char1 and char2)))
+        key = (state, char1, char2) if want else None
         if not want:
             if self.char_combo is not None:
                 self.char_combo = None
+                self._char_combo_key = None
                 self.hud.hide()
             return
-        if self.char_combo is not None:
+        if key == self._char_combo_key:
             return
-        from .engine.char_combo import suggest_pairs
+        self._char_combo_key = key
+        from .engine.char_combo import char_id, suggest_pairs
         from .ui.hud import HudRow, HudView
         d = self.data
-        pairs = suggest_pairs(d, self.meta.chars_raw, self.recommender.history, limit=4)
+
+        if char1 and char2:
+            pairs = suggest_pairs(d, self.meta.chars_raw, self.recommender.history, limit=1,
+                                  exact=(char_id(char1), char_id(char2)))
+            if not pairs:
+                self.char_combo = None
+                return
+            p = pairs[0]
+            tone, status = ("accent", "좋음") if p.score >= 8 else (("neutral", "보통") if p.score >= 3
+                                                                    else ("neutral", "정보 없음"))
+            v = HudView(title=f"{d.name(p.a)} + {d.name(p.b)}", subtitle="이번 원정 캐릭터 궁합",
+                        status=status, status_tone=tone)
+            v.lines = [(r, "secondary") for r in (p.reasons[:3] or ["커뮤니티 추천·내 기록·전략 궁합 어디에도 안 걸림"])]
+            self.char_combo = pairs
+            log.info("캐릭터 궁합: %s + %s (%.1f) %s", d.name(p.a), d.name(p.b), round(p.score, 1), p.reasons)
+            self.hud.render_view(v)
+            return
+
+        fixed = char_id(char1) if char1 else None
+        pairs = suggest_pairs(d, self.meta.chars_raw, self.recommender.history, limit=4, fixed=fixed)
         if not pairs:
+            self.char_combo = None
             return
         best = pairs[0]
-        v = HudView(title=f"{d.name(best.a)} + {d.name(best.b)}", subtitle="캐릭터 조합 추천 (알선소)",
+        subtitle = f"{d.name(fixed)}와 좋은 조합 (알선소)" if fixed else "캐릭터 조합 추천 (알선소)"
+        v = HudView(title=f"{d.name(best.a)} + {d.name(best.b)}", subtitle=subtitle,
                     status="추천", status_tone="accent")
         v.lines = [(r, "secondary") for r in best.reasons[:2]]
         v.section = "다른 조합"
         v.rows = [HudRow((), f"{d.name(p_.a)} + {d.name(p_.b)}", p_.reasons[0] if p_.reasons else "") for p_ in pairs[1:]]
         v.footer = [("커뮤니티 추천(Dexerto·Screen Rant·Steam)과 내 런 기록 기준 — 참고용", "tertiary")]
         self.char_combo = pairs
-        log.info("캐릭터 조합 추천: %s", [(d.name(p_.a), d.name(p_.b), round(p_.score, 1)) for p_ in pairs])
+        log.info("캐릭터 조합 추천%s: %s", f" ({d.name(fixed)} 고정)" if fixed else "",
+                 [(d.name(p_.a), d.name(p_.b), round(p_.score, 1)) for p_ in pairs])
         self.hud.render_view(v)
 
     def _update_fusion(self, obs: ScreenObservation):
@@ -530,9 +562,10 @@ class AppController(QObject):
                               if obs.frame is not None and obs.panel_rect else None)
         rec = self.fusion.recommend(obs.fuser, obs.inventory, self.run)
         if self.fusion_rec is None or rec.headline != self.fusion_rec.headline:
-            log.info("융합 추천(%s): %s | 진화 %s | 융합 %s", rec.status, rec.headline,
+            log.info("융합 추천(%s): %s | 진화 %s | 융합 %s | 분열 %s", rec.status, rec.headline,
                      [(p.title, round(p.score, 1)) for p in rec.evos],
-                     [(p.title, round(p.score, 1)) for p in rec.combos])
+                     [(p.title, round(p.score, 1)) for p in rec.combos],
+                     round(rec.free.score, 1) if rec.free else None)
         self.fusion_rec = rec
         self.hud.show_fusion(rec)
 

@@ -32,8 +32,13 @@ def char_id(game_type: str) -> str:
     return "char:" + (game_type[1:] if game_type.startswith("k") else game_type).lower()
 
 
-def suggest_pairs(data: GameData, chars: Sequence[dict], history: Sequence = (), limit: int = 3) -> List[CharPair]:
-    """해금된 캐릭터(meta.chars — {type, lvl})로 만들 수 있는 조합 중 추천 순서."""
+def suggest_pairs(data: GameData, chars: Sequence[dict], history: Sequence = (), limit: int = 3,
+                  fixed: Optional[str] = None, exact: Optional[Sequence[str]] = None) -> List[CharPair]:
+    """해금된 캐릭터(meta.chars — {type, lvl})로 만들 수 있는 조합 중 추천 순서.
+
+    fixed: 이 캐릭터가 들어간 조합만 (알선소에서 하나를 이미 고르고 둘째를 고르는 중일 때).
+    exact: 이 두 캐릭터의 조합 하나만 — 근거가 하나도 없어도 돌려준다 (둘 다 이미 골랐을 때 '궁합' 표시용).
+    """
     levels: Dict[str, int] = {}
     for c in chars:
         t = c.get("type")
@@ -41,10 +46,15 @@ def suggest_pairs(data: GameData, chars: Sequence[dict], history: Sequence = (),
             cid = char_id(t)
             if cid in data.characters:
                 levels[cid] = int(c.get("lvl") or 0)
+    exact_key = frozenset(exact) if exact else None
     pairs = {frozenset(p["pair"]): p for p in (data.community.get("char_pairs") or []) if len(p.get("pair", [])) == 2}
     out: List[CharPair] = []
     for a, b in combinations(sorted(levels), 2):
         key = frozenset((a, b))
+        if exact_key is not None and key != exact_key:
+            continue
+        if fixed is not None and fixed not in (a, b):
+            continue
         score, why = 0.0, []
         cp = pairs.get(key)
         if cp:
@@ -61,8 +71,9 @@ def suggest_pairs(data: GameData, chars: Sequence[dict], history: Sequence = (),
         shared = [k for k in fa if fa[k] > 0 and fb.get(k, 0) > 0]
         if shared:
             score += 1.0
+            why.append(f"둘 다 {'·'.join(shared)} 전략 선호")
         score += LEVEL_W * (levels[a] + levels[b])
-        if cp or rec is not None:
+        if exact_key is not None or cp or rec is not None:
             out.append(CharPair(a, b, score, why))
     out.sort(key=lambda p: -p.score)
     return out[:limit]

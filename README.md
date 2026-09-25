@@ -114,6 +114,8 @@ PyInstaller onedir 빌드(Qt 라이브러리는 LGPL 조건대로 별도 파일)
   Steam 토론 [Max Iron Fortress + Veterans Hut + Captains Quarters](https://steamcommunity.com/app/2062430/discussions/0/595163560549778862/)
 - [StonedModder/BallxPitxApp](https://github.com/StonedModder/BallxPitxApp) 연구 문서 — 생산 주기·타일 용량·건설 비용,
   빌드 아키타입 아이디어
+- 퓨전 리액터(융합/분열) 우선순위: [dood.gg 메타 가이드](https://dood.gg/en/ball-x-pit/guides/meta) — 초반엔 분열로 볼을
+  먼저 레벨업하고, 재료가 갖춰지면 그때 융합·진화를 노리라는 조언
 
 ## 라이선스
 
