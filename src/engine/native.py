@@ -38,6 +38,7 @@ def lib():
         dll.bxp_simulate_team.argtypes = [P(d), i, P(i), P(i), P(i), P(i), P(i), P(d), P(d), P(d), P(i), P(i), P(i),
                                           i, P(d), P(i), d, i, P(i), P(i), P(i), P(d), i, P(d), P(i)]
         _lib = dll
+        log.info("네이티브 계산 모듈 사용 (%s)", _DLL)
     except (OSError, AttributeError) as e:
         log.warning("네이티브 계산 모듈을 불러오지 못해 파이썬으로 계산합니다: %s", e)
         return None

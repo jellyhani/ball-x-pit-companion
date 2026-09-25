@@ -195,7 +195,9 @@ class AppController(QObject):
         if not self.ocr_status.ok:
             log.warning(self.ocr_status.message)
             self.control.select_page("진단")
-        log.info("시작: 데이터 빌드 %s, OCR %s", self.data.game_build_id, self.ocr_status.ok)
+        from .engine import native
+        log.info("시작: 데이터 빌드 %s, OCR %s, 네이티브 계산 %s", self.data.game_build_id, self.ocr_status.ok,
+                 "사용" if native.lib() is not None else "없음 (파이썬 계산)")
 
     def shutdown(self):
         self.sim.shutdown()
