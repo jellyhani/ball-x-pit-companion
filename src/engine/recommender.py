@@ -188,13 +188,7 @@ class Recommender:
         auto = [c for c in run.character_ids if d.character_rule(c).get("auto_selects_upgrades")]
         plan = build_plan(run, d, progress)
         self._arch = detect_archetype(run, d)
-        if not self._arch.top:
-            for cid in run.character_ids:           # 초반: 볼이 적으면 캐릭터 궁합 계열을 기본 방향으로
-                fav = d.character_rule(cid).get("strategy", {}).get("favor", {})
-                seed = [a for a in ("aoe", "baby", "sustain") if fav.get(a, 0) >= 3]
-                if seed:
-                    self._arch.top = seed[:1]
-                    break
+        # 캐릭터 궁합은 archetype.detect 가 볼 점수와 함께 합산한다 (두 캐릭터 모두, 볼이 쌓인 뒤에도)
         evals = [self._evaluate(card, run, progress, plan) for card in session.cards]
         situation = situation_text(progress)
         if auto:

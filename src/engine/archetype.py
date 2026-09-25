@@ -27,6 +27,12 @@ AXIS_LABEL = {"burn": "화상", "freeze": "빙결·둔화", "bleed": "출혈", "
 # 계열과 맞는 패시브 역할 (passive_value.ROLE)
 AXIS_PASSIVE_ROLE = {"aoe": "aoe", "baby": "baby", "sustain": "defense"}
 MIN_SCORE = 2.0
+# 캐릭터 궁합(strategy.favor)이 덱 계열에 더하는 점수 — 캐릭터마다 한 번씩(같은 캐릭터 둘이면 한 번). 예전 초반 씨앗
+# (favor >= 3 이면 계열 1개)과 같은 문턱이라, 볼이 없을 때 결과는 그대로이고 볼이 쌓이면 볼 점수 옆에서
+# 작은 가중치로 계속 남는다. 값은 추정 (근거: favor 자체가 공식 설명에서 끌어낸 추정 가중치).
+CHAR_SEED_SCORE = 2.0
+CHAR_SEED_AXES = ("aoe", "baby", "sustain")          # favor 키 중 덱 계열과 1:1 로 대응하는 것만
+CHAR_SEED_MIN_FAVOR = 3
 
 
 @dataclass
@@ -66,7 +72,13 @@ def detect(run: RunState, data: GameData) -> Archetype:
         w = 1.0 + 0.3 * (lvl - 1) + 2.0 * share
         for a in axes:
             scores[a] = scores.get(a, 0.0) + w
-    ranked: List[Tuple[str, float]] = sorted(scores.items(), key=lambda kv: -kv[1])
+    # 캐릭터(메인+동행) 성향: 순서와 무관하게 합산 (A+B == B+A)
+    for cid in sorted(set(run.character_ids)):
+        fav = data.character_rule(cid).get("strategy", {}).get("favor", {})
+        for a in CHAR_SEED_AXES:
+            if fav.get(a, 0) >= CHAR_SEED_MIN_FAVOR:
+                scores[a] = scores.get(a, 0.0) + CHAR_SEED_SCORE
+    ranked: List[Tuple[str, float]] = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
     top = [a for a, v in ranked[:2] if v >= MIN_SCORE]
     if len(top) == 2 and ranked[1][1] < 0.6 * ranked[0][1]:
         top = top[:1]                                  # 둘째가 한참 작으면 한 계열
