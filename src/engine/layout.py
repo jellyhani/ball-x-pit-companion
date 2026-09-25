@@ -68,7 +68,7 @@ class Move:
     reason: str
     b: int = -1              # 자리 바꾸기와 같은 모양으로 다루기 위한 자리 (-1 = 빈 자리)
     target: int = -1         # 길 열기: 이 옮기기로 작업자가 닿게 되는 미완성 건물 id (gain = 예상 타격 수)
-    rot: int = -1            # 옮기면서 회전할 때 목표 회전 값(게임 rot, 가로·세로만 맞으면 됨). -1 = 회전 없음
+    rot: int = -1            # 옮기면서 회전할 때 목표 회전 값 (게임 rot, +1 = 시계 방향 90°). -1 = 회전 없음
 
 
 @dataclass
@@ -259,14 +259,25 @@ def move_geo(geo: dict, blds: Dict[int, "Bld"], a: int, to: Tuple[float, float])
     return g
 
 
-def turn_geo(geo: dict, a: int, to: Tuple[float, float], w: float, h: float) -> dict:
-    """한 건물을 가로·세로를 바꿔 새 중심에 놓는다: 충돌 모양을 새 크기(w×h, 월드 단위)의 상자로 바꾼다.
-    회전 방향을 모르므로(ㄱ자 모양은 방향에 따라 다름) 사각형 전체로 본다 — layout_opt.turned 와 같은 가정."""
-    hw, hh = w / 2, h / 2
-    cx, cy = to
-    box = {"id": a, "shape": "box",
-           "pts": [[cx - hw, cy - hh], [cx + hw, cy - hh], [cx + hw, cy + hh], [cx - hw, cy + hh]]}
-    cols = [c for c in geo.get("colliders") or [] if int(c.get("id", -1)) != a] + [box]
+def turn_geo(geo: dict, a: int, frm: Tuple[float, float], to: Tuple[float, float], k: int) -> dict:
+    """한 건물의 충돌 모양을 중심 frm 기준 시계 방향 90° × k 돌리고 새 중심 to 로 옮긴다
+    (게임 rot +1 = 시계 방향 90° — layout_opt.rotated 와 같은 규칙)."""
+    def turn(x: float, y: float) -> List[float]:
+        dx, dy = x - frm[0], y - frm[1]
+        for _ in range(k % 4):
+            dx, dy = dy, -dx
+        return [to[0] + dx, to[1] + dy]
+    cols = []
+    for c in geo.get("colliders") or []:
+        if int(c.get("id", -1)) != a:
+            cols.append(c)
+            continue
+        c2 = dict(c)
+        if "pts" in c:
+            c2["pts"] = [turn(x, y) for x, y in c["pts"]]
+        if "c" in c:
+            c2["c"] = turn(*c["c"])
+        cols.append(c2)
     g = dict(geo)
     g["colliders"] = cols
     return g

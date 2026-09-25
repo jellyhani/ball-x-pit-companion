@@ -166,11 +166,15 @@ class Piece:
     unfinished: bool = False  # 공사 중·강화 공사 중 (강철 요새 건설 점수 대상)
 
 
-def turned(p: Piece) -> Piece:
-    """가로·세로를 바꾼(90° 회전한) 건물. 게임 회전 버튼이 어느 쪽으로 도는지 몰라서(ㄱ자 건물은 방향에 따라
-    모양이 달라짐) 바꾼 모양은 사각형 전체를 차지한다고 본다 — 어느 쪽으로 돌려도 그 안에 들어간다."""
-    return Piece(p.id, p.type, p.h, p.w, frozenset((dx, dy) for dx in range(p.h) for dy in range(p.w)),
-                 p.movable, p.range, p.factor, p.cap, p.unfinished)
+def rotated(p: Piece, k: int) -> Piece:
+    """시계 방향으로 90° × k 돌린 건물 (게임 rot +1 = 시계 방향 90°). ㄱ·ㅜ·ㅠ 자 모양도 그대로 돌린다.
+    근거: 같은 건물이 다른 rot 로 기록된 충돌 모양 비교 (harvest_traces·live_state, 10종 — 시계 14 : 반시계 0)."""
+    k %= 4
+    w, h, rel = p.w, p.h, p.rel
+    for _ in range(k):
+        rel = frozenset((y, w - 1 - x) for x, y in rel)       # (x, y 위쪽) → 시계 방향 90°
+        w, h = h, w
+    return p if k == 0 else Piece(p.id, p.type, w, h, rel, p.movable, p.range, p.factor, p.cap, p.unfinished)
 
 
 @dataclass
@@ -186,7 +190,7 @@ class FullPlan:
     harvest_after: Optional[List[int]] = None
     moved: int = 0
     notes: List[str] = field(default_factory=list)
-    turned: Set[int] = field(default_factory=set)   # 가로·세로를 바꿔(회전) 놓는 건물 (계획도시)
+    turned: Dict[int, int] = field(default_factory=dict)   # 회전해서 놓는 건물 → 시계 방향 90° 횟수 (1~3, 계획도시)
 
 
 class Layout:
@@ -609,7 +613,7 @@ def canonicalize(pieces: Dict[int, Piece], origin0: Dict[int, Tuple[int, int]],
 
 
 def move_sequence(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int, int]],
-                  target: Dict[int, Tuple[int, int]], turn: Set[int] = frozenset()
+                  target: Dict[int, Tuple[int, int]], turn: Optional[Dict[int, int]] = None
                   ) -> List[Tuple[int, Tuple[int, int], bool]]:
     """지금 배치 → 목표 배치로 가는 옮기기 순서 (한 번에 한 건물, 항상 빈 자리로만).
 
@@ -617,10 +621,11 @@ def move_sequence(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int
     2) 막히면 막는 건물이 가장 적은 목표 자리 하나를 골라, 막는 건물들을 다른 건물 목표가 아닌 빈 곳에 잠시 비켜 둔다.
        그 건물은 다음 차례에 제자리로 간다 — 매 단계 최소 한 건물이 목표 자리에 확정되므로 반드시 끝난다.
     목표 자리끼리는 겹치지 않으므로 목표 자리를 막는 건물은 항상 아직 안 옮긴 건물이다.
-    turn: 목표 자리에 가로·세로를 바꿔 놓을 건물 — 목표 자리로 가는 한 번에 회전도 한다 (비켜 두기는 그대로).
+    turn: 목표 자리에 회전해서 놓을 건물 → 시계 방향 90° 횟수. 목표 자리로 가는 한 번에 회전도 한다 (비켜 두기는 그대로).
     돌려주는 값: [(건물, 옮길 자리(왼쪽 아래 타일), 잠시 비켜 두기인지)]."""
     lay = Layout(grid, dict(pieces), cur)
-    goal_piece = {i: (turned(pieces[i]) if i in turn else pieces[i]) for i in target}
+    turn = turn or {}
+    goal_piece = {i: rotated(pieces[i], turn.get(i, 0)) for i in target}
     pending = [i for i in target if lay.origin.get(i) != target[i] or i in turn]
     steps: List[Tuple[int, Tuple[int, int], bool]] = []
 
@@ -857,7 +862,7 @@ def _optimize_city(base: dict, grid: Grid, pieces: Dict[int, Piece], origin0: Di
     lrc = (int((float(launcher[0]) - grid.ox) // grid.size), int((float(launcher[1]) - grid.oy) // grid.size)) \
         if len(launcher) >= 2 else None
     orig, notes, turn = plan_city(grid, pieces, origin0, lrc, gold_u_spots(geo, grid), scorer, pad, hit)
-    shaped = {i: (turned(p) if i in turn else p) for i, p in pieces.items()}
+    shaped = {i: rotated(p, turn.get(i, 0)) for i, p in pieces.items()}
     orig = canonicalize(shaped, origin0, orig)
     e0, d0 = plain.score(Layout(grid, pieces, origin0))
     lay = Layout(grid, shaped, orig)
@@ -1093,14 +1098,13 @@ def final_base(base: dict, plan: FullPlan) -> dict:
     cur = dict(blds)
     for b in base.get("buildings") or []:
         i = b.get("id")
-        turn = i in plan.turned
+        turn = plan.turned.get(i, 0)
         if i in plan.centers_after and (plan.origin_after.get(i) != plan.origin_before.get(i) or turn) and i in cur:
             cx, cy = plan.centers_after[i]
             ob = cur[i]
             if turn:
-                w, h = ob.footprint
-                g = turn_geo(g, i, (cx, cy), h * grid.size, w * grid.size)
-                rot = (ob.rot + 1) % 4
+                g = turn_geo(g, i, (ob.x, ob.y), (cx, cy), turn)
+                rot = (ob.rot + turn) % 4
             else:
                 g = move_geo(g, cur, i, (cx, cy))
                 rot = ob.rot
@@ -1114,17 +1118,18 @@ def final_base(base: dict, plan: FullPlan) -> dict:
 def remaining_moves(base: dict, final: Dict[int, Tuple[float, float]],
                     final_rot: Optional[Dict[int, int]] = None) -> List[Move]:
     """지금(재배치 도중) 배치에서 목표 배치(건물별 중심)까지 남은 옮기기. 사용자가 다른 순서로 옮겨도 다시 맞춘다.
-    final_rot: 건물별 목표 회전(게임 rot 값). 가로·세로만 맞으면(짝홀이 같으면) 된 것으로 본다."""
+    final_rot: 건물별 목표 회전(게임 rot 값, +1 = 시계 방향 90°)."""
     grid = grid_from_geo(base.get("geo") or {})
     if grid is None or not final:
         return []
     pieces, cur = pieces_from_base(base, grid, housing_types())
     rots = {b["id"]: int(b.get("rot") or 0) for b in base.get("buildings") or [] if "id" in b}
-    turn = {i for i, r in (final_rot or {}).items() if i in pieces and (r - rots.get(i, 0)) % 2}
+    turn = {i: (r - rots.get(i, 0)) % 4 for i, r in (final_rot or {}).items()
+            if i in pieces and (r - rots.get(i, 0)) % 4}
     target = {}
     for i, (x, y) in final.items():
         if i in pieces:
-            p = turned(pieces[i]) if i in turn else pieces[i]
+            p = rotated(pieces[i], turn.get(i, 0))
             target[i] = (round((x - p.w * grid.size / 2 - grid.ox) / grid.size),
                          round((y - p.h * grid.size / 2 - grid.oy) / grid.size))
     for i in cur:                     # 계획 뒤에 새로 지은 건물(계획에 없음)은 그 자리에 둔다 — 없으면 KeyError 로 기지 화면이 멈춤
@@ -1133,16 +1138,21 @@ def remaining_moves(base: dict, final: Dict[int, Tuple[float, float]],
 
 
 def _moves(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int, int]], target: Dict[int, Tuple[int, int]],
-           turn: Set[int], rots: Dict[int, int]) -> List[Move]:
+           turn: Dict[int, int], rots: Dict[int, int]) -> List[Move]:
     out = []
     for i, o, park in move_sequence(grid, pieces, cur, target, turn):
-        spin = i in turn and not park
-        p = turned(pieces[i]) if spin else pieces[i]
+        k = 0 if park else turn.get(i, 0)
+        p = rotated(pieces[i], k)
         out.append(Move(i, grid.center(o[0], o[1], p.w, p.h), 0.0,
                         "잠시 비켜 두기 (자리 비우기)" if park else
-                        "회전(가로↔세로)해서 이 자리로" if spin else "최적 배치 자리로",
-                        rot=(rots.get(i, 0) + 1) % 4 if spin else -1))
+                        f"{turn_text(k)} 이 자리로" if k else "최적 배치 자리로",
+                        rot=(rots.get(i, 0) + k) % 4 if k else -1))
     return out
+
+
+def turn_text(k: int) -> str:
+    """회전 안내 (게임 회전 버튼 = 시계 방향 90°)."""
+    return {1: "회전 버튼 1번 눌러서", 2: "회전 버튼 2번 눌러서", 3: "회전 버튼 3번 눌러서"}.get(k % 4, "")
 
 
 def plan_moves(plan: FullPlan, base: dict) -> List[Move]:
@@ -1152,4 +1162,4 @@ def plan_moves(plan: FullPlan, base: dict) -> List[Move]:
     pieces, cur = pieces_from_base(base, grid, housing_types())
     target = {i: plan.origin_after.get(i, o) for i, o in cur.items()}
     rots = {b["id"]: int(b.get("rot") or 0) for b in base.get("buildings") or [] if "id" in b}
-    return _moves(grid, pieces, cur, target, set(plan.turned) & set(cur), rots)
+    return _moves(grid, pieces, cur, target, {i: k for i, k in plan.turned.items() if i in cur}, rots)

@@ -13,7 +13,7 @@ FIX = os.path.join(os.path.dirname(__file__), "fixtures", "harvest_trace_48deg.j
 
 def shaped(pieces, plan):
     """계획의 회전(가로↔세로)을 반영한 건물 모양."""
-    return {i: (lo.turned(p) if i in plan.turned else p) for i, p in pieces.items()}
+    return {i: lo.rotated(p, plan.turned.get(i, 0)) for i, p in pieces.items()}
 
 
 def setup():
@@ -263,6 +263,21 @@ class LayoutOptTest(unittest.TestCase):
         corridor = {(left + 2 + dx, r) for dx in range(2) for r in range(min(s[1] for s in spots), max(s[1] for s in spots))}
         self.assertFalse(corridor & set(lay.occ))
 
+    def test_rotated_mask_matches_rotated_collider(self):
+        """ㄱ·ㅜ 자 건물: 충돌 모양을 시계 방향으로 돌린 게임 자료에서 읽은 모양 == 칸 모양을 돌린 것 (rot +1 = 시계 90°)."""
+        fx, base, grid, pieces, o0 = setup()
+        odd = [i for i, p in pieces.items() if len(p.rel) < p.w * p.h and p.w != p.h][:3]
+        self.assertTrue(odd)
+        for k in (1, 2, 3):
+            turn = {i: k for i in odd}
+            shaped = {i: lo.rotated(p, turn.get(i, 0)) for i, p in pieces.items()}
+            lay = lo.Layout(grid, shaped, o0)
+            plan = lo.FullPlan(o0, dict(o0), {i: lay.center(i) for i in o0}, 0, 0, {}, {}, turned=turn)
+            fb = lo.final_base(base, plan)
+            got, _ = lo.pieces_from_base(fb, grid, lo.housing_types())
+            for i in odd:
+                self.assertEqual((got[i].w, got[i].h, got[i].rel), (shaped[i].w, shaped[i].h, shaped[i].rel), (pieces[i].type, k))
+
     def test_plan_turns_buildings_and_moves_reach_it(self):
         """계획도시는 건물을 회전(가로↔세로)해 넣기도 한다. 목표 배치를 게임에 적용하면(rot 바뀜) 남은 옮기기가 0,
         지금 배치에서 가는 옮기기 순서는 겹침 없이 목표에 닿는다."""
@@ -271,20 +286,20 @@ class LayoutOptTest(unittest.TestCase):
         self.assertTrue(plan.turned)                                   # 이 기지에서는 회전해야 더 빽빽함
         fb = lo.final_base(base, plan)
         rots = {b["id"]: b.get("rot", 0) for b in fb["buildings"]}
-        for i in plan.turned:
+        for i, k in plan.turned.items():
             before = next(b for b in base["buildings"] if b["id"] == i).get("rot", 0)
-            self.assertEqual((rots[i] - before) % 2, 1)
+            self.assertEqual((rots[i] - before) % 4, k)
         final = {b["id"]: (b["x"], b["y"]) for b in fb["buildings"]}
         self.assertEqual(lo.remaining_moves(fb, final, rots), [])
         moves = lo.remaining_moves(base, final, rots)
         self.assertTrue(any(m.rot >= 0 for m in moves))
         # 순서대로 옮기면(회전 포함) 매 단계 겹치지 않는다
-        turn = {i for i in plan.turned}
+        turn = dict(plan.turned)
         cur = dict(o0)
         live = dict(pieces)
         for i, o, park in lo.move_sequence(grid, pieces, o0, plan.origin_after, turn):
             if i in turn and not park:
-                live[i] = lo.turned(pieces[i])
+                live[i] = lo.rotated(pieces[i], turn[i])
             cur[i] = o
             cells = [c for j in cur for c in lo.Layout(grid, live, cur).cells(j)]
             self.assertEqual(len(cells), len(set(cells)))

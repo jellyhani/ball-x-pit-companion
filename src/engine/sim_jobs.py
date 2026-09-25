@@ -247,20 +247,20 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
         target_origin[m.a] = (round((m.to[0] - p.w * grid.size / 2 - grid.ox) / grid.size),
                               round((m.to[1] - p.h * grid.size / 2 - grid.oy) / grid.size))
     opener = {m.a: m.target for m in access}
-    turn = set(getattr(full, "turned", ()) or ()) & set(cur)
+    turn = {i: k for i, k in (getattr(full, "turned", None) or {}).items() if i in cur}
     rots = {b["id"]: int(b.get("rot") or 0) for b in snap.get("buildings") or [] if "id" in b}
     steps = []
     for i, o, park in lo.move_sequence(grid, pieces, cur, {i: o for i, o in target_origin.items() if i in cur}, turn):
-        spin = i in turn and not park
-        p = lo.turned(pieces[i]) if spin else pieces[i]
+        k = 0 if park else turn.get(i, 0)
+        p = lo.rotated(pieces[i], k)
         to = grid.center(o[0], o[1], p.w, p.h)
-        rot = (rots.get(i, 0) + 1) % 4 if spin else -1
+        rot = (rots.get(i, 0) + k) % 4 if k else -1
         if park:
             steps.append(Move(i, to, 0.0, "잠시 비켜 두기 (다른 건물 자리 비우기)"))
         elif i in opener:
             steps.append(Move(i, to, 1.0, "미완성 건물로 가는 길 열기", target=opener[i], rot=rot))
         else:
-            steps.append(Move(i, to, 0.0, "회전(가로↔세로)해서 이 자리로" if spin else "최적 배치 자리로", rot=rot))
+            steps.append(Move(i, to, 0.0, f"{lo.turn_text(k)} 이 자리로" if k else "최적 배치 자리로", rot=rot))
     final_blds = buildings_from_base(final_base)
     plan = LayoutPlan(full.effect_before, full.effect_after, steps, full.detail_before, full.detail_after,
                       full.harvest_before, hv(final_base.get("geo") or {}) if team else full.harvest_after)
