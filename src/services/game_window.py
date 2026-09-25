@@ -16,6 +16,8 @@ from typing import Optional, Tuple
 
 from PIL import Image, ImageStat
 
+from ..i18n import tr
+
 GAME_EXE = "balls.exe"
 
 user32 = ctypes.WinDLL("user32", use_last_error=True)
@@ -176,7 +178,7 @@ def capture_game(win: GameWindow) -> Tuple[Optional[Image.Image], str]:
     (가려진 창도 그릴 수 있지만 DirectX 게임에서는 느리거나 멈출 수 있다).
     """
     if win.minimized:
-        return None, "게임 창이 최소화됨"
+        return None, tr("게임 창이 최소화됨")
     order = ("screen", "print") if win.foreground else ("print", "screen")
     reasons = []
     for method in order:
@@ -186,9 +188,9 @@ def capture_game(win: GameWindow) -> Tuple[Optional[Image.Image], str]:
             reasons.append(f"{method}: {e}")
             continue
         if img is not None:
-            return img, "화면 영역" if method == "screen" else "PrintWindow"
-        reasons.append(f"{method}: 검은 화면")
-    return None, "캡처 실패 (" + ", ".join(reasons) + ") — 독점 전체 화면이면 '전체 창 모드'로 바꿔 주세요"
+            return img, tr("화면 영역") if method == "screen" else "PrintWindow"
+        reasons.append(tr("{method}: 검은 화면", method=method))
+    return None, tr("캡처 실패 (") + ", ".join(reasons) + tr(") — 독점 전체 화면이면 '전체 창 모드'로 바꿔 주세요")
 
 
 WDA_EXCLUDEFROMCAPTURE = 0x11

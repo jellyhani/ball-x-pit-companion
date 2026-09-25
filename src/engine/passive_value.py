@@ -11,57 +11,59 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
+from ..i18n import tr
+
 # 수치 이름 → (표시 이름, 단위, 작을수록 좋은지, 역할)
 PROPS: Dict[str, Tuple[str, str, bool, str]] = {
-    "kBonusDamagePct": ("추가 피해", "%", False, "power"),
-    "kBonusDamagePctTenth": ("추가 피해", "‰", False, "power"),
-    "kCritChance": ("치명타 수치", "", False, "power"),
-    "kFireRatePct": ("발사 속도", "%", False, "power"),
-    "kAOEDmgPct": ("범위 피해", "%", False, "aoe"),
-    "kBallLvl": ("볼 레벨", "", False, "power"),
-    "kMinDamage": ("피해 최소", "", False, "power"),
-    "kMaxDamage": ("피해", "", False, "power"),
-    "kMinDamagePct": ("최소 피해", "%", False, "power"),
-    "kBonusDecayPct": ("피해 감소율", "%", True, "power"),
-    "kMaxDynamiteDamage": ("폭발 피해", "", False, "power"),
-    "kReflectChance": ("반사 확률", "%", False, "power"),
-    "kRange": ("범위", "", False, "power"),
-    "kCurseKillChance": ("저주 즉사 확률", "%", False, "power"),
-    "kCharmKillChance": ("매혹 즉사 확률", "%", False, "power"),
-    "kDetectKillChance": ("즉사 확률", "%", False, "power"),
-    "kCritKillChance": ("치명타 즉사 확률", "%", False, "power"),
-    "kTouchKillChance": ("접촉 즉사 확률", "%", False, "power"),
-    "kReduceDmgPct": ("받는 피해 감소", "%", False, "defense"),
-    "kDodgePct": ("회피", "%", False, "defense"),
-    "kKillHeal": ("처치 시 회복", "", False, "defense"),
-    "kHealAmt": ("회복량", "", False, "defense"),
-    "kHealChance": ("회복 확률", "%", False, "defense"),
-    "kThornsAmt": ("가시 피해", "", False, "defense"),
-    "kCooldownLength": ("재사용 대기", "", True, "defense"),
-    "kOverhealEfficiencyPct": ("초과 회복 효율", "%", False, "defense"),
-    "kHealthPerMinute": ("분당 회복", "", False, "defense"),
-    "kSlowPct": ("둔화", "%", False, "defense"),
-    "kMaxBabies": ("베이비볼 최대", "개", False, "baby"),
-    "kMinBabies": ("베이비볼 최소", "개", False, "baby"),
-    "kBabyChance": ("베이비볼 확률", "%", False, "baby"),
-    "kFollowerMult": ("베이비볼 피해 배율", "%", False, "baby"),
-    "kBaseSpeedPct": ("볼 속도", "%", False, "speed"),
-    "kPeakSpeedPct": ("최고 속도", "%", False, "speed"),
-    "kAccelerationPct": ("가속", "%", False, "speed"),
-    "kMoveSpeedPct": ("이동 속도", "%", False, "move"),
-    "kAllyHealth": ("소환 아군 체력", "", False, "ally"),
-    "kAllyBonusHealthPct": ("아군 체력", "%", False, "ally"),
-    "kMaxAllyDamage": ("아군 피해", "", False, "ally"),
-    "kZombieChance": ("좀비 확률", "%", False, "ally"),
-    "kTurretCooldown": ("포탑 대기", "", True, "ally"),
-    "kMaxBlockSpawnCycle": ("생성 주기(행)", "", True, "ally"),
-    "kGoldPerMinute": ("분당 골드", "", False, "econ"),
-    "kMagnetRange": ("자석 범위", "", False, "econ"),
+    "kBonusDamagePct": (tr("추가 피해"), "%", False, "power"),
+    "kBonusDamagePctTenth": (tr("추가 피해"), "‰", False, "power"),
+    "kCritChance": (tr("치명타 수치"), "", False, "power"),
+    "kFireRatePct": (tr("발사 속도"), "%", False, "power"),
+    "kAOEDmgPct": (tr("범위 피해"), "%", False, "aoe"),
+    "kBallLvl": (tr("볼 레벨"), "", False, "power"),
+    "kMinDamage": (tr("피해 최소"), "", False, "power"),
+    "kMaxDamage": (tr("피해"), "", False, "power"),
+    "kMinDamagePct": (tr("최소 피해"), "%", False, "power"),
+    "kBonusDecayPct": (tr("피해 감소율"), "%", True, "power"),
+    "kMaxDynamiteDamage": (tr("폭발 피해"), "", False, "power"),
+    "kReflectChance": (tr("반사 확률"), "%", False, "power"),
+    "kRange": (tr("범위"), "", False, "power"),
+    "kCurseKillChance": (tr("저주 즉사 확률"), "%", False, "power"),
+    "kCharmKillChance": (tr("매혹 즉사 확률"), "%", False, "power"),
+    "kDetectKillChance": (tr("즉사 확률"), "%", False, "power"),
+    "kCritKillChance": (tr("치명타 즉사 확률"), "%", False, "power"),
+    "kTouchKillChance": (tr("접촉 즉사 확률"), "%", False, "power"),
+    "kReduceDmgPct": (tr("받는 피해 감소"), "%", False, "defense"),
+    "kDodgePct": (tr("회피"), "%", False, "defense"),
+    "kKillHeal": (tr("처치 시 회복"), "", False, "defense"),
+    "kHealAmt": (tr("회복량"), "", False, "defense"),
+    "kHealChance": (tr("회복 확률"), "%", False, "defense"),
+    "kThornsAmt": (tr("가시 피해"), "", False, "defense"),
+    "kCooldownLength": (tr("재사용 대기"), "", True, "defense"),
+    "kOverhealEfficiencyPct": (tr("초과 회복 효율"), "%", False, "defense"),
+    "kHealthPerMinute": (tr("분당 회복"), "", False, "defense"),
+    "kSlowPct": (tr("둔화"), "%", False, "defense"),
+    "kMaxBabies": (tr("베이비볼 최대"), tr("개"), False, "baby"),
+    "kMinBabies": (tr("베이비볼 최소"), tr("개"), False, "baby"),
+    "kBabyChance": (tr("베이비볼 확률"), "%", False, "baby"),
+    "kFollowerMult": (tr("베이비볼 피해 배율"), "%", False, "baby"),
+    "kBaseSpeedPct": (tr("볼 속도"), "%", False, "speed"),
+    "kPeakSpeedPct": (tr("최고 속도"), "%", False, "speed"),
+    "kAccelerationPct": (tr("가속"), "%", False, "speed"),
+    "kMoveSpeedPct": (tr("이동 속도"), "%", False, "move"),
+    "kAllyHealth": (tr("소환 아군 체력"), "", False, "ally"),
+    "kAllyBonusHealthPct": (tr("아군 체력"), "%", False, "ally"),
+    "kMaxAllyDamage": (tr("아군 피해"), "", False, "ally"),
+    "kZombieChance": (tr("좀비 확률"), "%", False, "ally"),
+    "kTurretCooldown": (tr("포탑 대기"), "", True, "ally"),
+    "kMaxBlockSpawnCycle": (tr("생성 주기(행)"), "", True, "ally"),
+    "kGoldPerMinute": (tr("분당 골드"), "", False, "econ"),
+    "kMagnetRange": (tr("자석 범위"), "", False, "econ"),
 }
 # 역할 대표 수치를 고를 때의 우선순위 (앞일수록 주 효과)
 ROLE_ORDER = ("power", "aoe", "defense", "baby", "ally", "speed", "move", "econ")
-ROLE_LABEL = {"power": "화력", "aoe": "범위 피해", "defense": "생존", "baby": "베이비볼", "ally": "소환 아군",
-              "speed": "볼 속도", "move": "이동", "econ": "편의"}
+ROLE_LABEL = {"power": tr("화력"), "aoe": tr("범위 피해"), "defense": tr("생존"), "baby": tr("베이비볼"), "ally": tr("소환 아군"),
+              "speed": tr("볼 속도"), "move": tr("이동"), "econ": tr("편의")}
 SKIP = {"kMinBlockSpawnCycle", "kMinAllyDamage", "kMinDynamiteDamage", "kMinDamage"}   # 짝 수치 (최대 쪽에서 범위로 보여 준다)
 
 
@@ -113,13 +115,13 @@ def passive_effect(level_props: Optional[List[dict]], before: Optional[int], aft
         changes.append((g, f"{PROPS[k][0]} {_fmt(k, a, prev)} → {_fmt(k, b, row)}"))
     if not changes:
         k = keys[0]
-        return PassiveEffect(role, f"{PROPS[k][0]} {_fmt(k, row[k], row)} 그대로", 0.0)
+        return PassiveEffect(role, tr("{v0} {v1} 그대로", v0=PROPS[k][0], v1=_fmt(k, row[k], row)), 0.0)
     changes.sort(key=lambda t: -t[0])
     return PassiveEffect(role, " · ".join(t for _, t in changes[:2]), changes[0][0])
 
 
 # ---- 볼: 레벨별 수치 이름이 볼마다 다르다 (kMinBurnDamage·kMaxBurnDamage, kBurnLength, kMaxBurnStacks …) ----
-_BALL_SUFFIX = (("Length", "지속"), ("Stacks", "최대 중첩"), ("Limit", "연쇄 수"))   # 확률(…Pct)은 이름을 옮기지 못해 뺀다
+_BALL_SUFFIX = (("Length", tr("지속")), ("Stacks", tr("최대 중첩")), ("Limit", tr("연쇄 수")))   # 확률(…Pct)은 이름을 옮기지 못해 뺀다
 
 
 def _ball_parts(row: dict) -> Dict[str, str]:
@@ -145,7 +147,7 @@ def ball_effect(level_props: Optional[List[dict]], before: Optional[int], after:
         return ""
     now = _ball_parts(level_props[after - 1])
     if not before or before < 1 or before > len(level_props):
-        return f"피해 {now['피해']}" if "피해" in now else ""
+        return tr("피해 {v0}", v0=now['피해']) if "피해" in now else ""
     prev = _ball_parts(level_props[before - 1])
-    changed = [f"{k} {prev[k]} → {v}" for k, v in now.items() if k in prev and prev[k] != v]
-    return " · ".join(changed[:2]) if changed else ("수치 변화 없음" if now else "")
+    changed = [f"{tr(k)} {prev[k]} → {v}" for k, v in now.items() if k in prev and prev[k] != v]
+    return " · ".join(changed[:2]) if changed else (tr("수치 변화 없음") if now else "")

@@ -18,6 +18,7 @@ from typing import List, Optional, Sequence, Tuple
 
 from ..domain import CardLabel, FrameInfo, OcrLine, Rect, ScreenKind
 from .text_match import normalize
+from ..i18n import tr
 
 # 1920×1080 스크린샷에서 잰 비율 (단위: 카드 간격 P, 원점: 제목 중심)
 LABEL_DY_RANGE = (0.6, 1.35)   # 카드 문구의 세로 위치 (버튼 수에 따라 0.84–1.14 관측)
@@ -109,10 +110,10 @@ class ParsedScreen:
 
 def _position_name(offset: float) -> str:
     if offset < -0.25:
-        return "왼쪽"
+        return tr("왼쪽")
     if offset > 0.25:
-        return "오른쪽"
-    return "가운데"
+        return tr("오른쪽")
+    return tr("가운데")
 
 
 def parse_layout(lines: Sequence[OcrLine], frame: FrameInfo) -> ParsedScreen:
@@ -148,7 +149,7 @@ def parse_layout(lines: Sequence[OcrLine], frame: FrameInfo) -> ParsedScreen:
         if lab is not None:
             labels.append((ln, lab, lvl))
     if not labels:
-        return ParsedScreen(ScreenKind.OTHER, note="제목은 있으나 카드 문구를 찾지 못함")
+        return ParsedScreen(ScreenKind.OTHER, note=tr("제목은 있으나 카드 문구를 찾지 못함"))
     labels.sort(key=lambda t: t[0].cx)
 
     xs = [t[0].cx for t in labels]
@@ -166,7 +167,7 @@ def parse_layout(lines: Sequence[OcrLine], frame: FrameInfo) -> ParsedScreen:
     plausible = 6.0 * header.h <= pitch <= 12.0 * header.h
     if not (same_row and near and below and plausible):
         # 카드 문구의 간격·줄·세로 위치가 선택창 배치와 맞지 않으면 다른 화면으로 본다
-        return ParsedScreen(ScreenKind.OTHER, note="카드 배치가 예상과 다름")
+        return ParsedScreen(ScreenKind.OTHER, note=tr("카드 배치가 예상과 다름"))
     P = pitch
 
     # 카드 자리: 문구가 있는 곳 + 그 사이 비어 있는 자리(문구를 못 읽은 카드)
@@ -180,7 +181,7 @@ def parse_layout(lines: Sequence[OcrLine], frame: FrameInfo) -> ParsedScreen:
     spots: List[CardSpot] = []
     names = [_position_name(o) for o in wanted]
     if len(set(names)) != len(names):
-        names = [f"{i + 1}번째" for i in range(len(wanted))]
+        names = [tr("{v0}번째", v0=i + 1) for i in range(len(wanted))]
     for i, off in enumerate(wanted):
         found = next((t for t, oo in zip(labels, offsets) if abs(oo - off) < 0.3), None)
         cx = found[0].cx if found else hx + off * P

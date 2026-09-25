@@ -13,6 +13,7 @@ from ..domain import RunProgress
 from ..gamedata import GameData
 from ..tracking.run_state import RunState
 from .roadmap import RoadmapEntry, build_roadmap
+from ..i18n import tr
 
 
 @dataclass
@@ -91,16 +92,16 @@ def _plan_text(plan: DeckPlan, data: GameData):
     if plan.targets:
         e = plan.targets[0]
         name = data.name(e.recipe.result)
-        label = "고정 목표" if plan.locked else "목표"
+        label = tr("고정 목표") if plan.locked else tr("목표")
         if e.missing:
             need = ", ".join(data.name(m) for m in e.missing)
-            target = f"{label} {name} ({need} 필요)"
+            target = tr("{label} {name} ({need} 필요)", label=label, name=name, need=need)
         elif e.levels_ready:
-            target = f"{name} 진화 가능 — 융합 화면에서"
+            target = tr("{name} 진화 가능 — 융합 화면에서", name=name)
         else:
-            target = f"{label} {name} (재료 강화 중)"
+            target = tr("{label} {name} (재료 강화 중)", label=label, name=name)
     if plan.phase == "endless":
-        phase = "무한의 심연: 새 항목보다 강화·진화·융합"
+        phase = tr("무한의 심연: 새 항목보다 강화·진화·융합")
     elif plan.phase == "boss_soon":
-        phase = "보스 직전: 보유 볼 강화 우선"
+        phase = tr("보스 직전: 보유 볼 강화 우선")
     return target, phase

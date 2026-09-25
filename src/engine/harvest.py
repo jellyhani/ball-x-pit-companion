@@ -19,6 +19,7 @@ from typing import Dict, List, Optional, Tuple
 
 from ..gamedata import GameData
 from ..tracking.meta_state import RESOURCES, MetaState
+from ..i18n import tr
 
 # 건물 종류 → 자원 번호 (0 골드, 1 밀, 2 나무, 3 돌). 이름 기준 + 보관 자원(held)으로 보정
 RES_BY_TYPE = {
@@ -56,10 +57,10 @@ class HarvestAdvice:
 def need_resource(meta: Optional[MetaState], shortfalls: Dict[str, int]) -> Tuple[int, str]:
     if shortfalls:
         name = max(shortfalls, key=shortfalls.get)
-        return RESOURCES.index(name), f"{name} (곧 지을·올릴 건물에 {shortfalls[name]} 부족)"
+        return RESOURCES.index(name), tr("{name} (곧 지을·올릴 건물에 {v0} 부족)", name=name, v0=shortfalls[name])
     res = list(meta.resources) if meta and meta.resources else [0, 0, 0, 0]
     i = min((1, 2, 3), key=lambda k: res[k] if k < len(res) else 0)
-    return i, f"{RESOURCES[i]} (보유량이 가장 적음: {res[i] if i < len(res) else 0})"
+    return i, tr("{v0} (보유량이 가장 적음: {v1})", v0=RESOURCES[i], v1=res[i] if i < len(res) else 0)
 
 
 class HarvestLog:
@@ -178,7 +179,7 @@ class AimRange:
 # 미완성 건물: 새로 지은 건물은 공사장(kScaffold), 강화한 건물은 강화 공사(kUpgrading) 상태로 시작한다.
 # 채집 때 작업자가 부딪힐 때마다 공사 점수가 쌓인다 (게임 BuildingInst.UpgradePts / GetUpgradeTgt,
 # 채집 강화 kMoreBuildPts). 남은 타격 수는 플러그인 1.7 부터 정확히 오고, 그 전에는 진행률로 어림한다.
-UNFINISHED = {"kScaffold": "공사 중", "kUpgrading": "강화 공사 중"}
+UNFINISHED = {"kScaffold": tr("공사 중"), "kUpgrading": tr("강화 공사 중")}
 FALLBACK_HITS = 10       # 목표 점수를 모를 때 완성까지 필요한 타격 수 어림값 (진행률로 나눠 씀)
 
 
@@ -242,15 +243,14 @@ def advise_harvest(base: dict, meta: Optional[MetaState], shortfalls: Dict[str, 
         # 화면 좌표는 y 가 아래로 커진다 — 게임 조준 벡터(y 위쪽 +)와 반대
         adv.aim_point = (int(player[0] + r * math.cos(math.radians(ang))),
                          int(player[1] - r * math.sin(math.radians(ang))))
-        adv.aim_text = f"기록 기반: 이 각도에서 {RESOURCES[need]} 평균 +{avg:.0f} ({n}번)"
+        adv.aim_text = tr("기록 기반: 이 각도에서 {v0} 평균 +{avg:.0f} ({n}번)", v0=RESOURCES[need], avg=avg, n=n)
         adv.learned = True
     elif blds:
         tot = sum(b["res"] for b in blds)
         adv.aim_point = (int(sum(b["sx"] * b["res"] for b in blds) / tot), int(sum(b["sy"] * b["res"] for b in blds) / tot))
-        adv.aim_text = (f"{RESOURCES[need]} 채집지 쪽 (남은 자원 가중) — 튕김 때문에 정확하지 않음, "
-                        "채집 기록이 3번 쌓이면 실제 결과로 조준을 추천")
+        adv.aim_text = (tr("{v0} 채집지 쪽 (남은 자원 가중) — 튕김 때문에 정확하지 않음, 채집 기록이 3번 쌓이면 실제 결과로 조준을 추천", v0=RESOURCES[need]))
     else:
-        adv.aim_text = f"채집할 수 있는 {RESOURCES[need]} 건물이 지금은 없음"
+        adv.aim_text = tr("채집할 수 있는 {v0} 건물이 지금은 없음", v0=RESOURCES[need])
     return adv
 
 
@@ -314,14 +314,14 @@ def advise_workers(meta: Optional[MetaState], chars_raw: List[dict], building_ty
         c = next((c for c in pool if t in _affinity(c)), pool[0])
         pool.remove(c)
         lv = launch_value(c, need)
-        why = (f"{data.building_name(t)} 전용 강화 보유" if t in _affinity(c) else
-               "발사 채집 강화가 없어 발사에서 빠져도 손해 없음" if lv == 0 else
-               f"쉬는 캐릭터 중 발사 채집 강화가 가장 적음 ({lv:g})")
-        out.append(WorkerAdvice(cid(c), t, f"비어 있음 — {why}", "쉬는 중"))
+        why = (tr("{v0} 전용 강화 보유", v0=data.building_name(t)) if t in _affinity(c) else
+               tr("발사 채집 강화가 없어 발사에서 빠져도 손해 없음") if lv == 0 else
+               tr("쉬는 캐릭터 중 발사 채집 강화가 가장 적음 ({lv:g})", lv=lv))
+        out.append(WorkerAdvice(cid(c), t, tr("비어 있음 — {why}", why=why), tr("쉬는 중")))
     for w in working:
         if w["work"] in SKIP_WORK:
-            out.append(WorkerAdvice(cid(w), w["work"], "금광은 안 씀 (골드 충분) — 빼서 채집 때 발사되게",
-                                    "금광에서 일함", "remove"))
+            out.append(WorkerAdvice(cid(w), w["work"], tr("금광은 안 씀 (골드 충분) — 빼서 채집 때 발사되게"),
+                                    tr("금광에서 일함"), "remove"))
     for w in sorted(working, key=lambda c: -launch_value(c, need)):
         t = w["work"]
         if t in SKIP_WORK or t in _affinity(w) or not pool:
@@ -331,12 +331,11 @@ def advise_workers(meta: Optional[MetaState], chars_raw: List[dict], building_ty
         if t not in _affinity(c) and lw - lc < SWAP_MARGIN:
             continue
         pool.remove(c)
-        out.append(WorkerAdvice(cid(c), t, f"{data.name(cid(w))}(발사 채집 강화 {lw:g})는 발사에 쓰는 게 나음 — "
-                                           f"{data.name(cid(c))}({lc:g})로 교체", "쉬는 중", "swap", cid(w)))
+        out.append(WorkerAdvice(cid(c), t, tr("{v0}(발사 채집 강화 {lw:g})는 발사에 쓰는 게 나음 — {v1}({lc:g})로 교체", v0=data.name(cid(w)), lw=lw, v1=data.name(cid(c)), lc=lc), tr("쉬는 중"), "swap", cid(w)))
     return out[:limit]
 
 
-RES_BUILDING_LABEL = {"kIdleFarm": "농장", "kIdleLumberyard": "야적장", "kIdleStoneMine": "채석장"}
+RES_BUILDING_LABEL = {"kIdleFarm": tr("농장"), "kIdleLumberyard": tr("야적장"), "kIdleStoneMine": tr("채석장")}
 
 
 # 목표 자원 비율 (밀 : 나무 : 돌) — 두 Steam 가이드가 거의 같다:
@@ -379,9 +378,7 @@ def advise_resource_ratio(building_types: List[str], need: Optional[int]) -> Opt
     if gap is None:
         return None
     r, bld, prod = gap
-    return (f"{RESOURCES[r]} 생산이 목표 비율보다 적음 — {bld} 더 짓기 "
-            f"(분당 약 밀 {prod[1]:.0f}·나무 {prod[2]:.0f}·돌 {prod[3]:.0f}, 목표 밀 1.5 : 나무 1.25 : 돌 1 — "
-            "Steam 가이드 Drake·apo)" + (" · 지금 부족한 자원" if r == need else ""))
+    return (tr("{v0} 생산이 목표 비율보다 적음 — {bld} 더 짓기 (분당 약 밀 {v1:.0f}·나무 {v2:.0f}·돌 {v3:.0f}, 목표 밀 1.5 : 나무 1.25 : 돌 1 — Steam 가이드 Drake·apo)", v0=RESOURCES[r], bld=bld, v1=prod[1], v2=prod[2], v3=prod[3]) + (tr(" · 지금 부족한 자원") if r == need else ""))
 
 
 def gold_bounce_tip(base: dict, unf: List) -> Optional[str]:
@@ -393,4 +390,4 @@ def gold_bounce_tip(base: dict, unf: List) -> Optional[str]:
         return None
     if not any(b.get("type") == "kGoldMine" for b in base.get("buildings") or []):
         return None
-    return "팁: 골드마인 쪽으로 조준하면 촘촘히 튕기며 미완성 건물이 한 번에 여러 개 진행되기도 함 (커뮤니티 팁, 미확인)"
+    return tr("팁: 골드마인 쪽으로 조준하면 촘촘히 튕기며 미완성 건물이 한 번에 여러 개 진행되기도 함 (커뮤니티 팁, 미확인)")

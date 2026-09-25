@@ -10,6 +10,8 @@ from typing import Tuple
 
 from PySide6.QtGui import QColor, QFont, QFontDatabase
 
+from ..i18n import tr
+
 RGBA = Tuple[int, int, int, int]
 
 BG: RGBA = (24, 24, 27, 238)          # HUD 배경 (반투명)
@@ -27,12 +29,12 @@ OK: RGBA = (72, 209, 120, 255)
 
 # 카드 판정 색 (HUD 목록 · 게임 화면 카드 테두리 공통): 신호등처럼 한눈에
 VERDICT = {
-    "best": (ACCENT, "추천"),
-    "alt": (OK, "비슷함"),
-    "banish": (WARN, "삭제 추천"),
-    "skip": (DANGER, "비추천"),
-    "neutral": (TEXT_2, "보류"),
-    "unknown": (TEXT_3, "읽지 못함"),
+    "best": (ACCENT, tr("추천")),
+    "alt": (OK, tr("비슷함")),
+    "banish": (WARN, tr("삭제 추천")),
+    "skip": (DANGER, tr("비추천")),
+    "neutral": (TEXT_2, tr("보류")),
+    "unknown": (TEXT_3, tr("읽지 못함")),
 }
 
 _FAMILY_CANDIDATES = ("Noto Sans KR", "Malgun Gothic")

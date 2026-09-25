@@ -17,6 +17,7 @@ from collections import Counter
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from .layout import Grid
+from ..i18n import tr
 
 Cell = Tuple[int, int]
 
@@ -424,23 +425,22 @@ def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: O
                     best = (total, final, (w, anchor, reserve, waste, miss), shaped,
                             {i: r for i, (_q, r) in shape.items() if r})
     if best is None:
-        return dict(origin0), ["계획도시: 땅이 모자라 패턴대로 다시 짤 수 없음 — 지금 배치 유지"], {}
+        return dict(origin0), [tr("계획도시: 땅이 모자라 패턴대로 다시 짤 수 없음 — 지금 배치 유지")], {}
     shaped, turn = best[3], best[4]
     final = _polish_town(grid, shaped, best[1], {p.id for p in plain}, scorer)
     w, anchor, reserve, waste, miss = best[2]
-    side = {"left": "왼쪽", "center": "가운데", "right": "오른쪽"}[anchor]
+    side = {"left": tr("왼쪽"), "center": tr("가운데"), "right": tr("오른쪽")}[anchor]
     lay = Layout(grid, shaped, final)
-    notes = [f"계획도시: 생산 유닛 {len(prods)}개(건물 + 둘레 자원 타일)를 발사대 쪽에 격자로, "
-             f"마을 건물 {len(town)}개를 먼 쪽 {side}에 폭 {w}칸으로 빽빽하게"]
+    notes = [tr("계획도시: 생산 유닛 {v0}개(건물 + 둘레 자원 타일)를 발사대 쪽에 격자로, 마을 건물 {v1}개를 먼 쪽 {side}에 폭 {w}칸으로 빽빽하게", v0=len(prods), v1=len(town), side=side, w=w)]
     notes += _guide_notes(lay, shaped, final, captain, veteran, stats, house_ids, hh, brick, builds, pad, size)
     if mines:
-        notes.append(f"금광 {len(mines)}개는 쓰지 않으니 뒤쪽에 모아 둠 (무한 모드로 골드 충분 — 철거해도 됨)")
+        notes.append(tr("금광 {v0}개는 쓰지 않으니 뒤쪽에 모아 둠 (무한 모드로 골드 충분 — 철거해도 됨)", v0=len(mines)))
     if reserve and prods:
-        notes.append("유닛 둘레 빈칸은 자원 타일을 사서 채울 자리로 비워 둠")
+        notes.append(tr("유닛 둘레 빈칸은 자원 타일을 사서 채울 자리로 비워 둠"))
     if miss > 0:
-        notes.append(f"땅이 모자라 {round(miss / 0.2)}개는 패턴 밖에 놓음")
+        notes.append(tr("땅이 모자라 {v0}개는 패턴 밖에 놓음", v0=round(miss / 0.2)))
     if turn:
-        notes.append(f"{len(turn)}개는 회전해서 놓아야 빈틈 없이 맞물림 (ㄱ·ㅜ 자 모양 포함)")
+        notes.append(tr("{v0}개는 회전해서 놓아야 빈틈 없이 맞물림 (ㄱ·ㅜ 자 모양 포함)", v0=len(turn)))
     return final, notes, turn
 
 
@@ -464,17 +464,15 @@ def _guide_notes(lay, shaped, final, captain, veteran, stats, house_ids, hh, bri
         return n
     out = []
     if captain is not None and stats:
-        out.append(f"대위 막사 범위 안 능력치 건물 {covered(captain, [p.id for p in stats])}/{len(stats)}개 "
-                   "(가이드: 전부 — 지략가 레벨이 오르면 범위가 넓어짐)")
+        out.append(tr("대위 막사 범위 안 능력치 건물 {v0}/{v1}개 (가이드: 전부 — 지략가 레벨이 오르면 범위가 넓어짐)", v0=covered(captain, [p.id for p in stats]), v1=len(stats)))
     homes = [i for i in house_ids if i in final]
     if veteran is not None and homes:
         others = [i for i in homes if i != veteran.id]
-        out.append(f"잔병의 오두막 범위 안 거처 {covered(veteran, others)}/{len(others)}개 (가이드: 전부)")
+        out.append(tr("잔병의 오두막 범위 안 거처 {v0}/{v1}개 (가이드: 전부)", v0=covered(veteran, others), v1=len(others)))
     if brick and builds:
-        out.append(f"강철 요새 범위 안 무한 강화·공사 중 건물 {covered(brick[0], [p.id for p in builds])}/{len(builds)}개 "
-                   "(발사대 쪽에 둬서 공이 닿게)")
+        out.append(tr("강철 요새 범위 안 무한 강화·공사 중 건물 {v0}/{v1}개 (발사대 쪽에 둬서 공이 닿게)", v0=covered(brick[0], [p.id for p in builds]), v1=len(builds)))
     if hh:
-        out.append(f"채집·재생 거처 {len(hh)}개는 자기 자원 타일 옆에 (둘러싸이면 못 캠 — apo 가이드)")
+        out.append(tr("채집·재생 거처 {v0}개는 자기 자원 타일 옆에 (둘러싸이면 못 캠 — apo 가이드)", v0=len(hh)))
     return out
 
 

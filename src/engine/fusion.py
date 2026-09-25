@@ -21,6 +21,7 @@ from ..gamedata import GameData
 from ..tracking.run_state import RunState
 from .recommender import Reason
 from ..tracking.meta_state import MetaState
+from ..i18n import tr
 
 
 @dataclass
@@ -58,19 +59,19 @@ class FusionAdvisor:
             return
         r, n = rank
         if r <= max(1, n // 4):
-            pick.reasons.append(Reason("fz_record_top", f"내 기록: {self.data.name(item_id)} 런당 평균 피해 {r}위 / {n}",
-                                       4, "내 기록 상위"))
+            pick.reasons.append(Reason("fz_record_top", tr("내 기록: {v0} 런당 평균 피해 {r}위 / {n}", v0=self.data.name(item_id), r=r, n=n),
+                                       4, tr("내 기록 상위")))
             pick.score += 4
         elif r > n - max(1, n // 4):
-            pick.warnings.append(Reason("fz_record_low", f"내 기록: {self.data.name(item_id)} 런당 평균 피해 {r}위 / {n}",
-                                        -2, "내 기록 하위"))
+            pick.warnings.append(Reason("fz_record_low", tr("내 기록: {v0} 런당 평균 피해 {r}위 / {n}", v0=self.data.name(item_id), r=r, n=n),
+                                        -2, tr("내 기록 하위")))
             pick.score -= 2
 
     def recommend(self, fz: Optional[FuserOptions], inventory: Optional[tuple], run: RunState) -> FusionRecommendation:
         d = self.data
         if fz is None:
-            return FusionRecommendation("none", "융합 후보를 받지 못했습니다", None, [], [],
-                                        ["게임 연동 플러그인을 최신으로 설치하면 후보를 받습니다"])
+            return FusionRecommendation("none", tr("융합 후보를 받지 못했습니다"), None, [], [],
+                                        [tr("게임 연동 플러그인을 최신으로 설치하면 후보를 받습니다")])
         # 합쳐 넣어진 볼(InventorySlot.combined)은 자기 칸이 없어져 이 목록에 안 나온다 — evos/combos 도
         # 게임이 남은 볼만으로 준 후보라 따로 걸러낼 게 없다. 합친 볼을 다시 재료로 쓸 수 있는지는 모름(추정 아님,
         # 미확인) — 게임이 그런 후보를 준 적이 없어 지금은 판단할 자료가 없다.
@@ -82,7 +83,7 @@ class FusionAdvisor:
         free_pick = self._free(balls) if fz.free_upgrades else None
         notes = []
         if d.recipe_source != "game":
-            notes.append("진화 레시피는 위키 기준")
+            notes.append(tr("진화 레시피는 위키 기준"))
 
         # 진화 기본 가산 + 수치·실측·기록. 분열(무료 강화)도 같은 점수 척도로 한 번에 비교한다
         best: Optional[FusionPick] = None
@@ -93,15 +94,15 @@ class FusionAdvisor:
             best = ranked[0]
             if sum(1 for group in (evos, combos, [free_pick] if free_pick else []) if group) > 1:
                 measured = any(r.rule_id.startswith(("fz_", "evo_dmg")) for p in all_picks for r in p.reasons)
-                notes.append("진화 기본 가산 + 게임 수치·실측 피해로 비교" if measured
-                             else "진화를 먼저 권함 (비교할 수치가 아직 없음)")
+                notes.append(tr("진화 기본 가산 + 게임 수치·실측 피해로 비교") if measured
+                             else tr("진화를 먼저 권함 (비교할 수치가 아직 없음)"))
         if best is None:
-            return FusionRecommendation("hold", "권할 조합이 없음", None, evos, combos, notes, free_pick)
+            return FusionRecommendation("hold", tr("권할 조합이 없음"), None, evos, combos, notes, free_pick)
 
         close = [p for p in all_picks if p is not best and best.score - p.score < 4
                  and not any(w.rule_id == "combo_bad" for w in p.warnings)]
         status = "close" if close else "recommend"
-        verb = {"evo": "진화", "combo": "융합", "free": ""}[best.kind]
+        verb = {"evo": tr("진화"), "combo": tr("융합"), "free": ""}[best.kind]
         headline = f"{best.title} {verb}".strip()
         return FusionRecommendation(status, headline, best, evos, combos, notes, free_pick)
 
@@ -111,19 +112,19 @@ class FusionAdvisor:
 
     def _free(self, balls: List[InventorySlot]) -> FusionPick:
         d = self.data
-        pick = FusionPick("free", "무료 강화", "보유 볼 레벨이 1~2회 오름", score=self.FREE_BASE)
-        pick.reasons.append(Reason("free_base", "다음 진화·융합 재료가 될 볼들을 먼저 레벨업 (분열)", self.FREE_BASE, "분열"))
+        pick = FusionPick("free", tr("무료 강화"), tr("보유 볼 레벨이 1~2회 오름"), score=self.FREE_BASE)
+        pick.reasons.append(Reason("free_base", tr("다음 진화·융합 재료가 될 볼들을 먼저 레벨업 (분열)"), self.FREE_BASE, tr("분열")))
         maxlv = d.max_level("ball")
         unleveled = [s for s in balls if s.level is not None and s.level < maxlv]
         if unleveled:
             n = min(len(unleveled), 6)
             bonus = n * self.FREE_UNLEVELED_W
-            pick.reasons.append(Reason("free_unleveled", f"아직 최대 레벨이 아닌 볼 {len(unleveled)}개 — 레벨업 여지 큼",
-                                       bonus, "레벨업 여지"))
+            pick.reasons.append(Reason("free_unleveled", tr("아직 최대 레벨이 아닌 볼 {v0}개 — 레벨업 여지 큼", v0=len(unleveled)),
+                                       bonus, tr("레벨업 여지")))
             pick.score += bonus
         elif balls:
-            pick.warnings.append(Reason("free_all_maxed", "보유 볼이 대부분 이미 최대 레벨 — 강화 효율 낮음", -6,
-                                        "레벨업 여지 적음"))
+            pick.warnings.append(Reason("free_all_maxed", tr("보유 볼이 대부분 이미 최대 레벨 — 강화 효율 낮음"), -6,
+                                        tr("레벨업 여지 적음")))
             pick.score -= 6
         return pick
 
@@ -134,20 +135,20 @@ class FusionAdvisor:
         recipe = next(iter(d.recipes_for(result)), None) if result else None
         parts = recipe.ingredients if recipe else ()
         title = d.name(result)
-        detail = (" + ".join(d.name(p) for p in parts) + " → 진화") if parts else "진화"
+        detail = (" + ".join(d.name(p) for p in parts) + tr(" → 진화")) if parts else tr("진화")
         pick = FusionPick("evo", title, detail, result, parts, score=20)
         if result is None:
-            pick.warnings.append(Reason("evo_unknown", "결과 항목을 알 수 없음", -20, "미확인"))
+            pick.warnings.append(Reason("evo_unknown", tr("결과 항목을 알 수 없음"), -20, tr("미확인")))
             pick.score -= 20
             return pick
-        pick.reasons.append(Reason("evo_base", "두 볼이 더 강한 한 볼이 되고 칸이 하나 빔", 20, "진화"))
+        pick.reasons.append(Reason("evo_base", tr("두 볼이 더 강한 한 볼이 되고 칸이 하나 빔"), 20, tr("진화")))
         # 결과가 다음 진화 재료가 되는가
         owned = {s.item_id for s in balls}
         for r in d.recipes_using(result):
             others = [x for x in r.ingredients if x != result]
             if others and all(o in owned for o in others):
-                pick.reasons.append(Reason("evo_chain", f"다음 진화 {d.name(r.result)}의 재료를 이미 보유", 8,
-                                           f"{d.name(r.result)} 경로"))
+                pick.reasons.append(Reason("evo_chain", tr("다음 진화 {v0}의 재료를 이미 보유", v0=d.name(r.result)), 8,
+                                           tr("{v0} 경로", v0=d.name(r.result))))
                 pick.score += 8
                 break
         self._character_fit(pick, result, run)
@@ -160,21 +161,20 @@ class FusionAdvisor:
             mid = (res[0] + res[1]) / 2
             mat_mid = max((m[0] + m[1]) / 2 for m in mats)
             if mid > mat_mid:
-                pick.reasons.append(Reason("evo_dmg_up", f"기본 피해 {res[0]}–{res[1]} (재료 중 최고 "
-                                           f"{int(mat_mid)} 안팎보다 높음, 게임 수치)", 4, "피해 상승"))
+                pick.reasons.append(Reason("evo_dmg_up", tr("기본 피해 {v0}–{v1} (재료 중 최고 {v2} 안팎보다 높음, 게임 수치)", v0=res[0], v1=res[1], v2=int(mat_mid)), 4, tr("피해 상승")))
                 pick.score += 4
         # 이번 런 실측: 재료가 주력 볼이면 그 화력이 진화 볼로 이어진다
         share = sum(run.damage_share(p_) or 0 for p_ in parts)
         if share >= 0.3:
-            pick.reasons.append(Reason("fz_run_share", f"재료가 이번 런 피해의 {round(share * 100)}%를 담당", 3,
-                                       "주력 재료"))
+            pick.reasons.append(Reason("fz_run_share", tr("재료가 이번 런 피해의 {v0}%를 담당", v0=round(share * 100)), 3,
+                                       tr("주력 재료")))
             pick.score += 3
         self._record(pick, result)
         # 회복 수단 손실
         heal_owned = [s.item_id for s in balls if d.has_tag(s.item_id, "heal_source")]
         lost = [p for p in parts if d.has_tag(p, "heal_source")]
         if lost and len(heal_owned) <= len(lost) and not d.has_tag(result, "heal_source"):
-            pick.warnings.append(Reason("evo_lose_heal", f"유일한 회복 수단({d.name(lost[0])})이 사라짐", -8, "회복 잃음"))
+            pick.warnings.append(Reason("evo_lose_heal", tr("유일한 회복 수단({v0})이 사라짐", v0=d.name(lost[0])), -8, tr("회복 잃음")))
             pick.score -= 8
         return pick
 
@@ -182,22 +182,22 @@ class FusionAdvisor:
     def _combo(self, c: FuserCombo, run: RunState) -> FusionPick:
         d = self.data
         title = f"{d.name(c.item1)} + {d.name(c.item2)}"
-        pick = FusionPick("combo", title, "두 볼의 효과를 한 볼에", None, (c.item1, c.item2), score=10)
-        pick.reasons.append(Reason("combo_base", "최대 레벨 볼 두 개를 합쳐 칸이 하나 빔", 10, "융합"))
+        pick = FusionPick("combo", title, tr("두 볼의 효과를 한 볼에"), None, (c.item1, c.item2), score=10)
+        pick.reasons.append(Reason("combo_base", tr("최대 레벨 볼 두 개를 합쳐 칸이 하나 빔"), 10, tr("융합")))
         if c.ai_score is not None:
             # 게임 AI 점수는 크기 단위를 모르므로 순위 비교에만 쓴다 (0.1배 가중)
             pick.score += float(c.ai_score) * 0.1
-            pick.reasons.append(Reason("combo_ai", "게임 자동 선택 AI가 높게 보는 조합", 0, "AI 추천"))
+            pick.reasons.append(Reason("combo_ai", tr("게임 자동 선택 AI가 높게 보는 조합"), 0, tr("AI 추천")))
         if c.bad:
-            pick.warnings.append(Reason("combo_bad", "게임이 나쁜 조합으로 판정", -30, "나쁜 조합"))
+            pick.warnings.append(Reason("combo_bad", tr("게임이 나쁜 조합으로 판정"), -30, tr("나쁜 조합")))
             pick.score -= 30
         for item in (c.item1, c.item2):
             if item:
                 self._character_fit(pick, item, run)
         share = sum(run.damage_share(i) or 0 for i in (c.item1, c.item2) if i)
         if share >= 0.3:
-            pick.reasons.append(Reason("fz_run_share", f"두 볼이 이번 런 피해의 {round(share * 100)}%를 담당 — 한 볼에 모음",
-                                       round(share * 8), "주력 조합"))
+            pick.reasons.append(Reason("fz_run_share", tr("두 볼이 이번 런 피해의 {v0}%를 담당 — 한 볼에 모음", v0=round(share * 100)),
+                                       round(share * 8), tr("주력 조합")))
             pick.score += round(share * 8)
         for item in (c.item1, c.item2):
             self._record(pick, item)
@@ -212,13 +212,13 @@ class FusionAdvisor:
         if tier and self.EVO_TIER_W[tier]:
             w = self.EVO_TIER_W[tier]
             (pick.reasons if w > 0 else pick.warnings).append(
-                Reason("fz_tier", f"커뮤니티 평가 {tier}티어 진화", w, f"{tier}티어"))
+                Reason("fz_tier", tr("커뮤니티 평가 {tier}티어 진화", tier=tier), w, tr("{tier}티어", tier=tier)))
             pick.score += w
         for cid in run.character_ids:
             core, why = d.char_build_items(cid)
             if result in core:
-                pick.reasons.append(Reason("fz_char_build", f"{d.name(cid)} 추천 빌드 핵심 (커뮤니티): {why}", 5,
-                                           "캐릭터 추천 빌드"))
+                pick.reasons.append(Reason("fz_char_build", tr("{v0} 추천 빌드 핵심 (커뮤니티): {why}", v0=d.name(cid), why=why), 5,
+                                           tr("캐릭터 추천 빌드")))
                 pick.score += 5
                 break
 
@@ -230,10 +230,10 @@ class FusionAdvisor:
         for cid in run.character_ids:
             rule = d.character_rule(cid)
             if [t for t in rule.get("reduces_tags", []) if d.has_tag(item_id, t)]:
-                pick.warnings.append(Reason("char_reduces", f"{d.name(cid)}: {rule['reason']}", -12, "캐릭터와 안 맞음"))
+                pick.warnings.append(Reason("char_reduces", f"{d.name(cid)}: {rule['reason']}", -12, tr("캐릭터와 안 맞음")))
                 pick.score -= 12
             st_, dm_ = self.data.status_tags(it.id)
             if rule.get("boosts_wiki_status_or_aoe") and (st_ or "AOE" in dm_):
-                pick.reasons.append(Reason("char_sisyphus_boost", f"{d.name(cid)}: 범위·상태 이상 피해 4배", 6,
-                                           "캐릭터 연계"))
+                pick.reasons.append(Reason("char_sisyphus_boost", tr("{v0}: 범위·상태 이상 피해 4배", v0=d.name(cid)), 6,
+                                           tr("캐릭터 연계")))
                 pick.score += 6

@@ -18,6 +18,7 @@ from PySide6.QtCore import QObject, QThread, Signal, Slot
 from ..domain import FrameInfo, ScreenKind, ScreenObservation
 from ..recognition.screen_parser import parse_layout
 from . import game_window as gw
+from ..i18n import tr
 
 log = logging.getLogger(__name__)
 
@@ -85,7 +86,7 @@ class _Worker(QObject):
             if win is None:
                 return done(ScreenObservation(ScreenKind.GAME_NOT_FOUND))
             if not forced and (win.minimized or not win.foreground):
-                return done(ScreenObservation(ScreenKind.OTHER), window=win, skipped="게임이 앞에 있지 않음")
+                return done(ScreenObservation(ScreenKind.OTHER), window=win, skipped=tr("게임이 앞에 있지 않음"))
             t1 = time.perf_counter()
             img, backend = gw.capture_game(win)
             timings["capture"] = (time.perf_counter() - t1) * 1000
@@ -107,7 +108,7 @@ class _Worker(QObject):
 
             if not self._ensure_reader():
                 return done(ScreenObservation(ScreenKind.CAPTURE_FAILED, frame=frame,
-                                              error=f"OCR 사용 불가: {self._reader_error}"), window=win)
+                                              error=tr("OCR 사용 불가: {v0}", v0=self._reader_error)), window=win)
             t2 = time.perf_counter()
             lines = self._reader.read(img)
             timings["ocr"] = (time.perf_counter() - t2) * 1000
@@ -126,7 +127,7 @@ class _Worker(QObject):
             return done(obs, window=win, ocr_ran=True, image=img if keep_image else None)
         except Exception as e:
             log.exception("인식 작업 실패")
-            return done(ScreenObservation(ScreenKind.CAPTURE_FAILED, error=f"인식 오류: {e}"))
+            return done(ScreenObservation(ScreenKind.CAPTURE_FAILED, error=tr("인식 오류: {e}", e=e)))
 
     @staticmethod
     def _diff(a: Optional[Image.Image], b: Optional[Image.Image]) -> float:

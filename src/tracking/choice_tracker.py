@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from typing import Deque, List, Optional, Tuple
 
 from ..domain import Card, ChoiceSession, Click, PickOutcome, Rect, ScreenKind, ScreenObservation
+from ..i18n import tr
 
 
 @dataclass
@@ -104,7 +105,7 @@ class ChoiceTracker:
         if s is None or s.opened_at >= at - 1.5:
             return []
         self.generation += 1
-        return [self._close(at, force_kind="rerolled", evidence="게임 로그의 새로고침 기록")]
+        return [self._close(at, force_kind="rerolled", evidence=tr("게임 로그의 새로고침 기록"))]
 
     def observe(self, obs: ScreenObservation, now: float, forced: bool = False,
                 immediate: bool = False) -> List[TrackerEvent]:
@@ -191,27 +192,27 @@ class ChoiceTracker:
         if next_obs is not None:
             if (s.free_rerolls is not None and next_obs.free_rerolls is not None
                     and next_obs.free_rerolls < s.free_rerolls):
-                return PickOutcome(s.session_id, "rerolled", evidence="무료 새로고침 횟수 감소", options=s.cards)
+                return PickOutcome(s.session_id, "rerolled", evidence=tr("무료 새로고침 횟수 감소"), options=s.cards)
             if (s.gold is not None and next_obs.gold is not None and s.reroll_cost
                     and s.gold - next_obs.gold == s.reroll_cost):
-                return PickOutcome(s.session_id, "rerolled", evidence="새로고침 비용만큼 골드 감소", options=s.cards)
+                return PickOutcome(s.session_id, "rerolled", evidence=tr("새로고침 비용만큼 골드 감소"), options=s.cards)
             if (s.banish_left is not None and next_obs.banish_left is not None
                     and next_obs.banish_left < s.banish_left):
-                return PickOutcome(s.session_id, "banished", evidence="삭제 남은 횟수 감소", options=s.cards)
+                return PickOutcome(s.session_id, "banished", evidence=tr("삭제 남은 횟수 감소"), options=s.cards)
         ox, oy = s.frame.origin
         for c in reversed(self._clicks):
             if c.at < s.opened_at - 0.2 or c.at > s.last_seen_at + 1.5:
                 continue
             fx, fy = c.x - ox, c.y - oy
             if _inside(fx, fy, s.skip_rect):
-                return PickOutcome(s.session_id, "skipped", evidence="넘기기 버튼 클릭", options=s.cards)
+                return PickOutcome(s.session_id, "skipped", evidence=tr("넘기기 버튼 클릭"), options=s.cards)
             if _inside(fx, fy, s.reroll_rect):
-                return PickOutcome(s.session_id, "rerolled", evidence="새로고침 버튼 클릭", options=s.cards)
+                return PickOutcome(s.session_id, "rerolled", evidence=tr("새로고침 버튼 클릭"), options=s.cards)
             if _inside(fx, fy, s.banish_rect):
-                return PickOutcome(s.session_id, "banished", evidence="삭제 버튼 클릭", options=s.cards)
+                return PickOutcome(s.session_id, "banished", evidence=tr("삭제 버튼 클릭"), options=s.cards)
             for card in s.cards:
                 if _inside(fx, fy, card.rect):
                     return PickOutcome(s.session_id, "picked", card=card,
-                                       evidence=f"{card.position} 카드 클릭", options=s.cards)
-        return PickOutcome(s.session_id, "unknown", evidence="선택 근거 없음 (키보드·패드 선택이거나 클릭 위치 불명)",
+                                       evidence=tr("{position} 카드 클릭", position=card.position), options=s.cards)
+        return PickOutcome(s.session_id, "unknown", evidence=tr("선택 근거 없음 (키보드·패드 선택이거나 클릭 위치 불명)"),
                            options=s.cards)

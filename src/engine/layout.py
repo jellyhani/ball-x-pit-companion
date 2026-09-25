@@ -17,19 +17,20 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .harvest import RES_BY_TYPE
+from ..i18n import tr
 
 WHEAT, WOOD, STONE = 1, 2, 3
 # 범위 효과: 건물 → (영향 받는 자원 종류, 가중치, 설명)
 EFFECTS: Dict[str, Tuple[int, float, str]] = {
-    "kIdleFarm": (WHEAT, 1.0, "근처 밭에서 주기적으로 채집"),
-    "kIdleLumberyard": (WOOD, 1.0, "근처 숲에서 주기적으로 채집"),
-    "kIdleStoneMine": (STONE, 1.0, "근처 바위에서 주기적으로 채집"),
-    "kVilla": (WHEAT, 0.8, "근처 밀밭 재생 속도 상승"),
-    "kCampground": (WOOD, 0.8, "근처 숲 재생 속도 상승"),
-    "kRockyHill": (STONE, 0.8, "근처 바위 재생 속도 상승"),
-    "kSingleFamilyHome": (WHEAT, 0.6, "근처 밭에서 주기적으로 채집"),
-    "kCozyHome": (WOOD, 0.6, "근처 숲에서 주기적으로 채집"),
-    "kHovel": (STONE, 0.6, "근처 바위에서 주기적으로 채집"),
+    "kIdleFarm": (WHEAT, 1.0, tr("근처 밭에서 주기적으로 채집")),
+    "kIdleLumberyard": (WOOD, 1.0, tr("근처 숲에서 주기적으로 채집")),
+    "kIdleStoneMine": (STONE, 1.0, tr("근처 바위에서 주기적으로 채집")),
+    "kVilla": (WHEAT, 0.8, tr("근처 밀밭 재생 속도 상승")),
+    "kCampground": (WOOD, 0.8, tr("근처 숲 재생 속도 상승")),
+    "kRockyHill": (STONE, 0.8, tr("근처 바위 재생 속도 상승")),
+    "kSingleFamilyHome": (WHEAT, 0.6, tr("근처 밭에서 주기적으로 채집")),
+    "kCozyHome": (WOOD, 0.6, tr("근처 숲에서 주기적으로 채집")),
+    "kHovel": (STONE, 0.6, tr("근처 바위에서 주기적으로 채집")),
 }
 TILE_TYPES = {"kWheatField": WHEAT, "kDenseWheat": WHEAT, "kForest": WOOD, "kGrandTree": WOOD,
               "kBoulder": STONE, "kGraniteSlab": STONE, "kStonePile": STONE}
@@ -384,7 +385,7 @@ def plan_access(base: dict, targets: Sequence[int], reach_fn, max_moves: int = 2
             nb = moved_base(cur_base, cur, i, to)
             r2 = reach_fn(nb["geo"])
             if r2.get(t):
-                found = (Move(i, to, float(r2[t]), "미완성 건물로 가는 길 열기", target=t), nb, r2, here)
+                found = (Move(i, to, float(r2[t]), tr("미완성 건물로 가는 길 열기"), target=t), nb, r2, here)
                 break
         if found:
             moves.append(found[0])
@@ -455,12 +456,12 @@ def plan_swaps(base: dict, max_swaps: int = 6, harvest_eval=None,
             if key[0] == "s":
                 b = cur[key[2]]
                 eff = EFFECTS.get(a.type) or EFFECTS.get(b.type)
-                steps.append(Swap(key[1], key[2], sc - cur_score, eff[2] if eff else "자원 타일을 효과 건물 범위 안으로"))
+                steps.append(Swap(key[1], key[2], sc - cur_score, eff[2] if eff else tr("자원 타일을 효과 건물 범위 안으로")))
                 used.add(("s", min(key[1], key[2]), max(key[1], key[2])))
             else:
                 eff = EFFECTS.get(a.type)
                 steps.append(Move(key[1], key[2], sc - cur_score,
-                                  eff[2] + " — 빈 자리로" if eff else "자원 타일을 효과 건물 범위 안 빈 자리로"))
+                                  eff[2] + tr(" — 빈 자리로") if eff else tr("자원 타일을 효과 건물 범위 안 빈 자리로")))
                 used.add(key)
             cur, cur_geo, cur_score = cand, new_geo, sc
             accepted = True
@@ -494,6 +495,6 @@ def suggest_new(blds: Dict[int, "Bld"], grid: Grid, blueprints: Sequence[dict],
             if best is None or n > best[1]:
                 best = (c, n)
         if best and best[1] > 0:
-            size_note = "" if bp.get("tw") else " (크기 2×2 가정)"
+            size_note = "" if bp.get("tw") else tr(" (크기 2×2 가정)")
             out.append(NewSpot(t, best[0], (w, h), best[1], eff[2] + size_note))
     return out

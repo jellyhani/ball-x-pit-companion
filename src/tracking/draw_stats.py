@@ -14,11 +14,12 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 from ..domain import ChoiceSession
+from ..i18n import tr
 
 log = logging.getLogger(__name__)
 
 CATS = ("new_ball", "ball_up", "new_passive", "passive_up")
-CAT_LABEL = {"new_ball": "새 볼", "ball_up": "볼 강화", "new_passive": "새 패시브", "passive_up": "패시브 강화"}
+CAT_LABEL = {"new_ball": tr("새 볼"), "ball_up": tr("볼 강화"), "new_passive": tr("새 패시브"), "passive_up": tr("패시브 강화")}
 MIN_EXPECTED = 30.0     # 기대 장수 합이 이만큼은 돼야 가중치를 쓴다
 
 
@@ -115,5 +116,5 @@ class DrawStats:
         w = self.weights()
         if w is None:
             obs, exp = self.totals()
-            return f"뽑기 관측 {self.count}회 — 보정까지 더 필요 (기대 장수 {sum(exp.values()):.0f}/{MIN_EXPECTED:.0f})"
-        return f"뽑기 관측 {self.count}회 · " + " · ".join(f"{CAT_LABEL[c]} ×{w[c]:.2f}" for c in CATS)
+            return tr("뽑기 관측 {count}회 — 보정까지 더 필요 (기대 장수 {v0:.0f}/{MIN_EXPECTED:.0f})", count=self.count, v0=sum(exp.values()), MIN_EXPECTED=MIN_EXPECTED)
+        return tr("뽑기 관측 {count}회 · ", count=self.count) + " · ".join(f"{CAT_LABEL[c]} ×{w[c]:.2f}" for c in CATS)

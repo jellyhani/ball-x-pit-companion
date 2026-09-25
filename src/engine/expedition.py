@@ -12,6 +12,7 @@ from typing import List, Optional, Tuple
 from ..domain import RunProgress
 from ..gamedata import GameData
 from ..tracking.run_state import RunState
+from ..i18n import tr
 
 
 @dataclass
@@ -32,7 +33,7 @@ def personal_line(history: List[Tuple[float, int, int]], hr: Optional[float], ev
     if len(similar) < 3:
         return None
     similar.sort()
-    return f"내 기록: 비슷한 상황에서 계속했을 때 {len(similar)}번 중 중간값 {similar[len(similar) // 2]}턴 버팀"
+    return tr("내 기록: 비슷한 상황에서 계속했을 때 {v0}번 중 중간값 {v1}턴 버팀", v0=len(similar), v1=similar[len(similar) // 2])
 
 
 def advise(run: RunState, data: GameData, p: Optional[RunProgress], best_depth: Optional[int] = None,
@@ -44,42 +45,42 @@ def advise(run: RunState, data: GameData, p: Optional[RunProgress], best_depth: 
         pct = round(hr * 100)
         if hr >= 0.6:
             score += 2
-            reasons.append(f"체력 {pct}% — 여유 있음")
+            reasons.append(tr("체력 {pct}% — 여유 있음", pct=pct))
         elif hr < 0.3:
             score -= 3
-            reasons.append(f"체력 {pct}% — 위험")
+            reasons.append(tr("체력 {pct}% — 위험", pct=pct))
         else:
-            reasons.append(f"체력 {pct}%")
+            reasons.append(tr("체력 {pct}%", pct=pct))
     owned = run.owned
     heal = any(data.has_tag(i, "heal_source") for i in owned)
     if heal:
         score += 1
-        reasons.append("회복 수단 보유")
+        reasons.append(tr("회복 수단 보유"))
     if p is not None and p.revives_left:
         score += 1
-        reasons.append(f"부활 {p.revives_left}회 남음")
+        reasons.append(tr("부활 {revives_left}회 남음", revives_left=p.revives_left))
     evolved = [i for i in owned if data.recipes_for(i)]
     maxed = [o for o in owned.values() if o.kind == "ball" and o.at_max]
     power = len(evolved) + 0.5 * len(maxed)
     if power >= 2:
         score += 2
-        reasons.append(f"진화 {len(evolved)}개 · 최대 레벨 볼 {len(maxed)}개 — 덱 완성도 높음")
+        reasons.append(tr("진화 {v0}개 · 최대 레벨 볼 {v1}개 — 덱 완성도 높음", v0=len(evolved), v1=len(maxed)))
     elif power < 1:
         score -= 1
-        reasons.append("진화한 항목 없음 — 적이 계속 강해지는 구간에서 버티기 어려움")
+        reasons.append(tr("진화한 항목 없음 — 적이 계속 강해지는 구간에서 버티기 어려움"))
     else:
-        reasons.append(f"진화 {len(evolved)}개 · 최대 레벨 볼 {len(maxed)}개")
+        reasons.append(tr("진화 {v0}개 · 최대 레벨 볼 {v1}개", v0=len(evolved), v1=len(maxed)))
     if score >= 3:
-        verdict, headline = "continue", "원정 계속 추천"
+        verdict, headline = "continue", tr("원정 계속 추천")
     elif score <= -2:
-        verdict, headline = "return", "복귀 추천"
+        verdict, headline = "return", tr("복귀 추천")
     else:
-        verdict, headline = "either", "계속해도 되지만 위험 부담 있음"
+        verdict, headline = "either", tr("계속해도 되지만 위험 부담 있음")
     mine = personal_line(history or [], hr, len(evolved))
     if mine:
         reasons.insert(0, mine)
-    cautions = ["무한의 심연은 갈수록 적이 강해집니다",
-                "쓰러졌을 때 이번 런 자원이 모두 남는지는 확인하지 못했습니다"]
+    cautions = [tr("무한의 심연은 갈수록 적이 강해집니다"),
+                tr("쓰러졌을 때 이번 런 자원이 모두 남는지는 확인하지 못했습니다")]
     adv = ExpeditionAdvice(verdict, headline, reasons, cautions, best_depth)
     adv.snapshot = {"verdict": verdict, "health": hr, "evolved": len(evolved), "maxed": len(maxed)}
     return adv

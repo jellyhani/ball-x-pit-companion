@@ -12,6 +12,8 @@ from typing import Callable, Dict, Optional, Set
 
 from PySide6.QtCore import QObject, Signal
 
+from ..i18n import tr
+
 log = logging.getLogger(__name__)
 
 
@@ -61,7 +63,7 @@ class InputWatcher(QObject):
         try:
             from pynput import keyboard, mouse
         except ImportError as e:
-            self.status_changed.emit(f"단축키 사용 불가: {e}")
+            self.status_changed.emit(tr("단축키 사용 불가: {e}", e=e))
             return
         try:
             self._kb = keyboard.Listener(
@@ -73,7 +75,7 @@ class InputWatcher(QObject):
             self.keyboard_ok = True
         except Exception as e:
             log.exception("키보드 후킹 실패")
-            self.status_changed.emit(f"단축키 사용 불가: {e}")
+            self.status_changed.emit(tr("단축키 사용 불가: {e}", e=e))
         try:
             def on_click(x, y, button, pressed):
                 if not pressed and getattr(button, "name", "") == "left":
@@ -84,7 +86,7 @@ class InputWatcher(QObject):
             self.mouse_ok = True
         except Exception as e:
             log.exception("마우스 후킹 실패")
-            self.status_changed.emit(f"클릭 기록 사용 불가: {e}")
+            self.status_changed.emit(tr("클릭 기록 사용 불가: {e}", e=e))
 
     def stop(self):
         for listener in (self._kb, self._mouse):

@@ -12,6 +12,11 @@ Windows 전용 게임 오버레이. 파이썬(PySide6) 앱 + BepInEx 연동 플�
 - exe: 실행 중인 앱을 먼저 끈다 `dist\BallxPitCompanion\BallxPitCompanion.exe --stop` → `build_exe.ps1`
   (테스트가 통과해야 빌드. 앱이 켜져 있으면 파일 잠김·부하로 실패)
 
+## 화면 문구 번역
+- 사용자에게 보이는 문구는 `tr("한국어 원문", 이름=값)` 으로 감싼다 (`src/i18n.py`, 원문이 키). 번역은 `data/i18n/{en,ja,schinese,tchinese}.json`.
+  새 문구를 넣으면 네 파일에 모두 추가 (`tests/test_i18n.py` 가 빠진 키·자리표시자 불일치를 잡음). 로그·docstring 은 한국어 그대로.
+- 비교·분기에 쓰는 값(런 결과 '보스 격퇴', 화면 판별 문구, 게임 원문 매칭 낱말)은 번역하지 않는다. 확인용: `BXP_LANG=en` 으로 실행·테스트.
+
 ## 꼭 지킬 것
 - IMPORTANT: 게임을 조작하지 않는다 (입력·클릭·게임 값 변경 금지). 플러그인은 읽기 전용, Harmony 패치 없음.
 - 플러그인 버전은 세 곳이 같아야 한다: `Plugin.cs` Plugin.Version, `BallxPitBridge.csproj` Version,

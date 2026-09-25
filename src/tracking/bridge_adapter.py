@@ -16,6 +16,7 @@ from typing import Dict, List, Optional, Tuple
 from ..domain import (Card, CardLabel, ChoicePool, FrameInfo, FuserCombo, FuserEvo, FuserOptions, GameOverInfo,
                       InventorySlot, Rect, RunProgress, ScreenKind, ScreenObservation)
 from ..gamedata import GameData
+from ..i18n import tr
 
 IN_RUN_STATES = {"kPlaying", "kLevelUp", "kPaused", "kPickTreasure", "kFoundBlueprint", "kBonusBall",
                  "kBonusPassive", "kFoundEgg", "kRevive", "kEnteringLvl"}
@@ -72,12 +73,12 @@ def _rect(v, size: Tuple[int, int] = (0, 0)) -> Optional[Rect]:
 
 def _position_names(n: int) -> List[str]:
     if n == 3:
-        return ["왼쪽", "가운데", "오른쪽"]
+        return [tr("왼쪽"), tr("가운데"), tr("오른쪽")]
     if n == 2:
-        return ["왼쪽", "오른쪽"]
+        return [tr("왼쪽"), tr("오른쪽")]
     if n == 1:
-        return ["가운데"]
-    return [f"{i + 1}번째" for i in range(n)]
+        return [tr("가운데")]
+    return [tr("{v0}번째", v0=i + 1) for i in range(n)]
 
 
 def char_id(data: GameData, enum_name: Optional[str]) -> Optional[str]:
@@ -94,7 +95,7 @@ def _shown(lvl) -> Optional[int]:
 def convert(snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_id: int = 0,
             at: float = 0.0) -> BridgeState:
     size = (int(snap.get("screen_w") or 0), int(snap.get("screen_h") or 0))
-    frame = FrameInfo(frame_id, at, origin, size, "게임 연동")
+    frame = FrameInfo(frame_id, at, origin, size, tr("게임 연동"))
     state = snap.get("game_state") or ""
     battle = snap.get("battle") if isinstance(snap.get("battle"), dict) else None
     lvl = snap.get("levelup") if isinstance(snap.get("levelup"), dict) else None

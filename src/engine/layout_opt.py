@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from .layout import Bld, Grid, Move, buildings_from_base, grid_from_geo, shape_masks
+from ..i18n import tr
 
 WHEAT_T = {"kWheatField", "kDenseWheat"}
 WOOD_T = {"kForest", "kGrandTree"}
@@ -52,21 +53,21 @@ STAT_FALLBACK = {"kBarracks", "kClinic", "kConsulate", "kGunsmith", "kSchoolhous
 HARVEST_CAP = 99         # 칸 수 상한 없음 (타일마다 캐는 방식 — 위키)
 TILE_CAPACITY = {"kDenseWheat": 4, "kGrandTree": 3, "kGraniteSlab": 3}   # 고급 타일 용량 (기본 1, 위키)
 EFFECTS: Dict[str, Tuple[object, float, str, str, str]] = {
-    "kIdleFarm": (1, 1.0, "harvest", "worker", "붙어 있는 밀밭마다 6분에 밀 1 (일꾼 배정)"),
-    "kIdleLumberyard": (2, 0.67, "harvest", "worker", "붙어 있는 숲마다 9분에 나무 1 (일꾼 배정)"),
-    "kIdleStoneMine": (3, 0.6, "harvest", "worker", "붙어 있는 바위마다 10분에 돌 1 (일꾼 배정)"),
-    "kSingleFamilyHome": (1, 0.25, "harvest", "upgraded", "근처 밭에서 주기적으로 채집 (강화 효과)"),
-    "kCozyHome": (2, 0.37, "harvest", "upgraded", "근처 숲에서 주기적으로 채집 (강화 효과)"),
-    "kHovel": (3, 0.8, "harvest", "upgraded", "근처 바위에서 주기적으로 채집 (강화 효과)"),
-    "kVilla": (1, 0.3, "regen", "upgraded", "근처 밀밭 재생 속도 상승 (레벨 3은 범위 +1칸)"),
-    "kCampground": (2, 0.3, "regen", "upgraded", "근처 숲 재생 속도 상승 (레벨 3은 범위 +1칸)"),
-    "kRockyHill": (3, 0.3, "regen", "upgraded", "근처 바위 재생 속도 상승 (레벨 3은 범위 +1칸)"),
-    "kMansion": ("all", 0.2, "count", "upgraded", "근처 건물마다 분당 골드 1 (최대 29)"),
-    "kCaptainQuarters": ("stat", 1.0, "count", "upgraded", "인근 능력치 보너스 건물 +1 — 능력치 건물을 모두 범위 안에"),
-    "kVeteranHut": ("housing", 0.6, "count", "upgraded", "인근 거처 입주민 추가 경험치 (캐릭터 레벨 4·7·9에서 20·25·30%) — 거처를 모두 범위 안에"),
+    "kIdleFarm": (1, 1.0, "harvest", "worker", tr("붙어 있는 밀밭마다 6분에 밀 1 (일꾼 배정)")),
+    "kIdleLumberyard": (2, 0.67, "harvest", "worker", tr("붙어 있는 숲마다 9분에 나무 1 (일꾼 배정)")),
+    "kIdleStoneMine": (3, 0.6, "harvest", "worker", tr("붙어 있는 바위마다 10분에 돌 1 (일꾼 배정)")),
+    "kSingleFamilyHome": (1, 0.25, "harvest", "upgraded", tr("근처 밭에서 주기적으로 채집 (강화 효과)")),
+    "kCozyHome": (2, 0.37, "harvest", "upgraded", tr("근처 숲에서 주기적으로 채집 (강화 효과)")),
+    "kHovel": (3, 0.8, "harvest", "upgraded", tr("근처 바위에서 주기적으로 채집 (강화 효과)")),
+    "kVilla": (1, 0.3, "regen", "upgraded", tr("근처 밀밭 재생 속도 상승 (레벨 3은 범위 +1칸)")),
+    "kCampground": (2, 0.3, "regen", "upgraded", tr("근처 숲 재생 속도 상승 (레벨 3은 범위 +1칸)")),
+    "kRockyHill": (3, 0.3, "regen", "upgraded", tr("근처 바위 재생 속도 상승 (레벨 3은 범위 +1칸)")),
+    "kMansion": ("all", 0.2, "count", "upgraded", tr("근처 건물마다 분당 골드 1 (최대 29)")),
+    "kCaptainQuarters": ("stat", 1.0, "count", "upgraded", tr("인근 능력치 보너스 건물 +1 — 능력치 건물을 모두 범위 안에")),
+    "kVeteranHut": ("housing", 0.6, "count", "upgraded", tr("인근 거처 입주민 추가 경험치 (캐릭터 레벨 4·7·9에서 20·25·30%) — 거처를 모두 범위 안에")),
     # 강철 요새(방패잡이): 튕기면 근처 공사장에 건설 점수 +4 (위키 Iron Fortress) → 지금 공사 중인 건물과
     # 계속 강화할 무한 강화 능력치 건물 근처에 (Steam 가이드 '100% Utilization', 토론 'Max Iron Fortress')
-    "kBrickHouse": ("build", 0.5, "count", "upgraded", "튕기면 근처 공사장에 건설 점수 +4 — 공사 중·무한 강화 건물 근처에"),
+    "kBrickHouse": ("build", 0.5, "count", "upgraded", tr("튕기면 근처 공사장에 건설 점수 +4 — 공사 중·무한 강화 건물 근처에")),
 }
 # 무한 강화 능력치 건물 6개 (병원·사수 조합·카피톨륨·대박물관·마차 공장·전사 조합)
 STATUE_TYPES = {"kEnduranceStatue", "kDexterityStatue", "kLeadershipStatue", "kIntelligenceStatue", "kSpeedStatue",
@@ -330,7 +331,7 @@ def lane_idle(p: "Piece") -> bool:
     return not (p.type in TILE_RES or p.type in BOUNCE_TYPES or p.unfinished)
 
 
-PRESETS = {"effect": "효과 최대", "gold_u": "금광 U자", "plan": "계획도시"}
+PRESETS = {"effect": tr("효과 최대"), "gold_u": tr("금광 U자"), "plan": tr("계획도시")}
 PRESET_W = 20.0          # 프리셋 자리에 놓인 금광 하나의 가산 (범위 효과보다 크게 — 사용자가 고른 공략 틀을 따름)
 PRESET_CLEAR = 4.0       # 아직 금광이 없는 프리셋 자리를 다른 건물이 막는 칸마다 감점 — 0.5 는 약해서 채석장이 자리를 차지한 채 남음
 
@@ -736,8 +737,8 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
                 stale += 1
             if time.perf_counter() >= deadline:
                 break
-        search_note = (f"탐색 {k}번 (연속 {stale}번 더 좋은 배치 없음 — 수렴)" if stale >= CONVERGED
-                       else f"탐색 {k}번 (시간 상한)")
+        search_note = (tr("탐색 {k}번 (연속 {stale}번 더 좋은 배치 없음 — 수렴)", k=k, stale=stale) if stale >= CONVERGED
+                       else tr("탐색 {k}번 (시간 상한)", k=k))
         restarts = 0
     for k in range(restarts):
         sc = scorer
@@ -813,22 +814,20 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         pt = totals[id(prefer_orig)]
         if best[0] < pt[0] * 1.02:
             best = pt
-            notes.append("이전에 정한 최적 배치를 유지 (새 계산이 2% 넘게 좋지 않음)")
+            notes.append(tr("이전에 정한 최적 배치를 유지 (새 계산이 2% 넘게 좋지 않음)"))
     _, orig, s, hv = best
     if best[1] is prefer_orig and prefer_orig is not None:
         pass
     elif best[0] < 2.0 * 1.02:
-        notes.append("지금 배치가 최적에 가까움 — 범위 효과와 채집 발사량을 합쳐 2% 넘게 올리는 배치를 찾지 못함")
+        notes.append(tr("지금 배치가 최적에 가까움 — 범위 효과와 채집 발사량을 합쳐 2% 넘게 올리는 배치를 찾지 못함"))
         if alt is not None and alt[0] > 1.02:
-            notes.append(f"범위 효과만 보면 +{(alt[0] - 1) * 100:.0f}% 배치가 있지만 채집 발사량이 "
-                         f"{(alt[1] - 1) * 100:+.0f}% 라 권하지 않음")
+            notes.append(tr("범위 효과만 보면 +{v0:.0f}% 배치가 있지만 채집 발사량이 {v1:+.0f}% 라 권하지 않음", v0=(alt[0] - 1) * 100, v1=(alt[1] - 1) * 100))
         orig, s, hv = cands[0][0], e0, h0
     if preset == "gold_u":
         # 프리셋은 사용자가 고른 틀: 2% 기준·'지금이 최적' 판단 없이 가장 좋은 프리셋 후보를 쓴다
         cand_best = max(cands[1:], key=lambda c: c[1]) if len(cands) > 1 else cands[0]
         orig, s, hv = cand_best[0], cand_best[1], (harvest_eval(to_base(cand_best[0])["geo"]) if harvest_eval else None)
-        notes = [f"금광 U자: 발사대 앞 자리 {len(preset_spots)}곳 중 "
-                 f"{sum(1 for i, p in pieces.items() if p.type == 'kGoldMine' and orig.get(i) in set(preset_spots))}곳에 금광"]
+        notes = [tr("금광 U자: 발사대 앞 자리 {v0}곳 중 {v1}곳에 금광", v0=len(preset_spots), v1=sum(1 for i, p in pieces.items() if p.type == 'kGoldMine' and orig.get(i) in set(preset_spots)))]
     lay = Layout(grid, pieces, orig)
     if lane:
         def front(o):
@@ -840,11 +839,10 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             return sum(1 for i in laned.lane_tiles if i in o and any(lane.get(c, 0.0) > 0 for c in L.cells(i)))
         f0, f1 = front(origin0), front(orig)
         if f0 - f1 >= 1.0:
-            notes.append(f"능력치·거처처럼 치여도 얻는 게 없는 건물을 발사대 앞에서 뒤·구석으로 "
-                         f"(앞 구역 막음 {f0:.1f} → {f1:.1f})")
+            notes.append(tr("능력치·거처처럼 치여도 얻는 게 없는 건물을 발사대 앞에서 뒤·구석으로 (앞 구역 막음 {f0:.1f} → {f1:.1f})", f0=f0, f1=f1))
         t0, t1 = tiles(origin0), tiles(orig)
         if t1 - t0 >= 2:
-            notes.append(f"자원 타일을 발사대 앞으로 (앞 구역 자원 타일 {t0} → {t1}개 — 공을 던져 캐는 몫)")
+            notes.append(tr("자원 타일을 발사대 앞으로 (앞 구역 자원 타일 {t0} → {t1}개 — 공을 던져 캐는 몫)", t0=t0, t1=t1))
     # 보고는 범위 효과만 (앞 구역 점수는 배치를 고를 때만 쓴다)
     e0, d0 = plain.score(Layout(grid, pieces, origin0))
     s, d1 = plain.score(lay)
@@ -1046,8 +1044,8 @@ def activation_gains(base: dict, res_weight: Optional[Dict[int, float]] = None, 
         s1 = Scorer(pcs, stats, housing, res_weight, pad).score(Layout(grid, pcs, origin))[0]
         if s1 - s0 > 0.05:
             ch = house_characters().get(_slug(p.type))
-            what = ("일꾼 배정" if EFFECTS[p.type][3] == "worker"
-                    else f"{ch[1]} 레벨 {_next_house_level(p.type, CHAR_LEVELS.get(ch[0], 0))}" if ch else "강화")
+            what = (tr("일꾼 배정") if EFFECTS[p.type][3] == "worker"
+                    else tr("{v0} 레벨 {v1}", v0=ch[1], v1=_next_house_level(p.type, CHAR_LEVELS.get(ch[0], 0))) if ch else tr("강화"))
             out.append((i, p.type, what, s1 - s0))
     out.sort(key=lambda x: -x[3])
     return out
@@ -1062,11 +1060,11 @@ DEMOLISH_CANDIDATE_TYPES = {"kIdleFarm", "kIdleLumberyard", "kIdleStoneMine"}
 DEMOLISH_MAX_SCORE = 0.5   # 이 밑으로 기여하면 후보 (범위 안에 캘 타일이 없다는 뜻) — 근거 없이 임의로 정함
 # 있기만 하면 철거 후보 — Steam 가이드·사용자 결정 (자리를 차지하고, 금광은 일꾼 캐릭터를 발사에서 뺀다)
 GUIDE_DEMOLISH = {
-    "kWarRoom": "쓸모없음 — 30분에 골드 1천·돌 100, 게임을 끄면 멈춤 (Steam 가이드 Zarcos·apo·Drake 모두)",
-    "kIdleLauncher": "효과가 별로라 안 지음 (Steam 가이드 Drake)",
-    "kGoldMine": "무한 모드로 골드가 모자라지 않음 — 금광은 권하지 않음 (Zarcos), 일꾼을 발사에 돌릴 수 있음",
+    "kWarRoom": tr("쓸모없음 — 30분에 골드 1천·돌 100, 게임을 끄면 멈춤 (Steam 가이드 Zarcos·apo·Drake 모두)"),
+    "kIdleLauncher": tr("효과가 별로라 안 지음 (Steam 가이드 Drake)"),
+    "kGoldMine": tr("무한 모드로 골드가 모자라지 않음 — 금광은 권하지 않음 (Zarcos), 일꾼을 발사에 돌릴 수 있음"),
 }
-TILE_DEMOLISH_REASON = "범위 안에 캘 자원 타일이 없어 지금 자리에서 거의 도움이 안 됨 — 옮기거나 철거 고려"
+TILE_DEMOLISH_REASON = tr("범위 안에 캘 자원 타일이 없어 지금 자리에서 거의 도움이 안 됨 — 옮기거나 철거 고려")
 
 
 def suggest_demolish(base: dict, res_weight: Optional[Dict[int, float]] = None, pad: float = 0.0,
@@ -1152,15 +1150,15 @@ def _moves(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int, int]]
         k = 0 if park else turn.get(i, 0)
         p = rotated(pieces[i], k)
         out.append(Move(i, grid.center(o[0], o[1], p.w, p.h), 0.0,
-                        "잠시 비켜 두기 (자리 비우기)" if park else
-                        f"{turn_text(k)} 이 자리로" if k else "최적 배치 자리로",
+                        tr("잠시 비켜 두기 (자리 비우기)") if park else
+                        tr("{v0} 이 자리로", v0=turn_text(k)) if k else tr("최적 배치 자리로"),
                         rot=(rots.get(i, 0) + k) % 4 if k else -1))
     return out
 
 
 def turn_text(k: int) -> str:
     """회전 안내 (게임 회전 버튼 = 시계 방향 90°)."""
-    return {1: "회전 버튼 1번 눌러서", 2: "회전 버튼 2번 눌러서", 3: "회전 버튼 3번 눌러서"}.get(k % 4, "")
+    return {1: tr("회전 버튼 1번 눌러서"), 2: tr("회전 버튼 2번 눌러서"), 3: tr("회전 버튼 3번 눌러서")}.get(k % 4, "")
 
 
 def plan_moves(plan: FullPlan, base: dict) -> List[Move]:

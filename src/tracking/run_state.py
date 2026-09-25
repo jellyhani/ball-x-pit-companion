@@ -11,14 +11,15 @@ from typing import Dict, List, Optional, Set, Tuple
 
 from ..domain import Card, CardLabel, InventorySlot, PickOutcome
 from ..gamedata import GameData
+from ..i18n import tr
 
 SOURCE_LABEL = {
-    "screen": "게임 보유 칸",
-    "pick": "선택 확인(클릭)",
-    "card": "선택창 카드 표시",
-    "manual": "직접 수정",
-    "portrait": "초상화로 확인",
-    "game": "게임 연동",
+    "screen": tr("게임 보유 칸"),
+    "pick": tr("선택 확인(클릭)"),
+    "card": tr("선택창 카드 표시"),
+    "manual": tr("직접 수정"),
+    "portrait": tr("초상화로 확인"),
+    "game": tr("게임 연동"),
 }
 
 
@@ -59,7 +60,7 @@ class RunState:
         self.joined_mid_run = False
         self._reset_items()
         self.characters = []
-        self.history = ["새 런 시작"]
+        self.history = [tr("새 런 시작")]
 
     def join_mid_run(self):
         self.run_seq += 1
@@ -67,11 +68,11 @@ class RunState:
         self.joined_mid_run = True
         self._reset_items()
         self.characters = []
-        self.history = ["런 도중에 연결됨 — 다음 선택창에서 보유 칸을 읽습니다"]
+        self.history = [tr("런 도중에 연결됨 — 다음 선택창에서 보유 칸을 읽습니다")]
 
     def end_run(self, reason: str):
         self.phase = "base"
-        self._log(f"런 종료 ({reason})")
+        self._log(tr("런 종료 ({reason})", reason=reason))
 
     def _reset_items(self):
         self.owned.clear()
@@ -88,12 +89,12 @@ class RunState:
     # ---- 사용자가 직접 고른 덱 목표 ----
     def lock_target(self, item_id: str, data: GameData):
         self.locked_target = item_id
-        self._log(f"덱 목표 고정: {data.name(item_id)}")
+        self._log(tr("덱 목표 고정: {v0}", v0=data.name(item_id)))
 
     def clear_target(self, data: GameData):
         if self.locked_target is None:
             return
-        self._log(f"덱 목표 해제: {data.name(self.locked_target)}")
+        self._log(tr("덱 목표 해제: {v0}", v0=data.name(self.locked_target)))
         self.locked_target = None
 
     # ---- 화면에서 읽은 권위 있는 정보 ----
@@ -131,9 +132,9 @@ class RunState:
                 seen[o.item_id] = o
             removed = [i for i in removed if i not in seen]
         for i in added:
-            notes.append(f"보유 확인: {data.name(i)}")
+            notes.append(tr("보유 확인: {v0}", v0=data.name(i)))
         for i in removed:
-            notes.append(f"보유 칸에 없음: {data.name(i)}")
+            notes.append(tr("보유 칸에 없음: {v0}", v0=data.name(i)))
         self.owned = seen
         self.unreadable_slots = unreadable
         self.inventory_seen = True
@@ -170,21 +171,21 @@ class RunState:
             card = outcome.card
             if card.item_id is None:
                 self.pending_unknown_pick = True
-                self._log(f"{card.position} 카드를 골랐지만 무엇인지 읽지 못함")
+                self._log(tr("{position} 카드를 골랐지만 무엇인지 읽지 못함", position=card.position))
                 return True
             if data.items[card.item_id].kind != "pet":     # 펫 강화는 볼·패시브 칸에 들어가지 않는다
                 self._apply_card(card, data, "pick")
             self.picks.append(card.item_id)
-            self._log(f"선택: {data.name(card.item_id)} ({outcome.evidence})")
+            self._log(tr("선택: {v0} ({evidence})", v0=data.name(card.item_id), evidence=outcome.evidence))
         elif outcome.kind == "unknown":
             self.pending_unknown_pick = True
-            self._log("선택 결과 확인 못 함 — 다음 선택창의 보유 칸으로 맞춥니다")
+            self._log(tr("선택 결과 확인 못 함 — 다음 선택창의 보유 칸으로 맞춥니다"))
         elif outcome.kind == "rerolled":
-            self._log("새로고침")
+            self._log(tr("새로고침"))
         elif outcome.kind == "skipped":
-            self._log("넘기기")
+            self._log(tr("넘기기"))
         elif outcome.kind == "banished":
-            self._log("삭제 사용")
+            self._log(tr("삭제 사용"))
         return True
 
     def _apply_card(self, card: Card, data: GameData, source: str):
@@ -214,7 +215,7 @@ class RunState:
             if c.label is CardLabel.UPGRADE and cur is None:
                 before = c.shown_level - 1 if c.shown_level else None
                 self.owned[c.item_id] = Owned(c.item_id, data.items[c.item_id].kind, before, "card")
-                notes.append(f"{data.name(c.item_id)} 보유 (강화 카드로 확인)")
+                notes.append(tr("{v0} 보유 (강화 카드로 확인)", v0=data.name(c.item_id)))
         for n in notes:
             self._log(n)
         return notes
@@ -256,15 +257,15 @@ class RunState:
     def limitations(self, data: GameData) -> List[str]:
         out = []
         if self.phase != "in_run":
-            out.append("진행 중인 런 없음")
+            out.append(tr("진행 중인 런 없음"))
         if not self.characters:
-            out.append("캐릭터 미확인")
+            out.append(tr("캐릭터 미확인"))
         if not self.inventory_seen:
-            out.append("보유 칸을 아직 읽지 못함")
+            out.append(tr("보유 칸을 아직 읽지 못함"))
         elif self.unreadable_slots:
-            out.append(f"보유 칸 {self.unreadable_slots}개를 읽지 못함")
+            out.append(tr("보유 칸 {unreadable_slots}개를 읽지 못함", unreadable_slots=self.unreadable_slots))
         if self.pending_unknown_pick:
-            out.append("직전 선택 결과 미확인")
+            out.append(tr("직전 선택 결과 미확인"))
         return out
 
     def _log(self, text: str):

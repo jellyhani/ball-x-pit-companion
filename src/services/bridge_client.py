@@ -15,6 +15,8 @@ from typing import Optional
 
 from PySide6.QtCore import QObject, Signal
 
+from ..i18n import tr
+
 log = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = 1
@@ -51,7 +53,7 @@ class BridgeClient(QObject):
     def _set_connected(self, on: bool, why: str = ""):
         if on != self.connected:
             self.connected = on
-            text = "게임 연동 연결됨" if on else f"게임 연동 없음{(' — ' + why) if why else ''}"
+            text = tr("게임 연동 연결됨") if on else tr("게임 연동 없음{v0}", v0=(' — ' + why) if why else '')
             log.info(text)
             self.status_changed.emit(text)
 
@@ -84,7 +86,7 @@ class BridgeClient(QObject):
                     f.close()
                 except OSError:
                     pass
-                self._set_connected(False, "연결 끊김")
+                self._set_connected(False, tr("연결 끊김"))
 
     def _handle(self, line: bytes):
         try:

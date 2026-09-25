@@ -38,7 +38,7 @@ class BaseSuggestion:
 
     @property
     def status(self) -> str:
-        return tr("지금 가능") if self.affordable else f"부족: {self.missing_text}"
+        return tr("지금 가능") if self.affordable else tr("부족: {missing_text}", missing_text=self.missing_text)
 
 
 def _desc(data: GameData, type_name: str) -> str:
@@ -47,15 +47,15 @@ def _desc(data: GameData, type_name: str) -> str:
     return data.buildings.get(key, {}).get("desc_ko", "").replace("?", "N")
 
 
-FINISH_LABEL = {"kScaffold": "공사 중", "kUpgrading": "강화 공사 중"}
+FINISH_LABEL = {"kScaffold": tr("공사 중"), "kUpgrading": tr("강화 공사 중")}
 
 
 def suggest(meta: MetaState, data: GameData, limit: int = 10) -> List[BaseSuggestion]:
     out: List[BaseSuggestion] = []
     for b in meta.buildings:
         if b.state in FINISH_LABEL:
-            out.append(BaseSuggestion("finish", b.type, f"{data.building_name(b.type)} 완성", _desc(data, b.type),
-                                      f"{FINISH_LABEL[b.state]} · 채집 때 작업자를 이 건물에 맞히면 공사가 진행됨",
+            out.append(BaseSuggestion("finish", b.type, tr("{v0} 완성", v0=data.building_name(b.type)), _desc(data, b.type),
+                                      tr("{v0} · 채집 때 작업자를 이 건물에 맞히면 공사가 진행됨", v0=FINISH_LABEL[b.state]),
                                       True, "", True, "", 0))
     for bp in meta.blueprints:
         desc = _desc(data, bp.type)
@@ -68,7 +68,7 @@ def suggest(meta: MetaState, data: GameData, limit: int = 10) -> List[BaseSugges
             continue
         desc = _desc(data, b.type)
         short = meta.shortfall(b.upgrade_cost)
-        out.append(BaseSuggestion("upgrade", b.type, f"{data.building_name(b.type)} 강화", desc,
+        out.append(BaseSuggestion("upgrade", b.type, tr("{v0} 강화", v0=data.building_name(b.type)), desc,
                                   meta.resource_text(b.upgrade_cost), meta.affordable(b.upgrade_cost),
                                   " · ".join(f"{k} {v}" for k, v in short.items()),
                                   any(w in desc for w in RUN_WORDS), "", sum(short.values()), b.upgrade_cost))

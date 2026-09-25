@@ -15,6 +15,7 @@ from typing import Dict, List, Optional, Tuple
 from ..domain import RunProgress
 from ..gamedata import GameData
 from .run_state import RunState
+from ..i18n import tr
 
 log = logging.getLogger(__name__)
 
@@ -143,18 +144,18 @@ def expedition_history(records: List[RunRecord]) -> List[Tuple[float, int, int]]
 def describe(rec: RunRecord, data: GameData) -> Tuple[str, str]:
     """기록 목록 한 줄 (제목, 부제)."""
     when = time.strftime("%m-%d %H:%M", time.localtime(rec.started_at))
-    char = data.name(rec.char) if rec.char else "캐릭터 미확인"
+    char = data.name(rec.char) if rec.char else tr("캐릭터 미확인")
     title = f"{when} · {char} · {rec.result}"
     parts = []
     if rec.turn is not None:
-        parts.append(f"{rec.turn}턴")
+        parts.append(tr("{turn}턴", turn=rec.turn))
     if rec.endless_turns:
-        parts.append(f"원정 계속 {rec.endless_turns}턴")
+        parts.append(tr("원정 계속 {endless_turns}턴", endless_turns=rec.endless_turns))
     top = rec.top_ball
     if top:
         total = sum(v for i, v in rec.damage.items() if i.startswith("ball:")) or 1
-        parts.append(f"주력 {data.name(top)} {round(rec.damage[top] * 100 / total)}%")
+        parts.append(tr("주력 {v0} {v1}%", v0=data.name(top), v1=round(rec.damage[top] * 100 / total)))
     evo = [i for i in rec.owned_ids if data.recipes_for(i)]
     if evo:
-        parts.append("진화 " + ", ".join(data.name(i) for i in evo[:3]))
+        parts.append(tr("진화 ") + ", ".join(data.name(i) for i in evo[:3]))
     return title, " · ".join(parts)

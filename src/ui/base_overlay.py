@@ -15,6 +15,7 @@ from PySide6.QtWidgets import QWidget
 
 from ..services import game_window as gw
 from . import tokens as tk
+from ..i18n import tr
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +33,7 @@ class BaseOverlay(QWidget):
                             | Qt.WindowType.WindowTransparentForInput)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
-        self.setWindowTitle("BALL x PIT 채집 안내")
+        self.setWindowTitle(tr("BALL x PIT 채집 안내"))
         self._scale = 1.0            # 물리 → 논리
         self._targets: List[Tuple[float, float]] = []
         self._build: List[Tuple[float, float]] = []         # 미완성 건물 (먼저 맞힐 곳)
@@ -200,7 +201,7 @@ class BaseOverlay(QWidget):
                 p.drawEllipse(q, 26, 26)
                 p.setFont(f3)
                 p.setPen(bc)
-                p.drawText(QRectF(q.x() - 30, q.y() - 40, 60, 14), Qt.AlignmentFlag.AlignCenter, "완성")
+                p.drawText(QRectF(q.x() - 30, q.y() - 40, 60, 14), Qt.AlignmentFlag.AlignCenter, tr("완성"))
         # 예상 경로: 추천(파란 실선), 지금 조준(흰 점선)
         for path, pen in ((self._path_best, QPen(QColor(64, 156, 255, 220), 3)),
                           (self._path_now, QPen(QColor(255, 255, 255, 170), 2, Qt.PenStyle.DashLine))):

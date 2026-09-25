@@ -17,6 +17,7 @@ from ..services import game_window as gw
 from ..tracking.dps import DpsRow
 from . import tokens as tk
 from .hud import icon_tile
+from ..i18n import tr
 
 log = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ class DpsMeter(QWidget):
                             | Qt.WindowType.WindowTransparentForInput)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
-        self.setWindowTitle("BALL x PIT 초당 피해")
+        self.setWindowTitle(tr("BALL x PIT 초당 피해"))
         self._rows: List[DpsRow] = []
         self._total = 0.0
         self._window_s = 10
@@ -63,9 +64,9 @@ class DpsMeter(QWidget):
             return ""
         parts = []
         if b.boss_ratio is not None:
-            parts.append(f"보스 체력 {round(b.boss_ratio * 100)}%")
+            parts.append(tr("보스 체력 {v0}%", v0=round(b.boss_ratio * 100)))
         if b.enemies is not None:
-            parts.append(f"적 {b.enemies}")
+            parts.append(tr("적 {enemies}", enemies=b.enemies))
         return " · ".join(parts)
 
     def set_battle(self, b):
@@ -122,7 +123,7 @@ class DpsMeter(QWidget):
         p.setFont(title)
         p.setPen(tk.qcolor(tk.TEXT_2))
         head = QRectF(pad, self.px(10), card.width() - 2 * pad, self.px(18))
-        p.drawText(head, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, f"초당 피해 · 최근 {self._window_s}초")
+        p.drawText(head, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, tr("초당 피해 · 최근 {v0}초", v0=self._window_s))
         p.setPen(tk.qcolor(tk.TEXT))
         p.drawText(head, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, fmt(self._total))
 
@@ -147,7 +148,7 @@ class DpsMeter(QWidget):
             p.setFont(body)
             p.setPen(tk.qcolor(tk.TEXT_3))
             p.drawText(QRectF(pad, y0 - self.px(2), card.width() - 2 * pad, self.px(24)),
-                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, "피해 기록을 모으는 중")
+                       Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, tr("피해 기록을 모으는 중"))
             return
         fm = QFontMetricsF(body)
         icon = self.px(20)

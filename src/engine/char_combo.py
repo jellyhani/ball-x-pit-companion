@@ -13,6 +13,7 @@ from itertools import combinations
 from typing import Dict, List, Optional, Sequence
 
 from ..gamedata import GameData
+from ..i18n import tr
 
 SRC_W = 4.0          # 추천한 곳 하나당
 RECORD_MIN = 2       # 내 기록은 이 조합으로 2번 이상 했을 때만
@@ -60,18 +61,18 @@ def suggest_pairs(data: GameData, chars: Sequence[dict], history: Sequence = (),
         if cp:
             n = len(cp.get("src") or [1])
             score += SRC_W * n
-            why.append(f"커뮤니티 추천 {n}곳: {cp.get('why', '')}")
+            why.append(tr("커뮤니티 추천 {n}곳: {v0}", n=n, v0=cp.get('why', '')))
         rec = _record(history, a, b)
         if rec is not None:
             rate, n = rec
             score += (rate - 0.5) * 8
-            why.append(f"내 기록: 보스 격퇴 {round(rate * 100)}% ({n}번)")
+            why.append(tr("내 기록: 보스 격퇴 {v0}% ({n}번)", v0=round(rate * 100), n=n))
         fa = data.character_rule(a).get("strategy", {}).get("favor", {})
         fb = data.character_rule(b).get("strategy", {}).get("favor", {})
         shared = [k for k in fa if fa[k] > 0 and fb.get(k, 0) > 0]
         if shared:
             score += 1.0
-            why.append(f"둘 다 {'·'.join(shared)} 전략 선호")
+            why.append(tr("둘 다 {v0} 전략 선호", v0='·'.join(shared)))
         score += LEVEL_W * (levels[a] + levels[b])
         if exact_key is not None or cp or rec is not None:
             out.append(CharPair(a, b, score, why))

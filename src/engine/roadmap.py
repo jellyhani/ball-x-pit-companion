@@ -12,6 +12,7 @@ from typing import List, Optional, Set
 
 from ..gamedata import GameData, Recipe
 from ..tracking.run_state import RunState
+from ..i18n import tr
 
 
 @dataclass
@@ -26,12 +27,12 @@ class RoadmapEntry:
     @property
     def status(self) -> str:
         if self.missing:
-            return "재료 1개 부족" if len(self.missing) == 1 else f"재료 {len(self.missing)}개 부족"
+            return tr("재료 1개 부족") if len(self.missing) == 1 else tr("재료 {v0}개 부족", v0=len(self.missing))
         if not self.levels_known:
-            return "재료 보유 · 최대 레벨 필요"
+            return tr("재료 보유 · 최대 레벨 필요")
         if self.levels_ready:
-            return "진화 가능"
-        return f"강화 {self.upgrades_left}번 남음" if self.upgrades_left > 0 else "재료 보유 · 강화 필요"
+            return tr("진화 가능")
+        return tr("강화 {upgrades_left}번 남음", upgrades_left=self.upgrades_left) if self.upgrades_left > 0 else tr("재료 보유 · 강화 필요")
 
     @property
     def rank(self) -> int:

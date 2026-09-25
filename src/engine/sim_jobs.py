@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Sequence
 
 from . import harvest_sim as hs
 from . import native
+from ..i18n import tr
 
 
 def job_now(geo: dict, blds: Dict[int, dict], team: Sequence[dict], angle: float, dur: float,
@@ -220,11 +221,11 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
         to = grid.center(o[0], o[1], p.w, p.h)
         rot = (rots.get(i, 0) + k) % 4 if k else -1
         if park:
-            steps.append(Move(i, to, 0.0, "잠시 비켜 두기 (다른 건물 자리 비우기)"))
+            steps.append(Move(i, to, 0.0, tr("잠시 비켜 두기 (다른 건물 자리 비우기)")))
         elif i in opener:
-            steps.append(Move(i, to, 1.0, "미완성 건물로 가는 길 열기", target=opener[i], rot=rot))
+            steps.append(Move(i, to, 1.0, tr("미완성 건물로 가는 길 열기"), target=opener[i], rot=rot))
         else:
-            steps.append(Move(i, to, 0.0, f"{lo.turn_text(k)} 이 자리로" if k else "최적 배치 자리로", rot=rot))
+            steps.append(Move(i, to, 0.0, tr("{v0} 이 자리로", v0=lo.turn_text(k)) if k else tr("최적 배치 자리로"), rot=rot))
     final_blds = buildings_from_base(final_base)
     plan = LayoutPlan(full.effect_before, full.effect_after, steps, full.detail_before, full.detail_after,
                       full.harvest_before, hv(final_base.get("geo") or {}) if team else full.harvest_after)
@@ -246,6 +247,6 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
     plan.activations = lo.activation_gains(final_base, res_weight, pad)
     plan.demolish = lo.suggest_demolish(final_base, res_weight, pad)
     from .layout import NewSpot
-    plan.new_spots = [NewSpot(t, c, sz, n, f"범위 효과 +{g:.1f} (지은 뒤 강화·일꾼 배정 기준)")
+    plan.new_spots = [NewSpot(t, c, sz, n, tr("범위 효과 +{g:.1f} (지은 뒤 강화·일꾼 배정 기준)", g=g))
                       for t, c, sz, g, n, *_ in plan.builds[:3]]
     return plan

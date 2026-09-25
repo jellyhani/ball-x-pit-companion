@@ -26,7 +26,11 @@ _lang: Optional[str] = None
 
 
 def detect_ui_lang() -> str:
-    """윈도우 UI 언어 → 지원 코드(en/ja/schinese/tchinese), 그 밖엔 'ko' (번역 안 함, 원문 그대로)."""
+    """윈도우 UI 언어 → 지원 코드(en/ja/schinese/tchinese), 그 밖엔 'ko' (번역 안 함, 원문 그대로).
+    환경 변수 BXP_LANG 로 강제할 수 있다 (ko/en/ja/schinese/tchinese — 테스트·확인용)."""
+    forced = os.environ.get("BXP_LANG", "").strip()
+    if forced:
+        return forced if forced in SUPPORTED or forced == "ko" else "ko"
     try:
         import ctypes
         lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
@@ -71,7 +75,7 @@ def _table(code: str) -> Dict[str, str]:
     return _cache[code]
 
 
-def tr(text: str, **kwargs) -> str:
+def tr(text: str, /, **kwargs) -> str:
     """text: 한국어 원문 (번역 키를 겸함). 번역이 있으면 그걸, 없으면 원문 그대로.
     kwargs 를 주면 str.format 으로 채운다 — 원문·번역 모두 같은 {이름} 자리표시자를 써야 한다."""
     lang = current_lang()

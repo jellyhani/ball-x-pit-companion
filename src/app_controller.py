@@ -57,11 +57,12 @@ from .engine.base_advisor import suggest as suggest_base
 from .ui.control_window import ControlWindow
 from .ui.hud import RecommendationHud
 from .ui.tray import Tray, app_icon
+from .i18n import tr
 
 log = logging.getLogger(__name__)
 
 
-CARD_LABEL_KO = {CardLabel.NEW: "신규", CardLabel.UPGRADE: "강화"}
+CARD_LABEL_KO = {CardLabel.NEW: tr("신규"), CardLabel.UPGRADE: tr("강화")}
 
 
 class AppController(QObject):
@@ -155,7 +156,7 @@ class AppController(QObject):
         self.control.set_draw_summary(self.draws.summary())
         self.mod_guard = ModGuard(self.settings, self.data.game_build_id, lambda: self.bridge.connected)
         self.mod_guard.status.connect(self.control.set_mod_status)
-        self.mod_guard.notice.connect(lambda text: self.tray.showMessage("BALL x PIT 도우미", text))
+        self.mod_guard.notice.connect(lambda text: self.tray.showMessage(tr("BALL x PIT 도우미"), text))
         self.control.mod_install_requested.connect(self.mod_guard.install_now)
         self.layout_win = LayoutWindow(self.data)
         self.layout_plan = None
@@ -197,7 +198,7 @@ class AppController(QObject):
             autostart.set_enabled(self.settings.start_with_windows)
         if not self.ocr_status.ok:
             log.warning(self.ocr_status.message)
-            self.control.select_page("진단")
+            self.control.select_page(tr("진단"))
         from .engine import native
         log.info("시작: 데이터 빌드 %s, OCR %s, 네이티브 계산 %s", self.data.game_build_id, self.ocr_status.ok,
                  "사용" if native.lib() is not None else "없음 (파이썬 계산)")
@@ -384,7 +385,7 @@ class AppController(QObject):
         if not st.in_run:
             if self.run.phase == "in_run" and snap.get("battle") is None:
                 self._handle(self.tracker.reset())
-                self.run.end_run("게임 연동: 런 밖")
+                self.run.end_run(tr("게임 연동: 런 밖"))
                 self._finish_run_record()
                 self.control.refresh_run()
             self._handle(self.tracker.observe(st.observation, time.monotonic(), immediate=True))
@@ -548,11 +549,11 @@ class AppController(QObject):
                 self.char_combo = None
                 return
             p = pairs[0]
-            tone, status = ("accent", "좋음") if p.score >= 8 else (("neutral", "보통") if p.score >= 3
-                                                                    else ("neutral", "정보 없음"))
-            v = HudView(title=f"{d.name(p.a)} + {d.name(p.b)}", subtitle="이번 원정 캐릭터 궁합",
+            tone, status = ("accent", tr("좋음")) if p.score >= 8 else (("neutral", tr("보통")) if p.score >= 3
+                                                                    else ("neutral", tr("정보 없음")))
+            v = HudView(title=f"{d.name(p.a)} + {d.name(p.b)}", subtitle=tr("이번 원정 캐릭터 궁합"),
                         status=status, status_tone=tone)
-            v.lines = [(r, "secondary") for r in (p.reasons[:3] or ["커뮤니티 추천·내 기록·전략 궁합 어디에도 안 걸림"])]
+            v.lines = [(r, "secondary") for r in (p.reasons[:3] or [tr("커뮤니티 추천·내 기록·전략 궁합 어디에도 안 걸림")])]
             self.char_combo = pairs
             log.info("캐릭터 궁합: %s + %s (%.1f) %s", d.name(p.a), d.name(p.b), round(p.score, 1), p.reasons)
             self.hud.render_view(v)
@@ -564,13 +565,13 @@ class AppController(QObject):
             self.char_combo = None
             return
         best = pairs[0]
-        subtitle = f"{d.name(fixed)}와 좋은 조합 (알선소)" if fixed else "캐릭터 조합 추천 (알선소)"
+        subtitle = tr("{v0}와 좋은 조합 (알선소)", v0=d.name(fixed)) if fixed else tr("캐릭터 조합 추천 (알선소)")
         v = HudView(title=f"{d.name(best.a)} + {d.name(best.b)}", subtitle=subtitle,
-                    status="추천", status_tone="accent")
+                    status=tr("추천"), status_tone="accent")
         v.lines = [(r, "secondary") for r in best.reasons[:2]]
-        v.section = "다른 조합"
+        v.section = tr("다른 조합")
         v.rows = [HudRow((), f"{d.name(p_.a)} + {d.name(p_.b)}", p_.reasons[0] if p_.reasons else "") for p_ in pairs[1:]]
-        v.footer = [("커뮤니티 추천(Dexerto·Screen Rant·Steam)과 내 런 기록 기준 — 참고용", "tertiary")]
+        v.footer = [(tr("커뮤니티 추천(Dexerto·Screen Rant·Steam)과 내 런 기록 기준 — 참고용"), "tertiary")]
         self.char_combo = pairs
         log.info("캐릭터 조합 추천%s: %s", f" ({d.name(fixed)} 고정)" if fixed else "",
                  [(d.name(p_.a), d.name(p_.b), round(p_.score, 1)) for p_ in pairs])
@@ -607,23 +608,23 @@ class AppController(QObject):
         self._base_advice_key = key
         from .ui.hud import HudRow, HudView
         d = self.data
-        verb = {"finish": "완성", "build": "짓기", "upgrade": "강화"}
+        verb = {"finish": tr("완성"), "build": tr("짓기"), "upgrade": tr("강화")}
         items = [(f"{verb[sg.kind]}: {sg.name}", sg.status) for sg in todo]
         if gap:
-            items.append((f"짓기: {gap[1]} ({RESOURCES[gap[0]]} 생산이 목표 비율보다 적음)", "가이드"))
-        items += [(f"철거 후보: {d.building_name(t)}", "가이드" if t in GUIDE_DEMOLISH else f"기여 {score:.1f}")
+            items.append((tr("짓기: {v0} ({v1} 생산이 목표 비율보다 적음)", v0=gap[1], v1=RESOURCES[gap[0]]), tr("가이드")))
+        items += [(tr("철거 후보: {v0}", v0=d.building_name(t)), tr("가이드") if t in GUIDE_DEMOLISH else tr("기여 {score:.1f}", score=score))
                   for _i, t, score, *_r in demolish]
-        items += [(f"일꾼 빼기: {d.building_name(a.building)}의 {d.name(a.char_id)} → 발사로" if a.action == "remove" else
-                   f"일꾼: {d.building_name(a.building)} ← {d.name(a.char_id)}"
-                   + (f" ({d.name(a.replace)} 대신)" if a.action == "swap" else ""),
-                   {"swap": "교체", "remove": "금광 안 씀"}.get(a.action, "빈 건물")) for a in workers]
+        items += [(tr("일꾼 빼기: {v0}의 {v1} → 발사로", v0=d.building_name(a.building), v1=d.name(a.char_id)) if a.action == "remove" else
+                   tr("일꾼: {v0} ← {v1}", v0=d.building_name(a.building), v1=d.name(a.char_id))
+                   + (tr(" ({v0} 대신)", v0=d.name(a.replace)) if a.action == "swap" else ""),
+                   {"swap": tr("교체"), "remove": tr("금광 안 씀")}.get(a.action, tr("빈 건물"))) for a in workers]
         title, status = items[0]
-        v = HudView(title=title, subtitle="기지 조언", status=status,
-                    status_tone="warn" if "부족" in status else "accent")
+        v = HudView(title=title, subtitle=tr("기지 조언"), status=status,
+                    status_tone="warn" if todo and not todo[0].affordable else "accent")
         if len(items) > 1:
-            v.section = "다른 항목"
+            v.section = tr("다른 항목")
             v.rows = [HudRow((), t, s) for t, s in items[1:]]
-        v.footer = [("배치 효과·부족 자원 기준 — F10 설정창에서 더 자세히", "tertiary")]
+        v.footer = [(tr("배치 효과·부족 자원 기준 — F10 설정창에서 더 자세히"), "tertiary")]
         self.base_advice = items
         log.info("기지 조언: %s", items)
         self.hud.render_view(v)
@@ -657,7 +658,7 @@ class AppController(QObject):
         if other is not None:
             # 보유 목록이 아니라 새로고침·삭제 횟수가 바뀌었다 → 고른 것이 아니다
             self._pending_pick = None
-            out = PickOutcome(out.session_id, other, None, "게임 상태로 확인 (횟수 변화)", out.options)
+            out = PickOutcome(out.session_id, other, None, tr("게임 상태로 확인 (횟수 변화)"), out.options)
             self.run.apply_outcome(out, self.data)
             log.info("세션 %s 종료: %s (%s)", out.session_id, other, out.evidence)
             return
@@ -668,14 +669,14 @@ class AppController(QObject):
         self._pending_pick = None
         self._picked_sig = (tuple(c.item_id for c in session.cards), time.monotonic())
         if card is not None:
-            out = PickOutcome(out.session_id, "picked", card, "게임 상태로 확인", out.options)
+            out = PickOutcome(out.session_id, "picked", card, tr("게임 상태로 확인"), out.options)
         self.run.apply_outcome(out, self.data)
         self.run.apply_inventory(inventory, self.data)
         log.info("세션 %s 선택 확정: %s (%s)%s", out.session_id,
                  self.data.name(out.card.item_id) if out.card else out.kind, out.evidence,
                  "" if out.card else f" | 횟수 열림 {self._session_counters.get(session.session_id)} → 지금 {self._counters}")
         if out.kind == "picked" and out.card is not None:
-            self.hud.show_message(self.data.name(out.card.item_id), f"선택 반영 · {out.card.position} 카드",
+            self.hud.show_message(self.data.name(out.card.item_id), tr("선택 반영 · {position} 카드", position=out.card.position),
                                   tk.OK, 1600, item_id=out.card.item_id)
         self.control.refresh_run()
         self._update_hud()
@@ -720,7 +721,7 @@ class AppController(QObject):
                     continue
                 other = self._counter_outcome(out.session_id) if self.bridge.live else None
                 if other is not None:
-                    out = PickOutcome(out.session_id, other, None, "게임 상태로 확인 (횟수 변화)", out.options)
+                    out = PickOutcome(out.session_id, other, None, tr("게임 상태로 확인 (횟수 변화)"), out.options)
                     self.run.apply_outcome(out, self.data)
                     log.info("세션 %s 종료: %s (%s)", out.session_id, other, out.evidence)
                     continue
@@ -733,14 +734,14 @@ class AppController(QObject):
                 self.run.apply_outcome(out, self.data)
                 log.info("세션 %s 종료: %s (%s)", out.session_id, out.kind, out.evidence)
                 if out.kind == "picked" and out.card is not None:
-                    self.hud.show_message(self.data.name(out.card.item_id), f"선택 반영 · {out.card.position} 카드 ({out.evidence})",
+                    self.hud.show_message(self.data.name(out.card.item_id), tr("선택 반영 · {position} 카드 ({evidence})", position=out.card.position, evidence=out.evidence),
                                           tk.OK, 1600, item_id=out.card.item_id)
                 elif out.kind == "rerolled":
                     self.force_until = time.monotonic() + 3.0
-                    self.hud.show_message("새로고침", "새 선택지를 읽는 중", tk.TEXT_3, 3000)
+                    self.hud.show_message(tr("새로고침"), tr("새 선택지를 읽는 중"), tk.TEXT_3, 3000)
                 elif out.kind == "unknown":
-                    self.hud.show_message("선택 결과를 확인하지 못했습니다",
-                                          "다음 선택창의 표시로 보정하거나 F10에서 고를 수 있습니다", tk.WARN, 2600)
+                    self.hud.show_message(tr("선택 결과를 확인하지 못했습니다"),
+                                          tr("다음 선택창의 표시로 보정하거나 F10에서 고를 수 있습니다"), tk.WARN, 2600)
                 else:
                     self.hud.hide()
         if events:
@@ -774,7 +775,7 @@ class AppController(QObject):
             log.info("런 시작")
         elif ev.kind == "run_ended":
             self._handle(self.tracker.reset())
-            self.run.end_run("기지 복귀")
+            self.run.end_run(tr("기지 복귀"))
             self._finish_run_record()
             self.hud.hide()
             self.control.refresh_run()
@@ -965,11 +966,11 @@ class AppController(QObject):
             types = {b.get("id"): b.get("type", "") for b in base.get("buildings") or []}
             if remain:
                 first = remain[0]
-                lines = [(f"최적 배치까지 옮기기 {len(remain)}개 남음 — 번호 순서대로", (245, 245, 247, 255)),
-                         (f"1번: {self.data.building_name(types.get(first.a, ''))} → 번호 1 자리 ({first.reason})",
+                lines = [(tr("최적 배치까지 옮기기 {v0}개 남음 — 번호 순서대로", v0=len(remain)), (245, 245, 247, 255)),
+                         (tr("1번: {v0} → 번호 1 자리 ({reason})", v0=self.data.building_name(types.get(first.a, '')), reason=first.reason),
                           (255, 159, 10, 255))]
             else:
-                lines = [("최적 배치 완료 — 재배치를 끝내도 됩니다", (48, 209, 88, 255))]
+                lines = [(tr("최적 배치 완료 — 재배치를 끝내도 됩니다"), (48, 209, 88, 255))]
             self.base_overlay.show_advice(game, scale, None, None, lines)
             if not self.base_overlay.isVisible():
                 self.base_overlay.show()
@@ -985,15 +986,14 @@ class AppController(QObject):
         texts = []
         sim = self._harvest_sim(base, adv.need, unf)
         if unf:
-            names = " · ".join(f"{self.data.building_name(u.type)}({u.label} {u.pct:.0%}, "
-                               f"{'' if u.exact else '약 '}{u.hits_left}번 더)" for u in unf[:3])
-            texts.append((f"미완성 먼저: {names}", (255, 159, 10, 255)))
+            names = " · ".join(tr("{v0}({label} {pct:.0%}, {v1}{hits_left}번 더)", v0=self.data.building_name(u.type), label=u.label, pct=u.pct, v1='' if u.exact else tr("약 "), hits_left=u.hits_left) for u in unf[:3])
+            texts.append((tr("미완성 먼저: {names}", names=names), (255, 159, 10, 255)))
             tip = gold_bounce_tip(base, unf)
             if tip:
                 texts.append((tip, (190, 190, 200, 255)))
             if self._stuck_text:
                 texts.append((self._stuck_text, (255, 159, 10, 255)))
-        texts.append((f"필요한 자원: {adv.need_text}", (245, 245, 247, 255)))
+        texts.append((tr("필요한 자원: {need_text}", need_text=adv.need_text), (245, 245, 247, 255)))
         if sim:
             texts += sim
         else:
@@ -1044,7 +1044,7 @@ class AppController(QObject):
         self.control.set_spa(adv)
         if adv is not None and adv.verdict == "profit" and base.get("harvested_today")                 and getattr(self, "_spa_notified", None) != adv.cost:
             self._spa_notified = adv.cost
-            self.tray.showMessage("BALL x PIT 도우미", adv.text)
+            self.tray.showMessage(tr("BALL x PIT 도우미"), adv.text)
         if adv is not None:
             log.info("스파: %s", adv.text)
 
@@ -1083,18 +1083,18 @@ class AppController(QObject):
         names = [self.data.building_name(types.get(sw.a, "")) for sw in plan.swaps
                  if isinstance(sw, Move) and sw.target in ids and sw.a in types]
         if names:
-            return f"재배치 모드에서 빈 자리로 옮기기: {', '.join(names)} (배치도 번호 순서)"
+            return tr("재배치 모드에서 빈 자리로 옮기기: {v0} (배치도 번호 순서)", v0=', '.join(names))
         reach = getattr(plan, "reach_after", {}) or {}
         if ids and all(reach.get(i, 0) > 0 for i in ids):
-            return "배치도의 최적 배치대로 옮기면 닿음 (재배치 모드에서 번호 순서대로)"
+            return tr("배치도의 최적 배치대로 옮기면 닿음 (재배치 모드에서 번호 순서대로)")
         return ""
 
     @staticmethod
     def _yield_text(r: dict) -> str:
         from .tracking.meta_state import RESOURCES
-        parts = [f"미완성 {r['build_hits']}번 맞힘"] if r.get("build_hits") else []
+        parts = [tr("미완성 {v0}번 맞힘", v0=r['build_hits'])] if r.get("build_hits") else []
         parts += [f"{RESOURCES[i]} +{v}" for i, v in enumerate(r.get("total") or []) if v]
-        return " · ".join(parts) or "채집 없음"
+        return " · ".join(parts) or tr("채집 없음")
 
     def _harvest_sim(self, base: dict, need: int, unf) -> List[tuple]:
         """채집 궤적: 지금 조준·추천 각도의 예상 경로와 결과. 계산은 계산 프로세스에 맡기고(가장 최근 요청만),
@@ -1144,7 +1144,7 @@ class AppController(QObject):
             if moved is not None:                         # 각도·위치가 한두 번 늦어도 같은 배치면 따라 그린다
                 r = got[1]
                 now_path = moved
-                lines.append((f"지금 조준 {r['angle']:.0f}°: {self._yield_text(r)}", (255, 255, 255, 230)))
+                lines.append((tr("지금 조준 {v0:.0f}°: {v1}", v0=r['angle'], v1=self._yield_text(r)), (255, 255, 255, 230)))
         best_path: list = []
         got = self._sim_res.get("sweep")
         if got and got[1] and got[0][:-1] == base_key and got[1].get("top"):
@@ -1155,8 +1155,8 @@ class AppController(QObject):
             if stuck:
                 opener = self._access_move_names(stuck)
                 self._stuck_text = (" · ".join(self.data.building_name(u.type) for u in stuck)
-                                    + ": 지금 배치로는 어떤 각도로도 닿지 않음 → "
-                                    + (opener or "배치도에서 옆 건물을 옮겨 길을 여세요"))
+                                    + tr(": 지금 배치로는 어떤 각도로도 닿지 않음 → ")
+                                    + (opener or tr("배치도에서 옆 건물을 옮겨 길을 여세요")))
             best = top[0]
             # 1위와 거의 같은 각도가 여럿이면(작업자가 오래 튕겨 어디로 쏴도 비슷하게 다 캐는 경우) 순위가 의미 없다 —
             # 그중 지금 조준에 가장 가까운 것을 보여 준다 (실제 화면: 162° 1위, 36° 2위가 1 차이)
@@ -1165,21 +1165,20 @@ class AppController(QObject):
             if len(similar) > 1:
                 show = min(similar, key=lambda r: abs(r["angle"] - cur))
                 best_path = follow(sweep_key, show.get("path")) or []
-                lines.append((f"각도 차이 거의 없음 ({len(similar)}곳 비슷) — 지금 조준에 가까운 {show['angle']:.0f}° "
-                              f"(파란 선): {self._yield_text(show)}", (120, 180, 255, 255)))
+                lines.append((tr("각도 차이 거의 없음 ({v0}곳 비슷) — 지금 조준에 가까운 {v1:.0f}° (파란 선): {v2}", v0=len(similar), v1=show['angle'], v2=self._yield_text(show)), (120, 180, 255, 255)))
             else:
                 best_path = follow(sweep_key, best.get("path")) or []
-                lines.append((f"1위 {best['angle']:.0f}° (파란 선): {self._yield_text(best)}", (120, 180, 255, 255)))
-                alts = " / ".join(f"{i}위 {r['angle']:.0f}° {self._yield_text(r)}" for i, r in enumerate(top[1:3], 2))
+                lines.append((tr("1위 {v0:.0f}° (파란 선): {v1}", v0=best['angle'], v1=self._yield_text(best)), (120, 180, 255, 255)))
+                alts = " / ".join(tr("{i}위 {v0:.0f}° {v1}", i=i, v0=r['angle'], v1=self._yield_text(r)) for i, r in enumerate(top[1:3], 2))
                 if alts:
                     lines.append((alts, (170, 170, 180, 255)))
         else:
-            lines.append(("추천 각도 계산 중…", (190, 190, 200, 255)))
+            lines.append((tr("추천 각도 계산 중…"), (190, 190, 200, 255)))
         l_ok, h_ok = self.aim_range.learned
         if not (l_ok and h_ok):
-            lines.append((f"추천 각도 범위 {lo:.0f}°~{hi:.0f}° (추정) — 마우스를 좌우 끝까지 밀면 게임 한계를 배웁니다",
+            lines.append((tr("추천 각도 범위 {lo:.0f}°~{hi:.0f}° (추정) — 마우스를 좌우 끝까지 밀면 게임 한계를 배웁니다", lo=lo, hi=hi),
                           (140, 140, 150, 255)))
-        lines.append(("실제 채집 기록 비교: 궤적 7~11초 일치 · 채집량 밀·나무 일치, 돌 ±5 (기록 1회)", (140, 140, 150, 255)))
+        lines.append((tr("실제 채집 기록 비교: 궤적 7~11초 일치 · 채집량 밀·나무 일치, 돌 ±5 (기록 1회)"), (140, 140, 150, 255)))
         self.base_overlay.set_paths(now_path, best_path)
         return lines
 
@@ -1287,7 +1286,7 @@ class AppController(QObject):
     def _set_hud_edit(self, on: bool):
         self.hud.set_edit_mode(on)
         if on and self.recommendation is None:
-            self.hud.show_message("HUD 위치 조정", "끌어서 옮긴 뒤 설정 창에서 버튼을 다시 누르세요", tk.ACCENT)
+            self.hud.show_message(tr("HUD 위치 조정"), tr("끌어서 옮긴 뒤 설정 창에서 버튼을 다시 누르세요"), tk.ACCENT)
         elif not on and self.recommendation is None:
             self.hud.hide()
         self._update_hud()
@@ -1301,7 +1300,7 @@ class AppController(QObject):
         self.user_hidden = not self.user_hidden
         log.info("사용자 HUD %s", "숨김" if self.user_hidden else "표시")
         if not self.user_hidden and self.recommendation is None:
-            self.hud.show_message("HUD 켜짐", "선택창이 열리면 추천이 표시됩니다", tk.TEXT_3, 1500)
+            self.hud.show_message(tr("HUD 켜짐"), tr("선택창이 열리면 추천이 표시됩니다"), tk.TEXT_3, 1500)
         self._update_hud()
 
     def _quit_from_tray(self):
@@ -1361,43 +1360,43 @@ class AppController(QObject):
                        "gold": obs.gold, "reroll_cost": obs.reroll_cost, "free_rerolls": obs.free_rerolls,
                        "banish_left": obs.banish_left, "points_left": obs.points_left},
                       f, ensure_ascii=False, indent=1, default=str)
-        self.control.saved_label.setText(f"저장함: {path}")
+        self.control.saved_label.setText(tr("저장함: {path}", path=path))
         log.info("진단용 게임 화면 저장: %s", path)
 
     def _refresh_diagnostics(self):
         w = self.window
         res = self.last_result
         if self.bridge.live:
-            conn = "게임 연동 중"
+            conn = tr("게임 연동 중")
         else:
-            conn = ("게임 연결됨 · 화면 인식" if w else "게임 창 없음")
+            conn = (tr("게임 연결됨 · 화면 인식") if w else tr("게임 창 없음"))
         self.control.set_connection(conn)
         if not self.control.isVisible():
             return
         obs = res.observation if res else None
+        phase_names = {'in_run': tr("런 진행 중"), 'base': tr("기지"), 'unknown': tr("미확인")}
         rows = {
-            "연결 방식": (f"게임 연동 (BepInEx 플러그인) · 메시지 {self.bridge.messages}건"
-                      + (f" · 게임 {self.bridge.game_version}" if self.bridge.game_version else ""))
-            if self.bridge.live else "화면 인식 (게임 연동 없음 — 플러그인 미설치이거나 게임이 꺼져 있음)",
-            "게임 창": (f"{w.size[0]}×{w.size[1]} · 위치 {w.origin} · DPI {w.dpi}"
-                      + (" · 앞에 있음" if w.foreground else " · 뒤에 있음") + (" · 최소화" if w.minimized else ""))
-            if w else "찾지 못함 (Balls.exe)",
-            "캡처": (obs.frame.backend if obs and obs.frame else (obs.error if obs else "-")) or "-",
-            "화면 판별": (SCREEN_LABEL.get(obs.kind, obs.kind.value) + (f" ({res.skipped})" if res.skipped else "")
+            tr("연결 방식"): (tr("게임 연동 (BepInEx 플러그인) · 메시지 {messages}건", messages=self.bridge.messages)
+                      + (tr(" · 게임 {game_version}", game_version=self.bridge.game_version) if self.bridge.game_version else ""))
+            if self.bridge.live else tr("화면 인식 (게임 연동 없음 — 플러그인 미설치이거나 게임이 꺼져 있음)"),
+            tr("게임 창"): (tr("{v0}×{v1} · 위치 {origin} · DPI {dpi}", v0=w.size[0], v1=w.size[1], origin=w.origin, dpi=w.dpi)
+                      + (tr(" · 앞에 있음") if w.foreground else tr(" · 뒤에 있음")) + (tr(" · 최소화") if w.minimized else ""))
+            if w else tr("찾지 못함 (Balls.exe)"),
+            tr("캡처"): (obs.frame.backend if obs and obs.frame else (obs.error if obs else "-")) or "-",
+            tr("화면 판별"): (SCREEN_LABEL.get(obs.kind, obs.kind.value) + (f" ({tr(res.skipped)})" if res.skipped else "")
                       + (f" — {obs.error}" if obs.error else "")) if obs else "-",
-            "게임 로그": (f"{ {'in_run': '런 진행 중', 'base': '기지', 'unknown': '미확인'}[self.logw.phase]} · "
-                      f"{self.base_state or '-'}") if self.logw.available else "없음",
-            "게임 버전": self.logw.game_version or "미확인",
-            "데이터 빌드": f"Steam {self.data.game_build_id}",
+            tr("게임 로그"): (f"{phase_names[self.logw.phase]} · {self.base_state or '-'}") if self.logw.available else tr("없음"),
+            tr("게임 버전"): self.logw.game_version or tr("미확인"),
+            tr("데이터 빌드"): f"Steam {self.data.game_build_id}",
             "OCR": self.ocr_status.message,
-            "HUD": "캡처 제외 " + {True: "확인", False: "실패", None: "아직 표시 안 됨"}[self.hud.capture_excluded]
-                   + " · 클릭 통과 " + {True: "켜짐", False: "꺼짐", None: "-"}[self.hud.click_through],
-            "입력": ("단축키 " + ("사용" if self.inputs.keyboard_ok else "불가")
-                   + " · 클릭 기록 " + ("사용" if self.inputs.mouse_ok else "불가")),
-            "버린 늦은 결과": f"{self.stale_results}건",
-            "연동 부하": (f"게임 쪽 읽기 {self._plugin_cost:.1f}ms/회" if self._plugin_cost is not None
-                      else "게임 쪽 읽기 - (플러그인 1.7부터)")
-                     + f" · 도우미 기지 화면 처리 {self._base_ms:.1f}ms/회 (궤적 계산은 별도 프로세스)",
+            "HUD": tr("캡처 제외 ") + {True: tr("확인"), False: tr("실패"), None: tr("아직 표시 안 됨")}[self.hud.capture_excluded]
+                   + tr(" · 클릭 통과 ") + {True: tr("켜짐"), False: tr("꺼짐"), None: "-"}[self.hud.click_through],
+            tr("입력"): (tr("단축키 ") + (tr("사용") if self.inputs.keyboard_ok else tr("불가"))
+                   + tr(" · 클릭 기록 ") + (tr("사용") if self.inputs.mouse_ok else tr("불가"))),
+            tr("버린 늦은 결과"): tr("{stale_results}건", stale_results=self.stale_results),
+            tr("연동 부하"): (tr("게임 쪽 읽기 {v0:.1f}ms/회", v0=self._plugin_cost) if self._plugin_cost is not None
+                      else tr("게임 쪽 읽기 - (플러그인 1.7부터)"))
+                     + tr(" · 도우미 기지 화면 처리 {v0:.1f}ms/회 (궤적 계산은 별도 프로세스)", v0=self._base_ms),
         }
         cards = "-"
         if obs is not None and obs.kind == ScreenKind.LEVEL_UP:
@@ -1406,25 +1405,24 @@ class AppController(QObject):
             for c in obs.cards:
                 label = CARD_LABEL_KO.get(c.label, "")
                 name = d.name(c.item_id) if c.item_id else (
-                    f"읽지 못함 (가장 비슷: {d.name(c.guess_id)})" if c.guess_id else "읽지 못함")
-                score = f" · 오차 {c.icon_error:.0f}/차이 {c.icon_margin:.0f}" if c.icon_error is not None else ""
+                    tr("읽지 못함 (가장 비슷: {v0})", v0=d.name(c.guess_id)) if c.guess_id else tr("읽지 못함"))
+                score = tr(" · 오차 {icon_error:.0f}/차이 {icon_margin:.0f}", icon_error=c.icon_error, icon_margin=c.icon_margin) if c.icon_error is not None else ""
                 parts.append(f"{c.position}: {name}{' · ' + label if label else ''}"
                              f"{' ' + str(c.shown_level) if c.shown_level else ''}{score}")
             if obs.inventory is not None:
-                held = [f"{d.name(s.item_id) if s.item_id else '읽지 못함'}"
+                unread = tr("읽지 못함")
+                held = [f"{d.name(s.item_id) if s.item_id else unread}"
                         f" {s.level if s.level is not None else '?'}" for s in obs.inventory if s.occupied]
-                parts.append("보유 칸: " + (", ".join(held) if held else "비어 있음"))
-            parts.append(f"캐릭터 {d.name(obs.character_id) if obs.character_id else '미확인'} · "
-                         f"골드 {obs.gold if obs.gold is not None else '?'} · "
-                         f"새로고침 {('무료 ' + str(obs.free_rerolls) + '회') if obs.free_rerolls is not None else (str(obs.reroll_cost) + '골드' if obs.reroll_cost is not None else '?')}")
+                parts.append(tr("보유 칸: ") + (", ".join(held) if held else tr("비어 있음")))
+            parts.append(tr("캐릭터 {v0} · 골드 {v1} · 새로고침 {v2}", v0=d.name(obs.character_id) if obs.character_id else tr("미확인"), v1=obs.gold if obs.gold is not None else '?', v2=(tr("무료 ") + str(obs.free_rerolls) + tr("회")) if obs.free_rerolls is not None else (str(obs.reroll_cost) + tr("골드") if obs.reroll_cost is not None else '?')))
             cards = "\n".join(parts)
-        timing = "아직 없음"
+        timing = tr("아직 없음")
         if self.timings:
             lines = []
-            for key, name in (("capture", "캡처"), ("ocr", "글자 인식"), ("icons", "아이콘 비교"), ("total", "전체")):
+            for key, name in (("capture", tr("캡처")), ("ocr", tr("글자 인식")), ("icons", tr("아이콘 비교")), ("total", tr("전체"))):
                 vals = sorted(t[key] for t in self.timings if key in t)
                 if vals:
                     p95 = vals[min(len(vals) - 1, int(round(0.95 * (len(vals) - 1))))]
-                    lines.append(f"{name}: 중앙값 {statistics.median(vals):.0f}ms · p95 {p95:.0f}ms")
-            timing = "\n".join(lines) + f"\n표본 {len(self.timings)}회"
+                    lines.append(tr("{name}: 중앙값 {v0:.0f}ms · p95 {p95:.0f}ms", name=name, v0=statistics.median(vals), p95=p95))
+            timing = "\n".join(lines) + tr("\n표본 {v0}회", v0=len(self.timings))
         self.control.update_diagnostics(rows, cards, timing)

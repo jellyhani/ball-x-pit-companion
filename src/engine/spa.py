@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence
 
 from ..tracking.meta_state import RESOURCES
+from ..i18n import tr
 
 
 @dataclass
@@ -32,19 +33,19 @@ def spa_advice(spa: Optional[dict], rows: Sequence[dict], layout: str = "",
     use = (same or good)[-5:]
     if not use:
         return SpaAdvice(cost, [0, 0, 0, 0], 0, "unknown",
-                         f"스파 재채집 비용 {cost:,}골드 — 채집 기록이 쌓이면 손익을 계산합니다", "neutral")
+                         tr("스파 재채집 비용 {cost:,}골드 — 채집 기록이 쌓이면 손익을 계산합니다", cost=cost), "neutral")
     avg = [sum(max(0, r["gain"][i]) for r in use) / len(use) for i in range(4)]
     net = avg[0] - cost
     res = " · ".join(f"{RESOURCES[i]} +{avg[i]:.0f}" for i in (1, 2, 3) if avg[i] >= 0.5)
-    basis = f"최근 채집 {len(use)}번 평균{' (같은 배치)' if same else ''}"
+    basis = tr("최근 채집 {v0}번 평균{v1}", v0=len(use), v1=tr(" (같은 배치)") if same else '')
     need = [k for k, v in (shortfalls or {}).items() if v > 0 and k in RESOURCES[1:]]
     if net > 0:
         return SpaAdvice(cost, avg, len(use), "profit",
-                         f"스파 재채집 이득: 비용 {cost:,}골드 < 골드 +{avg[0]:,.0f} ({basis}) · 순이익 {net:,.0f}"
-                         + (f" · 덤 {res}" if res else ""), "ok")
+                         tr("스파 재채집 이득: 비용 {cost:,}골드 < 골드 +{v0:,.0f} ({basis}) · 순이익 {net:,.0f}", cost=cost, v0=avg[0], basis=basis, net=net)
+                         + (tr(" · 덤 {res}", res=res) if res else ""), "ok")
     if res and need:
         return SpaAdvice(cost, avg, len(use), "resources",
-                         f"스파 재채집: 골드 {-net:,.0f} 손해지만 부족한 {'·'.join(need)} 필요하면 ({res}, {basis})", "warn")
+                         tr("스파 재채집: 골드 {v0:,.0f} 손해지만 부족한 {v1} 필요하면 ({res}, {basis})", v0=-net, v1='·'.join(need), res=res, basis=basis), "warn")
     return SpaAdvice(cost, avg, len(use), "loss",
-                     f"스파 재채집 손해: 비용 {cost:,}골드 > 골드 +{avg[0]:,.0f}" + (f", {res}" if res else "")
+                     tr("스파 재채집 손해: 비용 {cost:,}골드 > 골드 +{v0:,.0f}", cost=cost, v0=avg[0]) + (f", {res}" if res else "")
                      + f" ({basis})", "neutral")

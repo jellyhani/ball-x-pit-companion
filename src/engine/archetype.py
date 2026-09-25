@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple
 
 from ..gamedata import GameData
 from ..tracking.run_state import RunState
+from ..i18n import tr
 
 # 게임 태그 → 계열 (여러 태그가 한 계열로)
 AXIS_OF_STATUS = {
@@ -22,8 +23,8 @@ AXIS_OF_STATUS = {
     "Baby Ball Spawn": "baby", "Mosquito Spawn": "baby", "Clone": "baby",
     "Lifesteal": "sustain", "Heal": "sustain",
 }
-AXIS_LABEL = {"burn": "화상", "freeze": "빙결·둔화", "bleed": "출혈", "poison": "중독·방사능", "curse": "저주·매혹·실명",
-              "baby": "베이비볼", "sustain": "흡혈·회복", "aoe": "범위 피해"}
+AXIS_LABEL = {"burn": tr("화상"), "freeze": tr("빙결·둔화"), "bleed": tr("출혈"), "poison": tr("중독·방사능"), "curse": tr("저주·매혹·실명"),
+              "baby": tr("베이비볼"), "sustain": tr("흡혈·회복"), "aoe": tr("범위 피해")}
 # 계열과 맞는 패시브 역할 (passive_value.ROLE)
 AXIS_PASSIVE_ROLE = {"aoe": "aoe", "baby": "baby", "sustain": "defense"}
 MIN_SCORE = 2.0

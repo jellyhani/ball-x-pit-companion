@@ -25,6 +25,7 @@ from .deck_plan import DeckPlan, build_plan
 from .passive_value import ROLE_LABEL, ball_effect, passive_effect
 from .archetype import AXIS_LABEL, AXIS_PASSIVE_ROLE, Archetype, axes_of, detect as detect_archetype
 from ..tracking.meta_state import MetaState
+from ..i18n import tr
 
 BASE_RULES = {"base_new_ball", "base_upgrade_ball", "base_new_passive", "base_upgrade_passive",
               "base_new_pet", "base_upgrade_pet", "pet_desc"}
@@ -57,14 +58,14 @@ class ActionEval:
     @property
     def action_text(self) -> str:
         if self.action in ("new_ball", "new_passive"):
-            return "새 볼" if self.action == "new_ball" else "새 패시브"
+            return tr("새 볼") if self.action == "new_ball" else tr("새 패시브")
         if self.action in ("upgrade_ball", "upgrade_passive"):
             if self.level_before and self.level_after:
-                return f"레벨 {self.level_before} → {self.level_after}"
+                return tr("레벨 {level_before} → {level_after}", level_before=self.level_before, level_after=self.level_after)
             if self.level_after:
-                return f"레벨 {self.level_after}로 강화"
-            return "강화"
-        return "미확인"
+                return tr("레벨 {level_after}로 강화", level_after=self.level_after)
+            return tr("강화")
+        return tr("미확인")
 
     @property
     def strong(self) -> bool:
@@ -115,16 +116,16 @@ def card_badge(rec: "Recommendation", e: ActionEval) -> str:
     v = card_verdict(rec, e)
     n = card_rank(rec, e)
     if v == "unknown" or n is None:
-        return "읽지 못함"
+        return tr("읽지 못함")
     if v == "banish":
-        return f"{n}위 · 삭제 추천"
+        return tr("{n}위 · 삭제 추천", n=n)
     if v == "best":
-        return f"1위 {rec.confidence or '추천'}"
+        return tr("1위 {v0}", v0=rec.confidence or tr("추천"))
     if v == "alt":
-        return f"{n}위 비슷함"
+        return tr("{n}위 비슷함", n=n)
     if v == "neutral":
-        return "1위 무난" if n == 1 else f"{n}위"
-    return f"{n}위 비추천"
+        return tr("1위 무난") if n == 1 else tr("{n}위", n=n)
+    return tr("{n}위 비추천", n=n)
 
 
 def card_verdict(rec: "Recommendation", e: ActionEval) -> str:
@@ -151,20 +152,20 @@ def situation_text(p: Optional[RunProgress]) -> str:
     parts = []
     hr = p.health_ratio
     if hr is not None:
-        parts.append(f"체력 {round(hr * 100)}%")
+        parts.append(tr("체력 {v0}%", v0=round(hr * 100)))
     tb = p.turns_to_boss
     nb = p.turns_to_next_boss
     if nb is not None and nb > 0:
-        parts.append(f"다음 보스 {nb}턴")
+        parts.append(tr("다음 보스 {nb}턴", nb=nb))
     elif tb is not None and tb > 0 and not p.endless:
-        parts.append(f"보스까지 {tb}턴")
+        parts.append(tr("보스까지 {tb}턴", tb=tb))
     nf = p.turns_to_fuser
     if nf is not None and nf > 0:
-        parts.append(f"융합기 {nf}턴")
+        parts.append(tr("융합기 {nf}턴", nf=nf))
     if p.max_balls and p.balls is not None:
-        parts.append(f"볼 {p.balls}/{p.max_balls}")
+        parts.append(tr("볼 {balls}/{max_balls}", balls=p.balls, max_balls=p.max_balls))
     if p.max_passives is not None and p.passives is not None:
-        parts.append(f"패시브 {p.passives}/{p.max_passives}")
+        parts.append(tr("패시브 {passives}/{max_passives}", passives=p.passives, max_passives=p.max_passives))
     return " · ".join(parts)
 
 
@@ -182,7 +183,7 @@ class Recommender:
         limitations = run.limitations(d)
         unknown = session.unknown_count
         if unknown:
-            limitations.insert(0, f"읽지 못한 카드 {unknown}장 — 확인된 선택지끼리만 비교")
+            limitations.insert(0, tr("읽지 못한 카드 {unknown}장 — 확인된 선택지끼리만 비교", unknown=unknown))
         progress = session.progress
 
         auto = [c for c in run.character_ids if d.character_rule(c).get("auto_selects_upgrades")]
@@ -192,35 +193,35 @@ class Recommender:
         evals = [self._evaluate(card, run, progress, plan) for card in session.cards]
         situation = situation_text(progress)
         if auto:
-            return Recommendation(session.session_id, version, "auto", "이 캐릭터는 강화를 자동 선택합니다",
+            return Recommendation(session.session_id, version, "auto", tr("이 캐릭터는 강화를 자동 선택합니다"),
                                   None, evals, situation=situation, plan_text=plan.text, limitations=limitations)
         known = [e for e in evals if e.evaluated]
         if not known:
-            return Recommendation(session.session_id, version, "none", "선택지를 읽지 못했습니다",
-                                  None, evals, reroll_status="unknown", reroll_text="새로고침 판단 보류",
+            return Recommendation(session.session_id, version, "none", tr("선택지를 읽지 못했습니다"),
+                                  None, evals, reroll_status="unknown", reroll_text=tr("새로고침 판단 보류"),
                                   situation=situation, plan_text=plan.text, limitations=limitations)
 
         ranked = sorted(known, key=lambda e: (-e.score, e.card.index))
         best = ranked[0]
         close = [e for e in ranked[1:] if best.score - e.score < CLOSE_MARGIN]
         if not any(e.strong for e in known):
-            status, headline = "hold", "뚜렷한 차이 없음"
-            limitations.append("현재 조합과 연결되는 선택지를 찾지 못함")
+            status, headline = "hold", tr("뚜렷한 차이 없음")
+            limitations.append(tr("현재 조합과 연결되는 선택지를 찾지 못함"))
         elif close:
-            status, headline = "close", f"{best.card.position} 추천 · 차이 작음"
+            status, headline = "close", tr("{position} 추천 · 차이 작음", position=best.card.position)
         else:
-            status, headline = "recommend", f"{best.card.position} 선택 추천"
+            status, headline = "recommend", tr("{position} 선택 추천", position=best.card.position)
         if len(known) == 1 and unknown:
-            status, headline = ("recommend", f"{best.card.position} 선택 추천") if best.strong else ("hold", "판단 보류")
+            status, headline = ("recommend", tr("{position} 선택 추천", position=best.card.position)) if best.strong else ("hold", tr("판단 보류"))
 
         margin = best.score - ranked[1].score if len(ranked) > 1 else 99.0
         decisive = any(r.rule_id in ("evo_ready", "passive_recipe_ready") for r in best.reasons)
         if status == "hold":
-            confidence = "근거 약함"
+            confidence = tr("근거 약함")
         elif status == "close":
-            confidence = "근소"
+            confidence = tr("근소")
         else:
-            confidence = "확실" if margin >= 15 or decisive else "추천"
+            confidence = tr("확실") if margin >= 15 or decisive else tr("추천")
         odds = self.reroll_odds(session, plan, run)
         rs, rt = self._reroll(session, known, unknown, status, odds)
         banish_card, banish_text = self._banish(session, known, best if status != "hold" else None, run, plan)
@@ -254,20 +255,20 @@ class Recommender:
 
         base = {"new_ball": 6, "upgrade_ball": 10, "new_passive": 5, "upgrade_passive": 6,
                 "new_pet": 5, "upgrade_pet": 5}[action]
-        base_text = {"new_ball": "새 볼 획득", "upgrade_ball": "보유한 볼 강화",
-                     "new_passive": "새 패시브 획득", "upgrade_passive": "보유한 패시브 강화",
-                     "new_pet": "펫 강화", "upgrade_pet": "펫 강화"}[action]
+        base_text = {"new_ball": tr("새 볼 획득"), "upgrade_ball": tr("보유한 볼 강화"),
+                     "new_passive": tr("새 패시브 획득"), "upgrade_passive": tr("보유한 패시브 강화"),
+                     "new_pet": tr("펫 강화"), "upgrade_pet": tr("펫 강화")}[action]
         if kind == "pet":
             # 펫 강화는 수치·기록 비교 근거가 없다 — 기본값만 두고 설명문을 그대로 보여 준다
             ev.reasons.append(Reason(f"base_{action}", base_text, base))
             if item.desc_ko:
-                ev.reasons.append(Reason("pet_desc", item.desc_ko, 0.1, "펫"))
+                ev.reasons.append(Reason("pet_desc", item.desc_ko, 0.1, tr("펫")))
             ev.score = base
             return ev
         ev.reasons.append(Reason(f"base_{action}", base_text, base))
         if not upgrade and owned is not None:
-            ev.warnings.append(Reason("duplicate_copy", f"이미 {owned.copies}개 보유 — 레벨 1 복사본을 하나 더 얻음", -3,
-                                      "복사본"))
+            ev.warnings.append(Reason("duplicate_copy", tr("이미 {copies}개 보유 — 레벨 1 복사본을 하나 더 얻음", copies=owned.copies), -3,
+                                      tr("복사본")))
 
         self._recipes(ev, item.id, kind, after, run)
         self._game_hints(ev, card, run)
@@ -297,13 +298,13 @@ class Recommender:
         if kind == "ball":
             shared = [a for a in axes_of(self.data, item_id) if a in arch.top]
             if shared:
-                ev.reasons.append(Reason("archetype", f"덱 계열({arch.text})과 같은 {AXIS_LABEL[shared[0]]} 계열",
-                                         3 if upgrade else 4, f"{AXIS_LABEL[shared[0]]} 계열"))
+                ev.reasons.append(Reason("archetype", tr("덱 계열({text})과 같은 {v0} 계열", text=arch.text, v0=AXIS_LABEL[shared[0]]),
+                                         3 if upgrade else 4, tr("{v0} 계열", v0=AXIS_LABEL[shared[0]])))
         elif kind == "passive":
             pe = passive_effect(self.data.level_props.get(item_id), ev.level_before if upgrade else None, ev.level_after)
             if pe is not None and any(AXIS_PASSIVE_ROLE.get(a) == pe.role for a in arch.top):
-                ev.reasons.append(Reason("archetype_passive", f"덱 계열({arch.text})을 키우는 패시브 ({pe.text})", 3,
-                                         "계열 강화"))
+                ev.reasons.append(Reason("archetype_passive", tr("덱 계열({text})을 키우는 패시브 ({text2})", text=arch.text, text2=pe.text), 3,
+                                         tr("계열 강화")))
 
     def _ball_effect(self, ev: ActionEval, item_id: str, upgrade: bool):
         """볼 강화로 바뀌는 게임 수치 (피해 범위·지속·중첩·연쇄 수)."""
@@ -320,27 +321,27 @@ class Recommender:
         ev.effect = pe.text
         if upgrade and pe.gain is not None:
             if pe.gain <= 0.05:
-                ev.warnings.append(Reason("passive_gain_small", f"이번 강화로 주 효과가 거의 늘지 않음 ({pe.text})", -4,
-                                          "강화 효과 작음"))
+                ev.warnings.append(Reason("passive_gain_small", tr("이번 강화로 주 효과가 거의 늘지 않음 ({text})", text=pe.text), -4,
+                                          tr("강화 효과 작음")))
             elif pe.gain >= 0.3:
-                ev.reasons.append(Reason("passive_gain", f"강화 효과 큼: {pe.text}", min(6, 2 + round(4 * pe.gain)),
-                                         "강화 효과 큼"))
+                ev.reasons.append(Reason("passive_gain", tr("강화 효과 큼: {text}", text=pe.text), min(6, 2 + round(4 * pe.gain)),
+                                         tr("강화 효과 큼")))
         hr = p.health_ratio if p else None
         if pe.role == "defense" and hr is not None and hr < 0.5:
-            ev.reasons.append(Reason("passive_defense_low_hp", f"체력 {round(hr * 100)}% — 생존 패시브 ({pe.text})",
-                                     7 if hr < 0.35 else 4, "생존"))
+            ev.reasons.append(Reason("passive_defense_low_hp", tr("체력 {v0}% — 생존 패시브 ({text})", v0=round(hr * 100), text=pe.text),
+                                     7 if hr < 0.35 else 4, tr("생존")))
         if pe.role == "aoe":
             aoe = [i for i in run.owned if i.startswith("ball:") and d.item(i) is not None
                    and "AOE" in d.status_tags(i)[1]]
             if len(aoe) >= 2:
-                ev.reasons.append(Reason("passive_aoe_balls", f"보유한 범위 피해 볼 {len(aoe)}개를 함께 강화",
-                                         2 * min(len(aoe), 3), "범위 볼 연계"))
+                ev.reasons.append(Reason("passive_aoe_balls", tr("보유한 범위 피해 볼 {v0}개를 함께 강화", v0=len(aoe)),
+                                         2 * min(len(aoe), 3), tr("범위 볼 연계")))
         tb = None
         if p is not None:
             tb = p.turns_to_next_boss if p.turns_to_next_boss is not None else p.turns_to_boss
         if pe.role == "power" and tb is not None and 0 < tb <= 10:
-            ev.reasons.append(Reason("passive_power_boss", f"보스까지 {tb}턴 — {ROLE_LABEL['power']} 패시브", 3,
-                                     "보스 대비"))
+            ev.reasons.append(Reason("passive_power_boss", tr("보스까지 {tb}턴 — {v0} 패시브", tb=tb, v0=ROLE_LABEL['power']), 3,
+                                     tr("보스 대비")))
 
     def _recipes(self, ev: ActionEval, item_id: str, kind: str, after: Optional[int], run: RunState):
         d = self.data
@@ -355,29 +356,29 @@ class Recommender:
             owned_others = [run.owned.get(o) for o in others]
             result = d.name(r.result)
             names = " + ".join(d.name(x) for x in r.ingredients)
-            src = "" if r.source == "game" else ", 위키 레시피"
+            src = "" if r.source == "game" else tr(", 위키 레시피")
             if others and all(owned_others):
                 others_max = [o.at_max is True or (known_max and o.level is not None and o.level >= maxlv)
                               for o in owned_others]
                 if kind == "passive":
-                    cand = Reason("passive_recipe_ready", f"{result} 재료가 모두 모임 (레벨 조건 미확인{src})", 16,
-                                  f"{result} 재료")
+                    cand = Reason("passive_recipe_ready", tr("{result} 재료가 모두 모임 (레벨 조건 미확인{src})", result=result, src=src), 16,
+                                  tr("{result} 재료", result=result))
                 elif known_max and after is not None and all(o.level is not None for o in owned_others):
                     remaining = (maxlv - after) + sum(max(0, maxlv - o.level) for o in owned_others)
                     if remaining <= 0:
-                        cand = Reason("evo_ready", f"{result} 진화 조건 충족 ({names} 최대 레벨)", 30,
-                                      f"{result} 진화 가능")
+                        cand = Reason("evo_ready", tr("{result} 진화 조건 충족 ({names} 최대 레벨)", result=result, names=names), 30,
+                                      tr("{result} 진화 가능", result=result))
                     else:
-                        cand = Reason("evo_path", f"{result} 진화까지 강화 {remaining}번 남음 ({names})",
-                                      max(8.0, 22.0 - 4 * remaining), f"{result} 진화 경로")
+                        cand = Reason("evo_path", tr("{result} 진화까지 강화 {remaining}번 남음 ({names})", result=result, remaining=remaining, names=names),
+                                      max(8.0, 22.0 - 4 * remaining), tr("{result} 진화 경로", result=result))
                 elif all(others_max):
-                    cand = Reason("evo_partner_max", f"{result} 재료 — 짝인 {' + '.join(d.name(o) for o in others)}은(는) 최대 레벨",
-                                  16, f"{result} 진화 경로")
+                    cand = Reason("evo_partner_max", tr("{result} 재료 — 짝인 {v0}은(는) 최대 레벨", result=result, v0=' + '.join(d.name(o) for o in others)),
+                                  16, tr("{result} 진화 경로", result=result))
                 else:
-                    cand = Reason("evo_path_level_unknown", f"{result} 진화 재료 ({names}{src})", 12,
-                                  f"{result} 진화 경로")
+                    cand = Reason("evo_path_level_unknown", tr("{result} 진화 재료 ({names}{src})", result=result, names=names, src=src), 12,
+                                  tr("{result} 진화 경로", result=result))
             elif any(owned_others) and len(others) >= 2:
-                cand = Reason("evo_partial", f"{result} 재료 일부 보유", 5, f"{result} 재료 일부")
+                cand = Reason("evo_partial", tr("{result} 재료 일부 보유", result=result), 5, tr("{result} 재료 일부", result=result))
             else:
                 continue
             if best is None or cand.weight > best.weight:
@@ -390,8 +391,8 @@ class Recommender:
             ev.reasons.append(best)
             if extra:
                 names = ", ".join(dict.fromkeys(extra))
-                ev.reasons.append(Reason("evo_multi", f"{names} 진화에도 쓰임", min(6, 2 * len(extra)),
-                                         f"{names} 경로"))
+                ev.reasons.append(Reason("evo_multi", tr("{names} 진화에도 쓰임", names=names), min(6, 2 * len(extra)),
+                                         tr("{names} 경로", names=names)))
 
     def _game_hints(self, ev: ActionEval, card: Card, run: RunState):
         """게임 연동으로 받은 게임 자체 판정: 보유 볼과의 시너지(카드 설명의 '시너지 장비'), 자동 선택 AI 기피."""
@@ -399,10 +400,10 @@ class Recommender:
         partners = [s for s in card.synergy if s != card.item_id and s in run.owned]
         if partners and not any(r.rule_id.startswith("evo") for r in ev.reasons):
             names = ", ".join(d.name(p) for p in partners[:2])
-            ev.reasons.append(Reason("game_synergy", f"보유한 {names}와 시너지 (게임 판정)",
-                                     6 + 2 * min(len(partners) - 1, 2), "시너지"))
+            ev.reasons.append(Reason("game_synergy", tr("보유한 {names}와 시너지 (게임 판정)", names=names),
+                                     6 + 2 * min(len(partners) - 1, 2), tr("시너지")))
         if card.ai_pick is False:
-            ev.warnings.append(Reason("game_ai_avoid", "게임 자동 선택 AI는 고르지 않는 항목", -3, "AI 비선호"))
+            ev.warnings.append(Reason("game_ai_avoid", tr("게임 자동 선택 AI는 고르지 않는 항목"), -3, tr("AI 비선호")))
 
     def _character(self, ev: ActionEval, item, kind: str, upgrade: bool, run: RunState):
         d = self.data
@@ -412,17 +413,17 @@ class Recommender:
                 continue
             cname = d.name(cid)
             if [t for t in rule.get("reduces_tags", []) if d.has_tag(item.id, t)]:
-                ev.warnings.append(Reason("char_reduces", f"{cname}: {rule['reason']} — 효과가 줄거나 없을 수 있음", -18,
-                                          "캐릭터와 안 맞음"))
+                ev.warnings.append(Reason("char_reduces", tr("{cname}: {v0} — 효과가 줄거나 없을 수 있음", cname=cname, v0=rule['reason']), -18,
+                                          tr("캐릭터와 안 맞음")))
             st_, dm_ = d.status_tags(item.id)
             if rule.get("boosts_wiki_status_or_aoe"):
                 if st_ or "AOE" in dm_:
-                    ev.reasons.append(Reason("char_sisyphus_boost", f"{cname}: 범위·상태 이상 피해 4배", 8, "캐릭터 연계"))
+                    ev.reasons.append(Reason("char_sisyphus_boost", tr("{cname}: 범위·상태 이상 피해 4배", cname=cname), 8, tr("캐릭터 연계")))
                 elif kind == "ball":
-                    ev.warnings.append(Reason("char_sisyphus_direct", f"{cname}: 볼 직접 피해가 없음", -8, "직접 피해 없음"))
+                    ev.warnings.append(Reason("char_sisyphus_direct", tr("{cname}: 볼 직접 피해가 없음", cname=cname), -8, tr("직접 피해 없음")))
             if rule.get("boosts_wiki_on_hit_status") and kind == "ball" and st_:
-                ev.reasons.append(Reason("char_fast_fire", f"{cname}: 발사 속도 두 배로 타격 효과가 자주 발동", 5,
-                                         "발사 속도 연계"))
+                ev.reasons.append(Reason("char_fast_fire", tr("{cname}: 발사 속도 두 배로 타격 효과가 자주 발동", cname=cname), 5,
+                                         tr("발사 속도 연계")))
 
     STATUS_AXES = ("burn", "freeze", "bleed", "poison", "curse")
 
@@ -465,9 +466,9 @@ class Recommender:
             worst = min(hits)
             cname = self.data.name(cid)
             if best[0] > 0:
-                ev.reasons.append(Reason("char_fit", f"{cname} 궁합: {st.get('why', '')}", float(best[0]), "캐릭터 궁합"))
+                ev.reasons.append(Reason("char_fit", tr("{cname} 궁합: {v0}", cname=cname, v0=st.get('why', '')), float(best[0]), tr("캐릭터 궁합")))
             if worst[0] < 0:
-                ev.warnings.append(Reason("char_misfit", f"{cname}: {st.get('why', '')}", float(worst[0]), "캐릭터와 덜 맞음"))
+                ev.warnings.append(Reason("char_misfit", f"{cname}: {st.get('why', '')}", float(worst[0]), tr("캐릭터와 덜 맞음")))
 
     TIER_W = {"S": 3, "A": 1.5, "B": 0, "C": -1, "D": -1.5}   # 의견이라 작게: 비슷할 때 가르는 정도
 
@@ -485,23 +486,23 @@ class Recommender:
         if tiers:
             tier, res = min(tiers, key=lambda t: "SABCD".index(t[0]))
             if self.TIER_W[tier] > 0:
-                ev.reasons.append(Reason("community_evo_tier", f"커뮤니티 평가: {d.name(res)} 진화는 {tier}티어",
-                                         float(self.TIER_W[tier]), f"{tier}티어 진화"))
+                ev.reasons.append(Reason("community_evo_tier", tr("커뮤니티 평가: {v0} 진화는 {tier}티어", v0=d.name(res), tier=tier),
+                                         float(self.TIER_W[tier]), tr("{tier}티어 진화", tier=tier)))
         else:
             tier = d.community_tier(item_id)
             if tier and self.TIER_W[tier] > 0:
-                ev.reasons.append(Reason("community_tier", f"커뮤니티 평가 {tier}티어", float(self.TIER_W[tier]),
-                                         f"{tier}티어"))
+                ev.reasons.append(Reason("community_tier", tr("커뮤니티 평가 {tier}티어", tier=tier), float(self.TIER_W[tier]),
+                                         tr("{tier}티어", tier=tier)))
             elif tier and self.TIER_W[tier] < 0 and not ev.linked and not any(
                     d.community_tier(r.result) in ("S", "A") for r in d.recipes_using(item_id)):
-                ev.warnings.append(Reason("community_tier_low", f"커뮤니티 평가 {tier}티어 (진화 재료가 아니면 약함)",
-                                          float(self.TIER_W[tier]), f"{tier}티어"))
+                ev.warnings.append(Reason("community_tier_low", tr("커뮤니티 평가 {tier}티어 (진화 재료가 아니면 약함)", tier=tier),
+                                          float(self.TIER_W[tier]), tr("{tier}티어", tier=tier)))
         for cid in run.character_ids:
             core, why = d.char_build_items(cid)
             hit = item_id in core or any(res in core for res in results)
             if hit:
-                ev.reasons.append(Reason("char_build", f"{d.name(cid)} 추천 빌드 핵심 (커뮤니티): {why}", 5.0,
-                                         "캐릭터 추천 빌드"))
+                ev.reasons.append(Reason("char_build", tr("{v0} 추천 빌드 핵심 (커뮤니티): {why}", v0=d.name(cid), why=why), 5.0,
+                                         tr("캐릭터 추천 빌드")))
                 break
 
     def _char_history(self, ev: ActionEval, item_id: str, run: RunState):
@@ -519,11 +520,11 @@ class Recommender:
         rate = sum(h.result == "보스 격퇴" for h in have) / len(have)
         base = sum(h.result == "보스 격퇴" for h in runs) / len(runs)
         cname = self.data.name(cid)
-        text = f"내 기록({cname}): 이 항목을 가진 런 보스 격퇴 {round(rate * 100)}% ({len(have)}번, 이 캐릭터 평균 {round(base * 100)}%)"
+        text = tr("내 기록({cname}): 이 항목을 가진 런 보스 격퇴 {v0}% ({v1}번, 이 캐릭터 평균 {v2}%)", cname=cname, v0=round(rate * 100), v1=len(have), v2=round(base * 100))
         if rate >= base + 0.2:
-            ev.reasons.append(Reason("char_record_good", text, 4, "이 캐릭터 기록 좋음"))
+            ev.reasons.append(Reason("char_record_good", text, 4, tr("이 캐릭터 기록 좋음")))
         elif rate <= base - 0.2:
-            ev.warnings.append(Reason("char_record_bad", text, -3, "이 캐릭터 기록 나쁨"))
+            ev.warnings.append(Reason("char_record_bad", text, -3, tr("이 캐릭터 기록 나쁨")))
 
     def _support(self, ev: ActionEval, item_id: str, run: RunState, progress: Optional[RunProgress]):
         d = self.data
@@ -532,19 +533,19 @@ class Recommender:
         hr = progress.health_ratio if progress else None
         if d.has_tag(item_id, "heal_source"):
             if hr is not None and hr < 0.35:
-                ev.reasons.append(Reason("heal_low_hp", f"체력 {round(hr * 100)}% — 회복 수단 우선", 12, "회복"))
+                ev.reasons.append(Reason("heal_low_hp", tr("체력 {v0}% — 회복 수단 우선", v0=round(hr * 100)), 12, tr("회복")))
             elif run.owned_complete and not has_heal:
-                ev.reasons.append(Reason("heal_gap", "현재 회복 수단이 없음", 7, "회복 보완"))
+                ev.reasons.append(Reason("heal_gap", tr("현재 회복 수단이 없음"), 7, tr("회복 보완")))
         if d.has_tag(item_id, "needs_healing") and run.owned_complete and not has_heal:
-            ev.warnings.append(Reason("heal_needed", "회복 수단이 없어 발동하기 어려움", -6, "발동 어려움"))
+            ev.warnings.append(Reason("heal_needed", tr("회복 수단이 없어 발동하기 어려움"), -6, tr("발동 어려움")))
         reduced = any("baby_ball_source" in d.character_rule(c).get("reduces_tags", []) for c in run.character_ids)
         if not reduced:
             sources = sum(1 for i in owned_ids if d.has_tag(i, "baby_ball_source"))
             if d.has_tag(item_id, "baby_ball_scaling") and sources:
-                ev.reasons.append(Reason("baby_synergy", f"보유한 베이비볼 생성 항목 {sources}개와 연계",
-                                         4 * min(sources, 3), "베이비볼 연계"))
+                ev.reasons.append(Reason("baby_synergy", tr("보유한 베이비볼 생성 항목 {sources}개와 연계", sources=sources),
+                                         4 * min(sources, 3), tr("베이비볼 연계")))
             elif d.has_tag(item_id, "baby_ball_source") and any(d.has_tag(i, "baby_ball_scaling") for i in owned_ids):
-                ev.reasons.append(Reason("baby_synergy", "보유한 베이비볼 강화 패시브와 연계", 5, "베이비볼 연계"))
+                ev.reasons.append(Reason("baby_synergy", tr("보유한 베이비볼 강화 패시브와 연계"), 5, tr("베이비볼 연계")))
 
     def _progress(self, ev: ActionEval, kind: str, upgrade: bool, p: Optional[RunProgress]):
         """런 진행 상황에 따른 규칙 (게임 연동에서 받은 체력·턴·칸 수)."""
@@ -558,20 +559,20 @@ class Recommender:
             if cap is not None and have is not None:
                 free = cap - have
                 if free <= 0:
-                    ev.warnings.append(Reason("slot_full", f"{'볼' if kind == 'ball' else '패시브'} 칸이 가득 참 ({have}/{cap})",
-                                              -25, "칸 없음"))
+                    ev.warnings.append(Reason("slot_full", tr("{v0} 칸이 가득 참 ({have}/{cap})", v0=tr("볼") if kind == 'ball' else tr("패시브"), have=have, cap=cap),
+                                              -25, tr("칸 없음")))
                 elif kind == "ball" and have <= 2:
                     # 실제 플레이 확인: 볼 1~2개로 강화만 거듭하면 턴 30대에 적이 쌓여 전멸했다
-                    ev.reasons.append(Reason("slot_fill_few", f"볼이 {have}개뿐 — 볼 수를 늘려야 여러 적을 동시에 처리",
-                                             9, "볼 수 늘리기"))
+                    ev.reasons.append(Reason("slot_fill_few", tr("볼이 {have}개뿐 — 볼 수를 늘려야 여러 적을 동시에 처리", have=have),
+                                             9, tr("볼 수 늘리기")))
                 elif kind == "ball" and early:
-                    ev.reasons.append(Reason("slot_fill_early", f"빈 볼 칸 {free}개 — 초반엔 볼 수를 늘리면 화력이 오름", 5,
-                                             "빈 칸 채우기"))
+                    ev.reasons.append(Reason("slot_fill_early", tr("빈 볼 칸 {free}개 — 초반엔 볼 수를 늘리면 화력이 오름", free=free), 5,
+                                             tr("빈 칸 채우기")))
                 elif kind == "passive" and free >= 2:
-                    ev.reasons.append(Reason("slot_fill_passive", f"빈 패시브 칸 {free}개", 2, "빈 칸"))
+                    ev.reasons.append(Reason("slot_fill_passive", tr("빈 패시브 칸 {free}개", free=free), 2, tr("빈 칸")))
         tb = p.turns_to_next_boss if p.turns_to_next_boss is not None else p.turns_to_boss
         if upgrade and kind == "ball" and tb is not None and 0 < tb <= max(15, int((p.final_boss_turn or 0) * 0.12)):
-            ev.reasons.append(Reason("boss_soon", f"보스까지 {tb}턴 — 보유 볼 강화로 바로 화력 확보", 4, "보스 대비"))
+            ev.reasons.append(Reason("boss_soon", tr("보스까지 {tb}턴 — 보유 볼 강화로 바로 화력 확보", tb=tb), 4, tr("보스 대비")))
 
     def _performance(self, ev: ActionEval, item_id: str, kind: str, upgrade: bool, run: RunState):
         """실제 성능: 이번 런에서 잰 피해(게임 통계)와 내 누적 기록(게임 세이브)."""
@@ -587,10 +588,10 @@ class Recommender:
                 return      # 실제 플레이 확인: 볼이 하나면 피해 100% 라 '주력' 판단이 무의미하다 (그 볼만 계속 강화하다 전멸)
             pct, rank = round(share * 100), run.damage_rank(item_id)
             if share >= 0.3:
-                ev.reasons.append(Reason("run_carry", f"이번 런 피해 {rank}위 ({pct}%) — 주력 볼을 더 키움",
-                                         4 + round(10 * share), "주력 볼"))
+                ev.reasons.append(Reason("run_carry", tr("이번 런 피해 {rank}위 ({pct}%) — 주력 볼을 더 키움", rank=rank, pct=pct),
+                                         4 + round(10 * share), tr("주력 볼")))
             elif share < 0.08 and not ev.linked:
-                ev.warnings.append(Reason("run_weak", f"이번 런 피해 {pct}% — 기여가 작은 볼", -3, "피해 적음"))
+                ev.warnings.append(Reason("run_weak", tr("이번 런 피해 {pct}% — 기여가 작은 볼", pct=pct), -3, tr("피해 적음")))
             return
         rec = self.meta.records.get(item_id) if self.meta else None
         rank = self.meta.damage_rank(item_id) if self.meta else None
@@ -598,10 +599,10 @@ class Recommender:
             return
         r, n = rank
         if r <= max(1, n // 4):
-            ev.reasons.append(Reason("my_record_top", f"내 기록: 런당 평균 피해 {r}위 / {n}개 볼 (가진 런 {rec.obtained}번)",
-                                     4, "내 기록 상위"))
+            ev.reasons.append(Reason("my_record_top", tr("내 기록: 런당 평균 피해 {r}위 / {n}개 볼 (가진 런 {obtained}번)", r=r, n=n, obtained=rec.obtained),
+                                     4, tr("내 기록 상위")))
         elif r > n - max(1, n // 4):
-            ev.warnings.append(Reason("my_record_low", f"내 기록: 런당 평균 피해 {r}위 / {n}개 볼", -2, "내 기록 하위"))
+            ev.warnings.append(Reason("my_record_low", tr("내 기록: 런당 평균 피해 {r}위 / {n}개 볼", r=r, n=n), -2, tr("내 기록 하위")))
 
     def _passive_performance(self, ev: ActionEval, item_id: str, upgrade: bool, run: RunState):
         """패시브: 이번 런 추가 피해(게임 통계, 볼 피해 대비)와 내 기록의 '가진 런 완료율' 순위."""
@@ -610,18 +611,18 @@ class Recommender:
         if upgrade and bonus and balls >= 2000:
             ratio = bonus / balls
             if ratio >= 0.1:
-                ev.reasons.append(Reason("passive_dmg", f"이번 런 추가 피해 {round(ratio * 100)}% (볼 피해 대비)",
-                                         min(8, 3 + round(10 * ratio)), "추가 피해 큼"))
+                ev.reasons.append(Reason("passive_dmg", tr("이번 런 추가 피해 {v0}% (볼 피해 대비)", v0=round(ratio * 100)),
+                                         min(8, 3 + round(10 * ratio)), tr("추가 피해 큼")))
         rank = self.meta.completion_rank(item_id) if self.meta else None
         if rank is None:
             return
         r, n, rate = rank
         if r <= max(1, n // 4):
-            ev.reasons.append(Reason("my_record_clear", f"내 기록: 가진 런 완료율 {round(rate * 100)}% ({r}위 / {n})",
-                                     3, "내 기록 상위"))
+            ev.reasons.append(Reason("my_record_clear", tr("내 기록: 가진 런 완료율 {v0}% ({r}위 / {n})", v0=round(rate * 100), r=r, n=n),
+                                     3, tr("내 기록 상위")))
         elif r > n - max(1, n // 4):
-            ev.warnings.append(Reason("my_record_clear_low", f"내 기록: 가진 런 완료율 {round(rate * 100)}% ({r}위 / {n})",
-                                      -2, "내 기록 하위"))
+            ev.warnings.append(Reason("my_record_clear_low", tr("내 기록: 가진 런 완료율 {v0}% ({r}위 / {n})", v0=round(rate * 100), r=r, n=n),
+                                      -2, tr("내 기록 하위")))
 
     def reroll_odds(self, s: ChoiceSession, plan: DeckPlan, run: RunState) -> Optional[Tuple[float, int, int]]:
         """새로고침하면 목표 카드(목표 진화의 빠진 재료, 핵심·주력 항목 강화)가 한 장 이상 나올 확률.
@@ -677,7 +678,7 @@ class Recommender:
             if any(name in r.text for r in best.reasons):
                 target = ""
         arch = getattr(self, "_arch", None)
-        arch_text = f"덱 계열: {arch.text}" if arch and arch.top else ""
+        arch_text = tr("덱 계열: {text}", text=arch.text) if arch and arch.top else ""
         return " · ".join(x for x in (target, arch_text, plan.phase_text) if x)
 
     def _plan(self, ev: ActionEval, kind: str, upgrade: bool, plan: DeckPlan):
@@ -685,53 +686,53 @@ class Recommender:
         d = self.data
         if upgrade and kind == "ball" and d.max_level_known("ball") and ev.level_after == d.max_level("ball") \
                 and not any(r.rule_id == "evo_ready" for r in ev.reasons):
-            ev.reasons.append(Reason("reach_max_fusion", "이번 강화로 최대 레벨 — 융합 화면에서 다른 최대 레벨 볼과 합칠 수 있음",
-                                     6, "최대 레벨 달성"))
+            ev.reasons.append(Reason("reach_max_fusion", tr("이번 강화로 최대 레벨 — 융합 화면에서 다른 최대 레벨 볼과 합칠 수 있음"),
+                                     6, tr("최대 레벨 달성")))
         if plan.phase == "endless":
             if upgrade:
-                ev.reasons.append(Reason("endless_upgrade", "무한의 심연: 적이 계속 강해져 새 항목보다 보유 항목 강화가 오래 감",
-                                         5, "강화 누적"))
+                ev.reasons.append(Reason("endless_upgrade", tr("무한의 심연: 적이 계속 강해져 새 항목보다 보유 항목 강화가 오래 감"),
+                                         5, tr("강화 누적")))
             elif not ev.linked:
-                ev.warnings.append(Reason("endless_unlinked", "무한의 심연: 진화로 이어지지 않는 새 항목은 가치가 낮음",
-                                          -4, "덱과 연결 없음"))
+                ev.warnings.append(Reason("endless_unlinked", tr("무한의 심연: 진화로 이어지지 않는 새 항목은 가치가 낮음"),
+                                          -4, tr("덱과 연결 없음")))
             return
         free = plan.free_slots(kind)
         if not upgrade and free == 1 and not ev.linked:
-            what = "볼" if kind == "ball" else "패시브"
-            ev.warnings.append(Reason("last_slot", f"마지막 {what} 칸 — 진화로 이어지는 {what}에 남겨 두는 편이 나음",
-                                      -5 if kind == "ball" else -3, "마지막 칸"))
+            what = tr("볼") if kind == "ball" else tr("패시브")
+            ev.warnings.append(Reason("last_slot", tr("마지막 {what} 칸 — 진화로 이어지는 {what2}에 남겨 두는 편이 나음", what=what, what2=what),
+                                      -5 if kind == "ball" else -3, tr("마지막 칸")))
 
     # ---- 새로고침·삭제 ----
     def _reroll(self, s: ChoiceSession, known: List[ActionEval], unknown: int, status: str,
                 odds: Optional[Tuple[float, int, int]] = None):
         can = s.can_reroll
         if s.free_rerolls is not None:
-            price = f"무료 {s.free_rerolls}회 남음"
+            price = tr("무료 {free_rerolls}회 남음", free_rerolls=s.free_rerolls)
         elif s.reroll_cost is not None:
-            price = f"{s.reroll_cost}골드" + (f", 보유 {s.gold}골드" if s.gold is not None else ", 보유 골드 미확인")
+            price = tr("{reroll_cost}골드", reroll_cost=s.reroll_cost) + (tr(", 보유 {gold}골드", gold=s.gold) if s.gold is not None else tr(", 보유 골드 미확인"))
         else:
-            price = "비용 미확인"
+            price = tr("비용 미확인")
         if can is False:
-            return "none", f"새로고침 불가 — {price}"
+            return "none", tr("새로고침 불가 — {price}", price=price)
         if unknown:
-            return "unknown", "새로고침 판단 보류 — 읽지 못한 카드가 있음"
+            return "unknown", tr("새로고침 판단 보류 — 읽지 못한 카드가 있음")
         weak = status == "hold" or all(e.score < 8 for e in known)
         if not weak:
-            return "keep", "새로고침 불필요 — 조합에 이어지는 선택지가 있음"
+            return "keep", tr("새로고침 불필요 — 조합에 이어지는 선택지가 있음")
         chance = ""
         if odds is not None:
             p, total, k = odds
             if k == 0:
-                return "keep", f"새로고침해도 목표 카드가 후보에 없음 (후보 {total}장) — {price}"
-            basis = "관측 보정" if self.draw_weights else "추정"
-            chance = f" · 목표 카드 나올 확률 약 {round(p * 100)}% (후보 {total}장 중 {k}장, {basis})"
+                return "keep", tr("새로고침해도 목표 카드가 후보에 없음 (후보 {total}장) — {price}", total=total, price=price)
+            basis = tr("관측 보정") if self.draw_weights else tr("추정")
+            chance = tr(" · 목표 카드 나올 확률 약 {v0}% (후보 {total}장 중 {k}장, {basis})", v0=round(p * 100), total=total, k=k, basis=basis)
         if can is None:
-            return "consider", f"새로고침 검토 — {price}{chance}"
+            return "consider", tr("새로고침 검토 — {price}{chance}", price=price, chance=chance)
         if s.free_rerolls is None and s.gold and s.reroll_cost and s.reroll_cost > s.gold * 0.5:
-            return "keep", f"새로고침 아껴 두기 — {price} (비용이 보유 골드의 절반 이상){chance}"
+            return "keep", tr("새로고침 아껴 두기 — {price} (비용이 보유 골드의 절반 이상){chance}", price=price, chance=chance)
         if odds is not None:
-            return "consider", f"새로고침 고려 — {price}{chance}"
-        return "consider", f"새로고침 고려 — {price} (다음 선택지는 예측 불가)"
+            return "consider", tr("새로고침 고려 — {price}{chance}", price=price, chance=chance)
+        return "consider", tr("새로고침 고려 — {price} (다음 선택지는 예측 불가)", price=price)
 
     BANISH_WEIGHTS = {"slot_full": 3, "char_reduces": 3, "char_sisyphus_direct": 2, "endless_unlinked": 2,
                       "last_slot": 2, "heal_needed": 1, "game_ai_avoid": 1, "duplicate_copy": 1}
@@ -768,6 +769,5 @@ class Recommender:
             # 셋 다 똑같이 쓸모없으면 하나를 고를 근거가 없다 — 드문 삭제 대신 새로고침이 맞다
             return None, ""
         why = bad[0].text
-        more = f" · 이번 런 {seen}번째 등장" if seen >= 2 else ""
-        return e.card, (f"삭제 추천: {self.data.name(e.card.item_id)} ({e.card.position}) — {why}{more} · "
-                        f"삭제 {s.banish_left}회 남음")
+        more = tr(" · 이번 런 {seen}번째 등장", seen=seen) if seen >= 2 else ""
+        return e.card, (tr("삭제 추천: {v0} ({position}) — {why}{more} · 삭제 {banish_left}회 남음", v0=self.data.name(e.card.item_id), position=e.card.position, why=why, more=more, banish_left=s.banish_left))

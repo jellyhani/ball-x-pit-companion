@@ -41,7 +41,7 @@ class Tray(QSystemTrayIcon):
 
     def __init__(self):
         super().__init__(app_icon())
-        self.setToolTip("BALL x PIT 도우미")
+        self.setToolTip(tr("BALL x PIT 도우미"))
         menu = QMenu()
         for text, sig in ((tr("창 열기") + "  (F10)", self.open_requested),
                           (tr("HUD 숨기기 / 보이기") + "  (F9)", self.hud_toggle_requested),

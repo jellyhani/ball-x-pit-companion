@@ -28,6 +28,8 @@ from typing import List
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from ..i18n import tr
+
 log = logging.getLogger(__name__)
 
 DEFAULT_LOG_DIR = os.path.join(os.path.expanduser("~"), "AppData", "LocalLow", "Kenny Sun", "BALL x PIT")
@@ -151,7 +153,7 @@ class PlayerLogWatcher(QObject):
     def _initial_sync(self):
         if not os.path.exists(self.path):
             self.available = False
-            self.status_changed.emit("게임 로그 없음 (게임을 한 번 실행하면 생성됩니다)")
+            self.status_changed.emit(tr("게임 로그 없음 (게임을 한 번 실행하면 생성됩니다)"))
             self.synced.emit("unknown", "")
             return
         self.available = True
@@ -159,7 +161,7 @@ class PlayerLogWatcher(QObject):
         events = self._parser.feed(self._read_from(0))
         self.phase = summarize_phase(events)
         self.game_version = next((e.value for e in reversed(events) if e.kind == "version"), "")
-        self.status_changed.emit("게임 로그 연결됨")
+        self.status_changed.emit(tr("게임 로그 연결됨"))
         log.info("Player.log 동기화: phase=%s version=%s", self.phase, self.game_version)
         self.synced.emit(self.phase, self.game_version)
 
@@ -169,7 +171,7 @@ class PlayerLogWatcher(QObject):
         except OSError:
             if self.available:
                 self.available = False
-                self.status_changed.emit("게임 로그를 읽을 수 없음")
+                self.status_changed.emit(tr("게임 로그를 읽을 수 없음"))
             return
         if not self.available or size < self._pos:
             # 게임을 다시 실행하면 Player.log 가 새로 만들어진다.

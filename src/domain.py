@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Tuple
 
+from .i18n import tr
+
 Rect = Tuple[int, int, int, int]  # x, y, w, h (프레임 물리 픽셀)
 
 
@@ -21,12 +23,12 @@ class ScreenKind(str, Enum):
 
 
 SCREEN_LABEL = {
-    ScreenKind.GAME_NOT_FOUND: "게임 창 없음",
-    ScreenKind.CAPTURE_FAILED: "캡처 실패",
-    ScreenKind.LEVEL_UP: "강화 선택 화면",
-    ScreenKind.FUSION: "융합 화면",
-    ScreenKind.PAUSE: "일시 정지",
-    ScreenKind.OTHER: "전투 또는 기타 화면",
+    ScreenKind.GAME_NOT_FOUND: tr("게임 창 없음"),
+    ScreenKind.CAPTURE_FAILED: tr("캡처 실패"),
+    ScreenKind.LEVEL_UP: tr("강화 선택 화면"),
+    ScreenKind.FUSION: tr("융합 화면"),
+    ScreenKind.PAUSE: tr("일시 정지"),
+    ScreenKind.OTHER: tr("전투 또는 기타 화면"),
 }
 
 

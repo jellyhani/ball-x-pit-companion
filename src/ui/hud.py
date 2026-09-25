@@ -156,7 +156,7 @@ class RecommendationHud(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.setWindowTitle("BALL x PIT 추천")
+        self.setWindowTitle(tr("BALL x PIT 추천"))
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
         self._hide_timer.timeout.connect(self.hide)
@@ -414,9 +414,9 @@ class RecommendationHud(QWidget):
         # 확신도: 1위와 2위의 차이·근거 (확실 / 추천 / 근소 / 근거 약함)
         status = rec.confidence or STATUS_TEXT.get(rec.status, "")
         if best is not None:
-            v = HudView(title=f"1위 {d.name(best.card.item_id)}",
-                        subtitle=f"{best.action_text} · {best.card.position} 카드",
-                        status=status, status_tone="ok" if rec.confidence == "확실" else tone, icons=(best.card.item_id,))
+            v = HudView(title=tr("1위 {v0}", v0=d.name(best.card.item_id)),
+                        subtitle=tr("{action_text} · {position} 카드", action_text=best.action_text, position=best.card.position),
+                        status=status, status_tone="ok" if rec.confidence == tr("확실") else tone, icons=(best.card.item_id,))
             v.lines = [(best.effect, "primary")] if best.effect else []
             v.lines += [(r.text, "secondary") for r in best.top_reasons(1 if best.effect else 2)]   # 결론 + 이유 한두 줄
             if best.warnings:
@@ -424,11 +424,11 @@ class RecommendationHud(QWidget):
         elif rec.ranked:
             # 판단 보류여도 순서는 보여 준다 (근거가 약하다는 것을 함께)
             fb = rec.fallback or rec.ranked[0]
-            v = HudView(title=f"1위 {d.name(fb.card.item_id)} (무난한 선택)",
-                        subtitle=f"{fb.action_text} · {fb.card.position} 카드",
+            v = HudView(title=tr("1위 {v0} (무난한 선택)", v0=d.name(fb.card.item_id)),
+                        subtitle=tr("{action_text} · {position} 카드", action_text=fb.action_text, position=fb.card.position),
                         status=status, status_tone=tone, icons=(fb.card.item_id,))
             v.lines = [(fb.effect, "primary")] if fb.effect else []
-            v.lines.append(("어느 카드도 현재 덱과 뚜렷하게 이어지지 않음 — 새로고침도 고려", "tertiary"))
+            v.lines.append((tr("어느 카드도 현재 덱과 뚜렷하게 이어지지 않음 — 새로고침도 고려"), "tertiary"))
         else:
             v = HudView(title=rec.headline, subtitle=rec.limitations[0] if rec.limitations else "",
                         status=STATUS_TEXT.get(rec.status, ""), status_tone=tone)
@@ -444,7 +444,7 @@ class RecommendationHud(QWidget):
                 v.footer.append((rec.reroll_text, "warn"))
             self.render_view(v)
             return
-        v.section = "다른 선택지"
+        v.section = tr("다른 선택지")
         v.rows = [self._row(e, rec) for e in others]
         # 아래 줄은 행동이 필요한 것만, 최대 2줄 (체력·다음 보스 같은 상황 요약은 설정 창에 있다)
         if rec.banish_text:
@@ -454,7 +454,7 @@ class RecommendationHud(QWidget):
         if rec.plan_text:
             v.footer.append((rec.plan_text, "secondary"))
         if points_left and points_left > 1:
-            v.footer.append((f"강화 포인트 {points_left}개 남음", "tertiary"))
+            v.footer.append((tr("강화 포인트 {points_left}개 남음", points_left=points_left), "tertiary"))
         if best is None and rec.limitations:
             v.footer.append((rec.limitations[0], "tertiary"))
         v.footer = v.footer[:2]
@@ -466,16 +466,16 @@ class RecommendationHud(QWidget):
     def _row(self, e: ActionEval, rec: Recommendation) -> HudRow:
         verdict = card_verdict(rec, e)
         if not e.evaluated:
-            return HudRow((None,), f"{e.card.position} 카드", "", verdict=verdict)
+            return HudRow((None,), tr("{position} 카드", position=e.card.position), "", verdict=verdict)
         n = card_rank(rec, e)
-        act = f"레벨 {e.level_after}" if e.action.startswith("upgrade") and e.level_after else e.action_text
+        act = tr("레벨 {level_after}", level_after=e.level_after) if e.action.startswith("upgrade") and e.level_after else e.action_text
         # 게임 카드에 이미 순위 배지가 있으니 이름을 앞에, 행동·이유는 아랫줄 한마디로
-        text = f"{n}위  {self.data.name(e.card.item_id)}" if n else self.data.name(e.card.item_id)
+        text = tr("{n}위  {v0}", n=n, v0=self.data.name(e.card.item_id)) if n else self.data.name(e.card.item_id)
         top = e.top_reasons(1)
         good = (top[0].short or top[0].text) if top else ""
         bad = e.warnings[0].text if e.warnings else ""
         if verdict in ("banish", "skip"):
-            why = bad or (f"{good}, 1위보다 약함" if good else "현재 덱과 연결 없음")
+            why = bad or (tr("{good}, 1위보다 약함", good=good) if good else tr("현재 덱과 연결 없음"))
         else:
             why = " · ".join(x for x in (good, bad) if x)
         if e.effect:
@@ -487,11 +487,11 @@ class RecommendationHud(QWidget):
     def show_expedition(self, adv):
         self._hide_timer.stop()
         tone = {"continue": "ok", "return": "warn"}.get(adv.verdict, "neutral")
-        status = {"continue": "계속", "return": "복귀"}.get(adv.verdict, "선택")
-        v = HudView(title=adv.headline, subtitle="보스 격퇴 · 원정 계속 또는 복귀", status=status, status_tone=tone)
+        status = {"continue": tr("계속"), "return": tr("복귀")}.get(adv.verdict, tr("선택"))
+        v = HudView(title=adv.headline, subtitle=tr("보스 격퇴 · 원정 계속 또는 복귀"), status=status, status_tone=tone)
         v.lines = [(r, "secondary") for r in adv.reasons[:3]]
         if adv.best_depth:
-            v.footer.append((f"이 지역 무한의 심연 최고 기록 {adv.best_depth}m", "tertiary"))
+            v.footer.append((tr("이 지역 무한의 심연 최고 기록 {best_depth}m", best_depth=adv.best_depth), "tertiary"))
         v.footer += [(c, "tertiary") for c in adv.cautions[:2]]
         self.render_view(v)
 
@@ -514,11 +514,11 @@ class RecommendationHud(QWidget):
             if p is best:
                 continue
             icons = (p.result_id,) if p.kind == "evo" else tuple(p.parts)
-            verb = {"evo": "진화", "combo": "융합", "free": "강화"}[p.kind]
+            verb = {"evo": tr("진화"), "combo": tr("융합"), "free": tr("강화")}[p.kind]
             note, tone2 = ((p.warnings[0].short, "warn") if p.warnings else
                            (next((r.short for r in p.reasons if r.rule_id in ("combo_ai", "evo_chain")), ""), "tertiary"))
             rows.append(HudRow(icons, f"{p.title}  {verb}", note, tone2))
-        v.section = "다른 후보"
+        v.section = tr("다른 후보")
         v.rows = rows[:4]
         if rec.notes:
             v.footer = [(" · ".join(rec.notes[:2]), "tertiary")]
@@ -529,7 +529,7 @@ class RecommendationHud(QWidget):
                      item_id: Optional[str] = None):
         tone_name = "ok" if tone == tk.OK else "warn" if tone == tk.WARN else "neutral"
         v = HudView(title=headline, subtitle=body, icons=(item_id,) if item_id else (),
-                    status={"ok": "반영됨", "warn": "확인 필요"}.get(tone_name, ""), status_tone=tone_name)
+                    status={"ok": tr("반영됨"), "warn": tr("확인 필요")}.get(tone_name, ""), status_tone=tone_name)
         self.render_view(v)
         if hide_after_ms:
             self._hide_timer.start(hide_after_ms)

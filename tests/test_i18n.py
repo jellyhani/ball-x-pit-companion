@@ -48,7 +48,6 @@ class TrTest(unittest.TestCase):
 
     def test_page_navigation_uses_internal_keys(self):
         """표시 이름이 번역돼도 페이지 이동(내부 키)은 그대로여야 한다."""
-        i18n.set_lang("en")
         from src.ui import control_window as cw
         self.assertEqual(len(cw.PAGES), len(cw.PAGE_KEYS))
         self.assertIn("진단", cw.PAGE_KEYS)
@@ -58,6 +57,38 @@ class TrTest(unittest.TestCase):
         from src.tracking.meta_state import RESOURCES, MetaState
         ms = MetaState(resources=[0, 0, 0, 0])
         self.assertEqual(set(ms.shortfall((5, 5, 5, 5))), set(RESOURCES))
+
+    def test_every_literal_tr_key_is_translated(self):
+        """소스의 tr("원문") 호출은 모든 지원 언어 파일에 번역이 있어야 한다 (자리표시자도 같아야 함)."""
+        import ast
+        import json
+        import os
+        import re
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        keys = {}
+        for base, _, files in os.walk(os.path.join(root, "src")):
+            for f in files:
+                if f.endswith(".py"):
+                    path = os.path.join(base, f)
+                    with open(path, encoding="utf-8") as fh:
+                        tree = ast.parse(fh.read())
+                    for n in ast.walk(tree):
+                        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "tr"
+                                and n.args and isinstance(n.args[0], ast.Constant)):
+                            keys.setdefault(n.args[0].value, f)
+        for code in i18n.SUPPORTED:
+            with open(os.path.join(i18n.DATA_DIR, f"{code}.json"), encoding="utf-8") as fh:
+                table = json.load(fh)
+            missing = sorted(k for k in keys if k not in table)
+            self.assertEqual(missing, [], f"{code}: 번역 없는 문구 {len(missing)}개")
+            for k in keys:
+                self.assertEqual(sorted(re.findall(r"\{\w+", k)), sorted(re.findall(r"\{\w+", table[k])), (code, k))
+
+    def test_forced_language_env(self):
+        with mock.patch.dict("os.environ", {"BXP_LANG": "ja"}):
+            self.assertEqual(i18n.detect_ui_lang(), "ja")
+        with mock.patch.dict("os.environ", {"BXP_LANG": "zz"}):
+            self.assertEqual(i18n.detect_ui_lang(), "ko")
 
     def test_format_kwargs(self):
         i18n.set_lang("ko")

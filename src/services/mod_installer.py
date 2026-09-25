@@ -24,6 +24,8 @@ from ctypes import wintypes
 from dataclasses import dataclass
 from typing import Callable, List, Optional
 
+from ..i18n import tr
+
 log = logging.getLogger(__name__)
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -149,16 +151,16 @@ class ModStatus:
     @property
     def summary(self) -> str:
         if not self.game_dir:
-            return "게임 설치 폴더를 찾지 못함 (Steam 라이브러리)"
+            return tr("게임 설치 폴더를 찾지 못함 (Steam 라이브러리)")
         if not self.bepinex:
-            return "게임 연동 모드(BepInEx) 없음"
+            return tr("게임 연동 모드(BepInEx) 없음")
         if self.enabled is False:
-            return "BepInEx 가 꺼져 있음 (doorstop enabled=false)"
+            return tr("BepInEx 가 꺼져 있음 (doorstop enabled=false)")
         if self.plugin_version is None:
-            return "연동 플러그인 없음"
+            return tr("연동 플러그인 없음")
         if not self.plugin_current:
-            return f"연동 플러그인 옛 버전 {self.plugin_version} (최신 {PLUGIN_VERSION})"
-        return f"설치됨 · 플러그인 {self.plugin_version}"
+            return tr("연동 플러그인 옛 버전 {plugin_version} (최신 {PLUGIN_VERSION})", plugin_version=self.plugin_version, PLUGIN_VERSION=PLUGIN_VERSION)
+        return tr("설치됨 · 플러그인 {plugin_version}", plugin_version=self.plugin_version)
 
 
 def check(game_dir: Optional[str] = None) -> ModStatus:
@@ -227,7 +229,7 @@ def bepinex_zip(say: Callable[[str], None] = log.info) -> str:
     import urllib.request
     os.makedirs(os.path.dirname(BEPINEX_CACHE), exist_ok=True)
     tmp = BEPINEX_CACHE + ".part"
-    say(f"BepInEx 내려받는 중 (공식 빌드 서버, 약 34MB): {BEPINEX_URL}")
+    say(tr("BepInEx 내려받는 중 (공식 빌드 서버, 약 34MB): {BEPINEX_URL}", BEPINEX_URL=BEPINEX_URL))
     try:
         with urllib.request.urlopen(BEPINEX_URL, timeout=60) as r, open(tmp, "wb") as f:
             shutil.copyfileobj(r, f)
@@ -251,7 +253,7 @@ def install(st: Optional[ModStatus] = None, say: Callable[[str], None] = log.inf
         raise InstallError(f"설치 파일이 없습니다: {VENDOR}")
     added: List[str] = []
     if not st.bepinex:
-        say("BepInEx 설치 파일 확인 중 (SHA-256)")
+        say(tr("BepInEx 설치 파일 확인 중 (SHA-256)"))
         zip_path = bepinex_zip(say)
         with zipfile.ZipFile(zip_path) as z:
             for info in z.infolist():
@@ -268,14 +270,14 @@ def install(st: Optional[ModStatus] = None, say: Callable[[str], None] = log.inf
                 with z.open(info) as src, open(dst, "wb") as out:
                     shutil.copyfileobj(src, out)
                 added.append(name)
-        say(f"BepInEx 설치 완료 (파일 {len(added)}개)")
+        say(tr("BepInEx 설치 완료 (파일 {v0}개)", v0=len(added)))
     plugins = os.path.join(st.game_dir, "BepInEx", "plugins")
     os.makedirs(plugins, exist_ok=True)
     dst = os.path.join(plugins, "BallxPitBridge.dll")
     if file_version(dst) != PLUGIN_VERSION:
         shutil.copy2(PLUGIN_DLL, dst)
         added.append(os.path.join("BepInEx", "plugins", "BallxPitBridge.dll"))
-        say(f"연동 플러그인 {PLUGIN_VERSION} 설치")
+        say(tr("연동 플러그인 {PLUGIN_VERSION} 설치", PLUGIN_VERSION=PLUGIN_VERSION))
     _record(added)
     new = check(st.game_dir)
     _save_state(new)
