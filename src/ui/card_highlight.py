@@ -64,7 +64,7 @@ class CardHighlight(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         origin = self.geometry().topLeft()
-        font = QFont(tk.family())
+        font = tk.base_font()
         font.setPixelSize(15)
         font.setWeight(QFont.Weight.Bold)
         fm = QFontMetricsF(font)

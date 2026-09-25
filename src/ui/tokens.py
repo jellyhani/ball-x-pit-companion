@@ -37,16 +37,46 @@ VERDICT = {
     "unknown": (TEXT_3, tr("읽지 못함")),
 }
 
-_FAMILY_CANDIDATES = ("Noto Sans KR", "Malgun Gothic")
-_family_cache = None
+# 글꼴: 화면 언어의 글꼴을 먼저, 그다음 한국어 글꼴. 한국어 글꼴만 쓰면 일본어 신자체(闘)·간체자처럼
+# 한국 한자에 없는 글자만 다른 글꼴로 대체돼 한 줄 안에서 글자 모양이 튄다. 한국어 글꼴을 뒤에 두는 건
+# 게임 이름·설명이 한국어로 추출돼 있을 수 있어서 (윈도우 언어 ≠ 도우미 언어인 경우).
+_KO_FAMILIES = ("Noto Sans KR", "Malgun Gothic")
+_LANG_FAMILIES = {
+    "ja": ("Yu Gothic UI", "Yu Gothic", "Meiryo UI", "Meiryo", "Noto Sans JP"),
+    "schinese": ("Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC"),
+    "tchinese": ("Microsoft JhengHei UI", "Microsoft JhengHei", "Noto Sans TC"),
+}
+_families_cache = None
+
+
+def families() -> Tuple[str, ...]:
+    """쓸 수 있는 글꼴 목록 (앞이 우선). 설치된 것만."""
+    global _families_cache
+    if _families_cache is None:
+        from ..i18n import current_lang
+        available = set(QFontDatabase.families())
+        want = _LANG_FAMILIES.get(current_lang(), ()) + _KO_FAMILIES
+        _families_cache = tuple(f for f in want if f in available)
+    return _families_cache
 
 
 def family() -> str:
-    global _family_cache
-    if _family_cache is None:
-        available = set(QFontDatabase.families())
-        _family_cache = next((f for f in _FAMILY_CANDIDATES if f in available), "")
-    return _family_cache
+    fs = families()
+    return fs[0] if fs else ""
+
+
+def css_families() -> str:
+    """스타일시트 font-family 값 (따옴표 붙인 목록)."""
+    return ", ".join(f'"{f}"' for f in families()) or "sans-serif"
+
+
+def base_font() -> QFont:
+    """글꼴 목록이 들어간 QFont (크기·굵기는 호출한 쪽이 정한다)."""
+    f = QFont()
+    fs = families()
+    if fs:
+        f.setFamilies(list(fs))
+    return f
 
 
 def qcolor(c: RGBA) -> QColor:
@@ -77,7 +107,7 @@ class Type:
     def space(self) -> int: return self.px(8)
 
     def font(self, size: int, weight: QFont.Weight = QFont.Weight.Normal) -> QFont:
-        f = QFont(family())
+        f = base_font()
         f.setPixelSize(size)
         f.setWeight(weight)
         f.setHintingPreference(QFont.HintingPreference.PreferNoHinting)

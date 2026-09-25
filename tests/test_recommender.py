@@ -286,5 +286,40 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(d.max_level("ball"), 5)
 
 
+class CharacterArchetypeTest(unittest.TestCase):
+    """두 캐릭터의 성향(strategy.favor)이 덱 계열을 거쳐 실제 카드 이유·점수까지 가는지 (archetype.detect 합산)."""
+
+    RULES = {"char:a": {"strategy": {"favor": {"aoe": 3}}}, "char:b": {"strategy": {"favor": {"baby": 3}}}}
+
+    def setUp(self):
+        from unittest import mock
+        self.d = game_data()
+        patch = mock.patch.object(self.d, "character_rule", lambda cid: self.RULES.get(cid, {}))
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def reasons(self, *chars):
+        run = RunState()
+        run.start_run()
+        run.characters = [(c, "manual") for c in chars]
+        s = session([card(0, "ball:earthquake"), card(1, "ball:broodmother"), card(2, "ball:wind")])
+        r = Recommender(self.d).recommend(s, run)
+        return {e.card.item_id: [x.rule_id for x in e.reasons] for e in r.evals}
+
+    def test_both_characters_reach_card_reasons(self):
+        got = self.reasons("char:a", "char:b")
+        self.assertIn("archetype", got["ball:earthquake"])     # 범위 (char:a)
+        self.assertIn("archetype", got["ball:broodmother"])    # 베이비볼 (char:b) — 예전엔 첫 캐릭터만 반영
+        self.assertNotIn("archetype", got["ball:wind"])
+
+    def test_order_of_characters_does_not_change_result(self):
+        self.assertEqual(self.reasons("char:a", "char:b"), self.reasons("char:b", "char:a"))
+
+    def test_single_character_only_its_axis(self):
+        got = self.reasons("char:a")
+        self.assertIn("archetype", got["ball:earthquake"])
+        self.assertNotIn("archetype", got["ball:broodmother"])
+
+
 if __name__ == "__main__":
     unittest.main()

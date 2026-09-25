@@ -1,4 +1,5 @@
 """도우미 자체 화면 문구 번역 (src/i18n.py) — 원문을 키로 쓰고, 없으면 원문 그대로."""
+import os
 import unittest
 from unittest import mock
 
@@ -30,16 +31,39 @@ class TrTest(unittest.TestCase):
         self.assertEqual(i18n.tr("아직 번역 안 한 문구입니다"), "아직 번역 안 한 문구입니다")
 
     def test_unsupported_language_stays_korean(self):
-        with mock.patch("locale.getdefaultlocale", return_value=("vi_VN", "UTF-8")), \
+        with mock.patch.dict("os.environ"), \
+             mock.patch("locale.getdefaultlocale", return_value=("vi_VN", "UTF-8")), \
              mock.patch("ctypes.windll", create=True, new=None):
+            os.environ.pop("BXP_LANG", None)          # tests/__init__.py 가 넣은 강제 언어를 빼고 자동 감지만 본다
             self.assertEqual(i18n.detect_ui_lang(), "ko")
+
+    def test_font_follows_language_with_korean_fallback(self):
+        """일본어·중국어 화면은 그 언어 글꼴을 먼저 (한국어 글꼴만 쓰면 闘·简体 같은 글자가 대체 글꼴로 튄다)."""
+        import sys
+        from PySide6.QtWidgets import QApplication
+        QApplication.instance() or QApplication(sys.argv)
+        from src.ui import tokens as tk
+        try:
+            for lang in ("ja", "schinese", "tchinese"):
+                i18n.set_lang(lang)
+                tk._families_cache = None
+                fs = tk.families()
+                own = [f for f in fs if f in tk._LANG_FAMILIES[lang]]
+                ko = [f for f in fs if f in tk._KO_FAMILIES]
+                if own and ko:
+                    self.assertLess(fs.index(own[0]), fs.index(ko[0]), lang)
+                self.assertTrue(set(fs) <= set(tk._LANG_FAMILIES[lang]) | set(tk._KO_FAMILIES))
+        finally:
+            tk._families_cache = None
 
     def test_all_locales_have_same_keys_and_placeholders(self):
         import json
         import os
         import re
-        tables = {c: json.load(open(os.path.join(i18n.DATA_DIR, f"{c}.json"), encoding="utf-8"))
-                  for c in i18n.SUPPORTED}
+        tables = {}
+        for c in i18n.SUPPORTED:
+            with open(os.path.join(i18n.DATA_DIR, f"{c}.json"), encoding="utf-8") as fh:
+                tables[c] = json.load(fh)
         base = set(tables["en"])
         for code, t in tables.items():
             self.assertEqual(set(t), base, code)

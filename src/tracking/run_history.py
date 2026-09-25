@@ -14,8 +14,8 @@ from typing import Dict, List, Optional, Tuple
 
 from ..domain import RunProgress
 from ..gamedata import GameData
-from .run_state import RunState
 from ..i18n import tr
+from .run_state import RunState
 
 log = logging.getLogger(__name__)
 
@@ -141,11 +141,16 @@ def expedition_history(records: List[RunRecord]) -> List[Tuple[float, int, int]]
     return out
 
 
+def result_label(result: str) -> str:
+    """저장된 런 결과(한국어 고정값 — 비교에 쓰므로 번역해 저장하지 않는다)를 화면 언어로."""
+    return {"보스 격퇴": tr("보스 격퇴"), "실패": tr("실패"), "중단": tr("중단")}.get(result, result)
+
+
 def describe(rec: RunRecord, data: GameData) -> Tuple[str, str]:
     """기록 목록 한 줄 (제목, 부제)."""
     when = time.strftime("%m-%d %H:%M", time.localtime(rec.started_at))
     char = data.name(rec.char) if rec.char else tr("캐릭터 미확인")
-    title = f"{when} · {char} · {rec.result}"
+    title = f"{when} · {char} · {result_label(rec.result)}"
     parts = []
     if rec.turn is not None:
         parts.append(tr("{turn}턴", turn=rec.turn))

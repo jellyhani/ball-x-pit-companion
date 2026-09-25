@@ -47,7 +47,7 @@ class BaseOverlay(QWidget):
         self._swap_marks: List[Tuple[float, float, float, float, str]] = []   # 재배치 안내 (화면 좌표 두 점, 번호)
         self._box_pts: List[Tuple[float, float]] = []       # 다음 옮길 자리 윤곽 (화면 좌표 네 점)
         self._drawn = QRect()        # 마지막으로 그린 내용의 경계 (논리 좌표)
-        self._font = QFont(tk.family())
+        self._font = tk.base_font()
         self._font.setPixelSize(14)
         self._fm = QFontMetrics(self._font)
 
@@ -191,7 +191,7 @@ class BaseOverlay(QWidget):
         # 미완성 건물: 굵은 주황 링 + '완성' (여기부터 맞히기)
         if self._build:
             bc = QColor(*BUILD_COLOR)
-            f3 = QFont(tk.family())
+            f3 = tk.base_font()
             f3.setPixelSize(12)
             f3.setWeight(QFont.Weight.Bold)
             for x, y in self._build:
@@ -226,7 +226,7 @@ class BaseOverlay(QWidget):
             for q in (a, b):
                 p.setBrush(QColor(20, 20, 24, 230))
                 p.drawEllipse(q, 22, 22)
-                f2 = QFont(tk.family())
+                f2 = tk.base_font()
                 f2.setPixelSize(16)
                 f2.setWeight(QFont.Weight.Bold)
                 p.setFont(f2)

@@ -58,7 +58,7 @@ class MapCanvas(QWidget):
         p.setPen(QPen(QColor(255, 255, 255, 40), 1))
         p.drawRect(QRectF(pt(L, T), pt(R, B)))
         tile = float(g.get("space_w") or 1.125)
-        f = QFont(tk.family())
+        f = tk.base_font()
         f.setPixelSize(10)
         p.setFont(f)
         for b in self.blds.values():

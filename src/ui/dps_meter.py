@@ -110,12 +110,12 @@ class DpsMeter(QWidget):
         p.drawPath(path)
 
         pad = self.px(12)
-        title = QFont(tk.family())
+        title = tk.base_font()
         title.setPixelSize(self.px(12))
         title.setWeight(QFont.Weight.DemiBold)
-        body = QFont(tk.family())
+        body = tk.base_font()
         body.setPixelSize(self.px(12))
-        num = QFont(tk.family())
+        num = tk.base_font()
         num.setPixelSize(self.px(12))
         num.setWeight(QFont.Weight.DemiBold)
 

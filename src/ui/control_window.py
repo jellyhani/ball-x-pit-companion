@@ -66,7 +66,7 @@ def _stylesheet(t: tk.Type) -> str:
     chip = (f"border-radius: {t.px(9)}px; padding: {t.px(2)}px {t.px(9)}px; font-size: {t.px(12)}px; "
             f"font-weight: 600;")
     return f"""
-    QWidget {{ background: {BG}; color: {TEXT}; font-family: "{tk.family()}"; font-size: {t.px(13)}px; }}
+    QWidget {{ background: {BG}; color: {TEXT}; font-family: {tk.css_families()}; font-size: {t.px(13)}px; }}
     QListWidget#sidebar {{ background: {SIDEBAR}; border: none; padding: {t.px(12)}px {t.px(8)}px; outline: 0; }}
     QListWidget#sidebar::item {{ padding: {t.px(7)}px {t.px(10)}px; border-radius: {t.px(7)}px; color: {TEXT};
                                  margin-bottom: 2px; }}

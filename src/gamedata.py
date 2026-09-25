@@ -15,6 +15,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
+from .i18n import tr
+
 REPO_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 # 게임에서 추출한 자료(아이콘·초상화·게임 문구)는 저작권이 게임에 있으므로 배포하지 않고, 설치할 때 사용자의 게임
 # 파일에서 이 폴더로 추출한다 (tools/setup_data.py). 여기에 없으면 저장소 data/ (개발용)를 쓴다.
@@ -116,7 +118,7 @@ class GameData:
         if it:
             return it.name_ko
         ch = self.characters.get(item_id or "")
-        return ch.name_ko if ch else "미확인"
+        return ch.name_ko if ch else tr("미확인")
 
     def item_by_log_id(self, log_id: str) -> Optional[str]:
         """Player.log 의 'kReachersSpear' 같은 내부 이름을 항목 ID로 바꾼다."""
