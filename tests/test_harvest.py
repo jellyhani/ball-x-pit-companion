@@ -25,6 +25,14 @@ class ResourceRatioTest(unittest.TestCase):
         self.assertIn("채석장", note)
         self.assertIn("돌", note)
 
+    def test_note_when_needed_resource_has_zero_even_early_game(self):
+        """실제 기록 확인(2026-09-25 라이브 스냅샷): 농장 1·야적장 0·채석장 1인 실제 기지에서
+        나무가 부족한데도 예전 임계값(최대 2개 이상)때문에 조언이 안 떴음 — 고친 뒤 재확인."""
+        types = ["kIdleFarm", "kIdleStoneMine"]
+        note = advise_resource_ratio(types, 2)
+        self.assertIsNotNone(note)
+        self.assertIn("야적장", note)
+
 
 class GoldBounceTipTest(unittest.TestCase):
     def test_no_tip_without_unfinished_buildings(self):

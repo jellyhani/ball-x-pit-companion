@@ -306,7 +306,9 @@ def advise_resource_ratio(building_types: List[str], need: Optional[int]) -> Opt
         if r in counts:
             counts[r] += 1
     mx = max(counts.values())
-    if mx < 2 or counts[need] > mx // 2:
+    # 실제 기록 확인: 중반까지도 생산 건물이 하나씩(1)만 있는 게 흔해서 '최대 2개 이상'을 요구하면 거의 안 뜬다.
+    # 그래서 개수 비율 대신 '부족한 자원만 0개' 또는 '차이가 2개 이상'일 때만 (초반 노이즈는 그래도 걸러짐).
+    if mx == 0 or (counts[need] > 0 and mx - counts[need] < 2):
         return None
     by_res = {v: RES_BUILDING_LABEL[k] for k, v in WORK_BUILDINGS.items() if v in counts}
     return (f"{RESOURCES[need]} 생산 건물({by_res[need]})이 {counts[need]}개로 다른 자원보다 적음 "
