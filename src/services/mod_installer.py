@@ -14,6 +14,7 @@ import hashlib
 import json
 import logging
 import os
+import sys
 import re
 import shutil
 import subprocess
@@ -36,7 +37,9 @@ BEPINEX_CACHE = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("
 BEPINEX_SHA256 = "F4CC496BD098A0DF4164B81E3737297707F13A47C2478DBA2F60EEFAB784817A"
 PLUGIN_DLL = os.path.join(VENDOR, "BallxPitBridge.dll")
 PLUGIN_VERSION = "1.11.0"          # Plugin.cs 의 Plugin.Version 과 같아야 한다
-MANIFEST = os.path.join(ROOT, "tools", "bepinex", "installed_files.txt")
+# 추가한 파일 목록 (지우기용). exe 는 설치 폴더가 읽기 전용일 수 있고 tools 폴더도 없어 사용자 자료 폴더에 둔다.
+MANIFEST = (os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion", "installed_files.txt")
+            if getattr(sys, "frozen", False) else os.path.join(ROOT, "tools", "bepinex", "installed_files.txt"))
 APP_ID = "2062430"
 GAME_EXE = "Balls.exe"
 STATE_PATH = os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "BallxPitCompanion", "mod_state.json")
@@ -192,6 +195,7 @@ def _record(files: List[str]):
             with open(MANIFEST, encoding="utf-8") as f:
                 existing = [x.strip() for x in f if x.strip()]
         merged = list(dict.fromkeys(existing + files))
+        os.makedirs(os.path.dirname(MANIFEST), exist_ok=True)
         with open(MANIFEST, "w", encoding="utf-8") as f:
             f.write("\n".join(merged) + "\n")
     except OSError:
