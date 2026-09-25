@@ -59,6 +59,31 @@ def levelup_hud_spot(game: QRect, cards: Sequence[QRect], hud_w: int, hud_h: int
     return QPoint(max(game.left() + margin, left), top)
 
 
+def place_avoiding(game: QRect, avoid: Sequence[QRect], hud_w: int, hud_h: int,
+                   preferred: Sequence[QPoint] = (), margin: int = 16) -> QPoint:
+    """게임 UI(글자·버튼·목록 — 연동 플러그인 1.11 이 알려 줌)를 가장 덜 가리는 자리.
+    먼저 선호 자리, 그다음 게임 창 네 모서리·좌우 가운데 순서로 보고, 겹치는 넓이가 가장 작은 곳 (같으면 앞 순서)."""
+    g = game
+    cands = list(preferred) + [
+        QPoint(g.right() - hud_w - margin, g.top() + margin), QPoint(g.left() + margin, g.top() + margin),
+        QPoint(g.right() - hud_w - margin, g.bottom() - hud_h - margin), QPoint(g.left() + margin, g.bottom() - hud_h - margin),
+        QPoint(g.right() - hud_w - margin, g.center().y() - hud_h // 2), QPoint(g.left() + margin, g.center().y() - hud_h // 2),
+    ]
+
+    def cost(p: QPoint) -> int:
+        box = QRect(p.x(), p.y(), hud_w, hud_h)
+        c = 0
+        for a in avoid:
+            i = box.intersected(a)
+            if not i.isEmpty():
+                c += i.width() * i.height()
+        if not g.contains(box):                      # 게임 창 밖으로 나가면 불리
+            c += hud_w * hud_h // 4
+        return c
+
+    return min(enumerate(cands), key=lambda t: (cost(t[1]), t[0]))[1]
+
+
 def place_hud(game: QRect, cards: Sequence[QRect], hud_w: int, hud_h: int, margin: int = 12,
               offset: Tuple[int, int] = (0, 0), panel: Optional[QRect] = None) -> QPoint:
     """게임의 강화 패널·카드를 가리지 않는 자리를 고른다.

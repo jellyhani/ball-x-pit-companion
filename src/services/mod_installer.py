@@ -35,7 +35,7 @@ BEPINEX_CACHE = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("
                              BEPINEX_NAME)
 BEPINEX_SHA256 = "F4CC496BD098A0DF4164B81E3737297707F13A47C2478DBA2F60EEFAB784817A"
 PLUGIN_DLL = os.path.join(VENDOR, "BallxPitBridge.dll")
-PLUGIN_VERSION = "1.10.0"          # Plugin.cs 의 Plugin.Version 과 같아야 한다
+PLUGIN_VERSION = "1.11.0"          # Plugin.cs 의 Plugin.Version 과 같아야 한다
 MANIFEST = os.path.join(ROOT, "tools", "bepinex", "installed_files.txt")
 APP_ID = "2062430"
 GAME_EXE = "Balls.exe"

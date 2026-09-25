@@ -184,20 +184,27 @@ class RecommendationHud(QWidget):
         self._top = top
         root.addLayout(top)
 
+        # 이유 줄끼리는 붙이고(한 덩어리), 덩어리 사이만 띄운다
+        self._lines_box = QVBoxLayout()
         self.lines = [_Label(self, wrap=True) for _ in range(3)]
         for r in self.lines:
-            root.addWidget(r)
+            self._lines_box.addWidget(r)
+        root.addLayout(self._lines_box)
         self.sep1 = self._hairline()
         root.addWidget(self.sep1)
+        self._rows_box = QVBoxLayout()                 # '다른 선택지' 제목 + 목록 한 덩어리
         self.section = _Label(self)
-        root.addWidget(self.section)
+        self._rows_box.addWidget(self.section)
         self.rows = QGridLayout()
-        root.addLayout(self.rows)
+        self._rows_box.addLayout(self.rows)
+        root.addLayout(self._rows_box)
         self.sep2 = self._hairline()
         root.addWidget(self.sep2)
+        self._footer_box = QVBoxLayout()
         self.footer = [_Label(self, wrap=True) for _ in range(4)]
         for f in self.footer:
-            root.addWidget(f)
+            self._footer_box.addWidget(f)
+        root.addLayout(self._footer_box)
         self._row_widgets: List[QLabel] = []
 
     def _hairline(self) -> QFrame:
@@ -210,14 +217,17 @@ class RecommendationHud(QWidget):
         self.type = tk.Type(scale)
         t = self.type
         m = t.px(SHADOW)
-        self._root.setContentsMargins(m + t.px(16), m + t.px(14), m + t.px(16), m + t.px(14))
-        self._root.setSpacing(t.px(8))
+        self._root.setContentsMargins(m + t.px(18), m + t.px(16), m + t.px(18), m + t.px(16))
+        self._root.setSpacing(t.px(12))
+        self._lines_box.setSpacing(t.px(3))
+        self._rows_box.setSpacing(t.px(6))
+        self._footer_box.setSpacing(t.px(3))
         self._top.setSpacing(t.px(12))
         self.rows.setHorizontalSpacing(t.px(10))
-        self.rows.setVerticalSpacing(t.px(6))
+        self.rows.setVerticalSpacing(t.px(10))
         self.setFixedWidth(t.px(self.BASE_WIDTH) + 2 * m)
         self.icon.setFixedSize(t.px(48), t.px(48))
-        self.headline.style(t.font(t.px(17), W.Bold), "primary")
+        self.headline.style(t.font(t.px(18), W.Bold), "primary")
         self.sub.style(t.font(t.px(13)), "secondary")
         self.section.style(t.font(t.px(11), W.DemiBold), "tertiary", "letter-spacing: 0.4px;")
         for f in self.footer:
@@ -346,7 +356,13 @@ class RecommendationHud(QWidget):
             lbl.setText(item[0])
             lbl.show()
         self.sep2.setVisible(bool(v.footer))
+        self.setMinimumHeight(0)                       # 지난번 고정 높이 풀기
+        self.setMaximumHeight(16777215)
         self.adjustSize()
+        # 줄바꿈 글자가 있으면 adjustSize 가 높이를 넉넉히 잡아 남는 공간이 줄 사이로 퍼진다 → 폭에 맞는 높이로
+        self._root.activate()
+        if self._root.hasHeightForWidth():
+            self.setFixedHeight(self._root.totalHeightForWidth(self.width()))   # 뒤에 부르는 adjustSize 가 되돌리지 않게
         self.update()
 
     def _add_verdict_row(self, r: int, row: HudRow):
@@ -400,7 +416,7 @@ class RecommendationHud(QWidget):
                         subtitle=f"{best.action_text} · {best.card.position} 카드",
                         status=status, status_tone="ok" if rec.confidence == "확실" else tone, icons=(best.card.item_id,))
             v.lines = [(best.effect, "primary")] if best.effect else []
-            v.lines += [(r.text, "secondary") for r in best.top_reasons(2)]
+            v.lines += [(r.text, "secondary") for r in best.top_reasons(1 if best.effect else 2)]   # 결론 + 이유 한두 줄
             if best.warnings:
                 v.lines.append((best.warnings[0].text, "warn"))
         elif rec.ranked:
@@ -426,21 +442,20 @@ class RecommendationHud(QWidget):
                 v.footer.append((rec.reroll_text, "warn"))
             self.render_view(v)
             return
-        v.section = "다른 선택지 (순위)"
+        v.section = "다른 선택지"
         v.rows = [self._row(e, rec) for e in others]
-        if rec.plan_text:
-            v.footer.append((rec.plan_text, "secondary"))
+        # 아래 줄은 행동이 필요한 것만, 최대 2줄 (체력·다음 보스 같은 상황 요약은 설정 창에 있다)
         if rec.banish_text:
             v.footer.append((rec.banish_text, "warn"))
-        if rec.reroll_text:
-            v.footer.append((rec.reroll_text, "warn" if rec.reroll_status == "consider" else "tertiary"))
-        if rec.situation:
-            v.footer.append((rec.situation, "tertiary"))
-        limits = [x for x in rec.limitations if best is not None or x not in rec.limitations[:1]]
+        if rec.reroll_status == "consider" and rec.reroll_text:
+            v.footer.append((rec.reroll_text, "warn"))
+        if rec.plan_text:
+            v.footer.append((rec.plan_text, "secondary"))
         if points_left and points_left > 1:
-            limits.insert(0, f"강화 포인트 {points_left}개 남음")
-        if limits and not rec.situation:
-            v.footer.append((" · ".join(limits[:2]), "tertiary"))
+            v.footer.append((f"강화 포인트 {points_left}개 남음", "tertiary"))
+        if best is None and rec.limitations:
+            v.footer.append((rec.limitations[0], "tertiary"))
+        v.footer = v.footer[:2]
         self.render_view(v)
 
     def _row(self, e: ActionEval, rec: Recommendation) -> HudRow:
@@ -449,8 +464,8 @@ class RecommendationHud(QWidget):
             return HudRow((None,), f"{e.card.position} 카드", "", verdict=verdict)
         n = card_rank(rec, e)
         act = f"레벨 {e.level_after}" if e.action.startswith("upgrade") and e.level_after else e.action_text
-        text = f"{n}위 · {self.data.name(e.card.item_id)} · {act} · {e.card.position}" if n else \
-            f"{self.data.name(e.card.item_id)} · {act} · {e.card.position}"
+        # 게임 카드에 이미 순위 배지가 있으니 이름을 앞에, 행동·이유는 아랫줄 한마디로
+        text = f"{n}위  {self.data.name(e.card.item_id)}" if n else self.data.name(e.card.item_id)
         top = e.top_reasons(1)
         good = (top[0].short or top[0].text) if top else ""
         bad = e.warnings[0].text if e.warnings else ""
@@ -460,6 +475,7 @@ class RecommendationHud(QWidget):
             why = " · ".join(x for x in (good, bad) if x)
         if e.effect:
             why = f"{e.effect} · {why}" if why else e.effect
+        why = f"{act} · {why}" if why else act
         return HudRow((e.card.item_id,), text, why, verdict=verdict, badge=card_badge(rec, e))
 
     # ---- 보스 격퇴 후: 원정 계속 / 복귀 ----

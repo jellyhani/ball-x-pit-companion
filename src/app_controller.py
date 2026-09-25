@@ -340,6 +340,7 @@ class AppController(QObject):
         origin = self.window.origin if self.window else (0, 0)
         st = convert(snap, self.data, origin, frame_id=int(snap.get("seq") or 0), at=at)
         self.bridge_state = st
+        self._read_ui_avoid(snap, st)
         b = snap.get("battle")
         if isinstance(b, dict):
             self._counters = {"rerolls": b.get("rerolls"), "free": b.get("free_rerolls"),
@@ -474,6 +475,16 @@ class AppController(QObject):
             self.hud.show_recommendation(self.recommendation, self.tracker.session.points_left)
         log.info("HUD %s", "간단히" if self.hud.compact else "자세히")
         self._update_hud()
+
+    def _read_ui_avoid(self, snap: dict, st):
+        """플러그인 1.11: 지금 화면에서 가리면 안 되는 게임 UI 영역 (화면 밖·미끄러져 들어오는 중인 값은 버림)."""
+        from .tracking.bridge_adapter import _rect
+        ui = snap.get("ui") if isinstance(snap.get("ui"), dict) else {}
+        frame = st.observation.frame
+        size = (int(snap.get("screen_w") or 0), int(snap.get("screen_h") or 0))
+        rects = [_rect(v, size) for v in ui.get("avoid") or []]
+        self._ui_screen = ui.get("screen") or ""
+        self._ui_avoid = [frame.to_screen(r) for r in rects if r] if frame is not None else []
 
     def _update_char_combo(self, base: Optional[dict], state: str):
         """캐릭터 선택 화면: 알선소가 지어져 있으면 두 캐릭터 조합을 추천한다 (커뮤니티 추천 + 내 기록)."""
@@ -1144,12 +1155,14 @@ class AppController(QObject):
             if game.contains(fp):                 # 밀려 들어오는 도중 값(화면 밖)은 쓰지 않는다
                 panel = fp
         spot = geo.levelup_hud_spot(game, [c for c in cards if c.width() > 0], hud.width(), hud.height())             if s is not None else None
-        if spot is not None:
-            # 강화 선택창: 캐릭터 초상화 자리 (패널 위치는 밀려 들어오는 도중 값이라 쓰지 않는다 — 실제 기록 x −1680~2160)
-            p = QPoint(spot.x() + self.settings.hud_offset_x, spot.y() + self.settings.hud_offset_y)
-        else:
-            p = geo.place_hud(game, cards, hud.width(), hud.height(),
-                              offset=(self.settings.hud_offset_x, self.settings.hud_offset_y), panel=panel)
+        if spot is None:
+            spot = geo.place_hud(game, cards, hud.width(), hud.height(), panel=panel)
+        # 강화 선택창은 캐릭터 초상화 자리(장식)가 먼저. 게임이 알려 준 UI 영역(글자·버튼·캐릭터 목록)이 있으면
+        # 그것을 가장 덜 가리는 자리로 — 캐릭터 선택창의 이름표, 융합 선택지, 설명 패널 등
+        avoid = [geo.phys_to_logical_rect(r) for r in getattr(self, "_ui_avoid", [])] + [c for c in cards if c.width() > 0]
+        if getattr(self, "_ui_avoid", None):
+            spot = geo.place_avoiding(game, avoid, hud.width(), hud.height(), preferred=[spot])
+        p = QPoint(spot.x() + self.settings.hud_offset_x, spot.y() + self.settings.hud_offset_y)
         hud.move(geo.clamp_to_screen(p, hud.width(), hud.height()))
 
     def _on_hud_moved(self, pos: QPoint):

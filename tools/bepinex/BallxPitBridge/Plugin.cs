@@ -24,7 +24,7 @@ namespace BallxPitBridge
     [BepInPlugin("dev.ballxpit.bridge", "BALL x PIT Bridge", Plugin.Version)]
     public class Plugin : BasePlugin
     {
-        public const string Version = "1.10.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
+        public const string Version = "1.11.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
         internal static ManualLogSource L;
 
         public override void Load()
@@ -260,6 +260,7 @@ namespace BallxPitBridge
                 WriteGameOver(w);
                 WriteField(w);
                 WriteBase(w);
+                WriteUiAvoid(w);
                 w.WriteEndObject();
             }
             var json = Encoding.UTF8.GetString(ms.ToArray());
@@ -1295,6 +1296,86 @@ namespace BallxPitBridge
             new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<Vector3>(4);
 
         /// <summary>UI 요소의 화면 사각형 (게임 클라이언트 영역 픽셀, 왼쪽 위 원점).</summary>
+        /// <summary>1.11: 지금 화면에서 도우미 HUD 가 가리면 안 되는 게임 UI 영역 (글자·버튼·목록). 켜져 있는 것만.</summary>
+        static void WriteUiAvoid(Utf8JsonWriter w)
+        {
+            w.WriteStartObject("ui");
+            try
+            {
+                var cs = CharSelectUI.I;
+                if (cs != null && cs.gameObject.activeInHierarchy)
+                {
+                    w.WriteString("screen", "char_select");
+                    w.WriteBoolean("fusion", cs.IsSelectingFusion);
+                    w.WriteStartArray("avoid");
+                    RectIfActive(w, cs.CharGrid);           // 캐릭터 목록 (이름표 포함)
+                    RectIfActive(w, cs.WrapperList);
+                    RectIfActive(w, cs.DetailsPanel);       // 선택한 캐릭터 설명
+                    RectIfActive(w, cs.WrapperDetailsBtns);
+                    RectIfActive(w, cs.BtnSelect);
+                    RectIfActive(w, cs.BtnClose);
+                    RectIfActive(w, cs.WrapperLvlItems);
+                    w.WriteEndArray();
+                }
+                else
+                {
+                    var ui = LevelUpUI.I;
+                    if (ui != null && ui.gameObject.activeInHierarchy && ui.IsActiveOverlay())
+                    {
+                        w.WriteString("screen", ui.Type.ToString() == "kFuser" ? "fuser" : "levelup");
+                        w.WriteStartArray("avoid");
+                        RectIfActive(w, ui.PanelSelectionDetails);   // 오른쪽 설명 패널
+                        RectIfActive(w, ui.WrapperCurHeroes);        // 볼 슬롯
+                        RectIfActive(w, ui.WrapperCurPassives);      // 패시브 슬롯
+                        RectIfActive(w, ui.BtnReroll);
+                        RectIfActive(w, ui.BtnBanish);
+                        RectIfActive(w, ui.WrapperFuserOptions);     // 융합 선택지
+                        RectIfActive(w, ui.WrapperSelectEvo);
+                        RectIfActive(w, ui.WrapperSelectCombo);
+                        RectIfActive(w, ui.EvoSelectInfoPanel);
+                        w.WriteEndArray();
+                    }
+                }
+            }
+            catch { }
+            w.WriteEndObject();
+        }
+
+        static void RectIfActive(Utf8JsonWriter w, GameObject go)
+        {
+            if (go != null) RectIfActive(w, go.transform);
+        }
+
+        static void RectIfActive(Utf8JsonWriter w, Component comp)
+        {
+            if (comp == null || !comp.gameObject.activeInHierarchy) return;
+            var rt = comp.TryCast<RectTransform>() ?? comp.GetComponent<RectTransform>();
+            if (rt == null) return;
+            rt.GetWorldCorners(Corners);
+            var canvas = rt.GetComponentInParent<Canvas>();
+            Camera cam = null;
+            if (canvas != null)
+            {
+                canvas = canvas.rootCanvas;
+                if (canvas.renderMode != RenderMode.ScreenSpaceOverlay) cam = canvas.worldCamera;
+            }
+            float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
+            for (int i = 0; i < 4; i++)
+            {
+                var p = RectTransformUtility.WorldToScreenPoint(cam, Corners[i]);
+                x0 = Math.Min(x0, p.x); x1 = Math.Max(x1, p.x);
+                y0 = Math.Min(y0, p.y); y1 = Math.Max(y1, p.y);
+            }
+            if (x1 - x0 < 2 || y1 - y0 < 2) return;
+            int h = Screen.height;
+            w.WriteStartArray();
+            w.WriteNumberValue((int)Math.Round(x0));
+            w.WriteNumberValue((int)Math.Round(h - y1));
+            w.WriteNumberValue((int)Math.Round(x1 - x0));
+            w.WriteNumberValue((int)Math.Round(y1 - y0));
+            w.WriteEndArray();
+        }
+
         static void WriteRect(Utf8JsonWriter w, string name, Component comp)
         {
             if (comp == null) return;

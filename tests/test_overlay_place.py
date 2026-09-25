@@ -49,3 +49,18 @@ class BaseBoxTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AvoidTest(unittest.TestCase):
+    def test_moves_off_character_names(self):
+        """캐릭터 선택창: 게임이 알려 준 캐릭터 목록·상세 패널을 가리지 않는 자리로."""
+        game = QRect(0, 0, 1920, 1080)
+        grid, details = QRect(1200, 0, 720, 700), QRect(0, 0, 700, 1080)     # 오른쪽 위 목록, 왼쪽 상세
+        p = geo.place_avoiding(game, [grid, details], 396, 300, preferred=[geo.QPoint(1500, 16)])
+        box = QRect(p.x(), p.y(), 396, 300)
+        self.assertFalse(box.intersects(grid) or box.intersects(details))
+
+    def test_keeps_preferred_when_free(self):
+        p = geo.place_avoiding(QRect(0, 0, 1920, 1080), [QRect(1000, 0, 100, 100)], 396, 300,
+                               preferred=[geo.QPoint(20, 115)])
+        self.assertEqual((p.x(), p.y()), (20, 115))
