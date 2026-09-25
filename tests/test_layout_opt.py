@@ -154,6 +154,19 @@ class LayoutOptTest(unittest.TestCase):
         self.assertGreater(scorer.score(near_statue)[0], 0)
         self.assertAlmostEqual(scorer.score(near_scaf)[0], 2 * scorer.score(near_statue)[0])
 
+    def test_front_lane_penalizes_idle_buildings_only(self):
+        """발사대 앞: 능력치 건물은 벌점, 자원 타일·금광·공사 중인 건물은 벌점 없음."""
+        fx, _, grid, _, _ = setup()
+        lane = lo.lane_values(fx["geo"], grid)
+        near = max(lane, key=lane.get)
+        sq = frozenset((x, y) for x in range(2) for y in range(2))
+        for typ, unfinished, penalized in (("kStrengthStatue", False, True), ("kForest", False, False),
+                                           ("kGoldMine", False, False), ("kStrengthStatue", True, False)):
+            pcs = {1: lo.Piece(1, typ, 2, 2, sq, True, 0.0, unfinished=unfinished)}
+            sc = lo.Scorer(pcs, set(), set(), lane=lane)
+            got = sc.score(lo.Layout(grid, pcs, {1: near}))[0]
+            self.assertEqual(got < 0, penalized, typ)
+
     def test_previous_target_is_kept(self):
         fx, base, *_ = setup()
         p1 = lo.optimize(base, None, None, seconds=1.5, restarts=1, seed=4)
