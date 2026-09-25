@@ -1,7 +1,9 @@
 """게임 데이터 로더.
 
 출처를 섞지 않고 구분해서 보관한다.
-- 이름·설명: data/game_text_ko.json (게임 파일에서 추출한 공식 번역)
+- 이름·설명: data/game_text_ko.json (게임 파일에서 추출한 공식 번역 — 윈도우 UI 언어로 자동 감지해 추출하므로
+  name_ko/desc_ko 필드에 실제로는 한국어가 아닌 언어가 들어 있을 수 있다. 파일·필드 이름은 역사적인 것이라 안 바꿈.
+  어떤 언어인지는 game_text_ko.json 의 source.language 를 보면 안다.)
 - 진화 레시피·상태 이상 태그·시작 볼: data/*_db.json (외부 위키, 미검증)
 - 추천 규칙: data/rules.json (근거가 적힌 수동 정리)
 - 커뮤니티 평가: data/community.json (공략 사이트 티어·캐릭터 빌드, 의견)

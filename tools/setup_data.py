@@ -1,6 +1,7 @@
 """처음 설치: 사용자의 게임 파일에서 도우미가 쓰는 자료를 추출한다 (게임 자료는 배포하지 않는다).
 
-- 게임 문구(이름·설명, 공식 한국어 번역 테이블) → %LOCALAPPDATA%\\BallxPitCompanion\\gamedata\\game_text_ko.json
+- 게임 문구(이름·설명, 공식 번역 테이블 — 윈도우 UI 언어로 자동 감지, 게임이 지원 안 하면 영어)
+  → %LOCALAPPDATA%\\BallxPitCompanion\\gamedata\\game_text_ko.json (파일 이름은 예전 그대로, 내용은 감지된 언어)
 - 볼·패시브 아이콘, 캐릭터 초상화 (화면 인식 예비 경로용) → 같은 폴더 icons\\, portraits\\
 게임 파일은 읽기만 한다. 게임이 업데이트되면 다시 실행하면 된다.
 exe 에서도 쓰도록 같은 프로세스 안에서 돈다 (별도 파이썬을 부르지 않음).
