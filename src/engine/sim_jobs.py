@@ -11,6 +11,7 @@ import math
 from typing import Dict, List, Optional, Sequence
 
 from . import harvest_sim as hs
+from . import native
 
 
 def job_now(geo: dict, blds: Dict[int, dict], team: Sequence[dict], angle: float, dur: float,
@@ -34,12 +35,16 @@ def job_sweep(geo: dict, blds: Dict[int, dict], team: Sequence[dict], dur: float
     world = hs.world_from_geo(geo, 0.03)
     if world is None:
         return {}
-    # 거칠게 6° 간격 → 상위 3개 주변만 1° 간격 (전부 1°로 하면 작업자 10명·20초에 수 초)
     lo_i, hi_i = int(round(lo)), int(round(hi))
-    coarse = hs.rank_angles(world, blds, team, dur, need, targets, angles=range(lo_i, hi_i + 1, 6))
-    fine = sorted({a for r in coarse[:3] for a in range(int(r.angle) - 2, int(r.angle) + 3)
-                   if lo_i <= a <= hi_i} - {int(r.angle) for r in coarse})
-    ranked = coarse + hs.rank_angles(world, blds, team, dur, need, targets, angles=fine)
+    if native.lib() is not None:
+        # 네이티브 계산(각도 하나 약 1ms)이면 1° 간격 전부 — 좁은 틈으로만 닿는 각도도 놓치지 않는다
+        ranked = hs.rank_angles(world, blds, team, dur, need, targets, angles=range(lo_i, hi_i + 1))
+    else:
+        # 파이썬 계산: 거칠게 6° 간격 → 상위 3개 주변만 1° 간격 (전부 1°로 하면 작업자 10명·20초에 수 초)
+        coarse = hs.rank_angles(world, blds, team, dur, need, targets, angles=range(lo_i, hi_i + 1, 6))
+        fine = sorted({a for r in coarse[:3] for a in range(int(r.angle) - 2, int(r.angle) + 3)
+                       if lo_i <= a <= hi_i} - {int(r.angle) for r in coarse})
+        ranked = coarse + hs.rank_angles(world, blds, team, dur, need, targets, angles=fine)
     ranked.sort(key=lambda r: -(100 * r.build_hits + r.total[need] + 0.25 * (sum(r.total) - r.total[need])))
     reach = {b: 0 for b in targets or {}}
     for r in ranked:
@@ -121,6 +126,15 @@ def full_tiles(blds: Dict[int, dict]) -> Dict[int, dict]:
             for i, b in blds.items()}
 
 
+def HV_ANGLES():
+    """배치 후보 비교에 쓰는 각도 (네이티브면 3°, 파이썬이면 10° 간격)."""
+    return range(15, 166, 3) if native.lib() is not None else range(20, 161, 10)
+
+
+def REACH_ANGLES():
+    return range(15, 166, 3) if native.lib() is not None else range(15, 166, 6)
+
+
 def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequence[dict],
                targets: Optional[Dict[int, int]] = None, need: int = 1, seconds: float = 12.0,
                prefer: Optional[Dict[int, tuple]] = None, char_levels: Optional[Dict[str, int]] = None):
@@ -143,7 +157,7 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
         w = hs.world_from_geo(geo, 0.03)
         if not w:
             return [0, 0, 0, 0]
-        a, total = hs.best_angles(w, blds, team, dur, need, angles=range(20, 161, 10))[0]
+        a, total = hs.best_angles(w, blds, team, dur, need, angles=HV_ANGLES())[0]
         if mines or monks:
             counts: Dict[int, int] = {}
             hs.run_angle(w, blds, team, a, dur, counts)
@@ -159,7 +173,7 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
         w = hs.world_from_geo(geo, 0.03)
         out: Dict[int, int] = {}
         if w:
-            for r in hs.rank_angles(w, blds, team, dur, need, targets, angles=range(15, 166, 6)):
+            for r in hs.rank_angles(w, blds, team, dur, need, targets, angles=REACH_ANGLES()):
                 for b, v in r.per_building.items():
                     out[b] = max(out.get(b, 0), v)
         return out

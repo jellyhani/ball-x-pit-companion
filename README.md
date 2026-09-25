@@ -75,6 +75,8 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 - 연동 플러그인은 게임 메인 스레드에서 0.1~0.2초마다 값을 읽어 named pipe 로 보냅니다. Harmony 패치를 쓰지 않고
   게임 값을 바꾸지 않습니다. 게임 쪽 읽기 비용은 설정 창 진단 탭에 표시됩니다(보통 1ms 미만).
 - 궤적·배치 계산은 별도 프로세스에서 돌아 화면이 끊기지 않습니다.
+- 채집 궤적 계산은 C++ 모듈(`native/bxp_native.cpp` → `src/engine/bxp_native.dll`, C 런타임 없이 빌드한 9KB DLL)로
+  파이썬보다 약 20배 빠르게 합니다. 결과는 파이썬 구현과 같고(`tests/test_native.py`), DLL 이 없으면 파이썬으로 계산합니다.
 - 연동 없이도 화면 인식(Windows OCR + 아이콘 비교)으로 강화 선택창 추천은 동작합니다.
 
 ## exe 빌드
@@ -90,7 +92,8 @@ PyInstaller onedir 빌드(Qt 라이브러리는 LGPL 조건대로 별도 파일)
 .venv\Scripts\python.exe -m unittest discover -s tests -t .
 ```
 
-게임 자료가 필요한 테스트는 자료를 추출하기 전에는 건너뜁니다. 플러그인 빌드: `tools\bepinex\bridge.ps1 build`
+게임 자료가 필요한 테스트는 자료를 추출하기 전에는 건너뜁니다. 네이티브 모듈 빌드: `nativeuild.ps1`
+(Visual Studio C++ 도구, Windows SDK 불필요). 플러그인 빌드: `tools\bepinex\bridge.ps1 build`
 (.NET SDK, 게임에서 BepInEx 를 한 번 실행해 만들어진 interop 필요).
 
 ## 자료 출처

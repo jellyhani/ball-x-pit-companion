@@ -5,7 +5,8 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 datas = [
     ("data/rules.json", "data"),                                   # own rules (game data is extracted at first run)
-    ("data/community.json", "data"),                               # community tier lists / builds (opinions, sourced)
+    ("data/community.json", "data"),
+    ("src/engine/bxp_native.dll", "src/engine"),                    # native compute module (harvest sim, no CRT deps)                               # community tier lists / builds (opinions, sourced)
     ("vendor/bepinex/BallxPitBridge.dll", "vendor/bepinex"),       # our bridge plugin (BepInEx is downloaded)
     ("LICENSE", "."),
     ("NOTICE.md", "."),

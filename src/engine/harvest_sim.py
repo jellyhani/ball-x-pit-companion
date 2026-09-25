@@ -261,12 +261,7 @@ class Worker:
     gain: List[int] = field(default_factory=lambda: [0, 0, 0, 0])
 
 
-def simulate_team(world: World, buildings: Dict[int, dict], workers: List[Worker], duration: float,
-                  max_events: int = 4000, counts: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
-    """여러 작업자를 시간 순서로 함께 돌린다 (한 명이 비운 채집지를 다른 작업자는 통과).
-
-    채집: 자원이 남은 채집지에 처음 닿으면 쌓인 자원을 모두 가져간다(가정, 실제 채집량과 맞춰 보는 중).
-    """
+def _team_tables(buildings: Dict[int, dict]):
     from .harvest import RES_BY_TYPE, building_resource
     res_left = {bid: int(b.get("res") or 0) if b.get("can_harvest") else 0 for bid, b in buildings.items()}
     rtype = {bid: (building_resource(b) if building_resource(b) is not None else RES_BY_TYPE.get(b.get("type", "")))
@@ -274,6 +269,35 @@ def simulate_team(world: World, buildings: Dict[int, dict], workers: List[Worker
     is_tile = {bid: b.get("type", "") in RES_BY_TYPE and b.get("type", "") not in
                ("kIdleFarm", "kIdleLumberyard", "kIdleStoneMine", "kStoneMine", "kLumberyard", "kFarm", "kGoldMine")
                for bid, b in buildings.items()}
+    return res_left, rtype, is_tile
+
+
+def simulate_team(world: World, buildings: Dict[int, dict], workers: List[Worker], duration: float,
+                  max_events: int = 4000, counts: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
+    """여러 작업자를 시간 순서로 함께 돌린다 (한 명이 비운 채집지를 다른 작업자는 통과).
+
+    채집: 자원이 남은 채집지에 처음 닿으면 쌓인 자원을 모두 가져간다(가정, 실제 채집량과 맞춰 보는 중).
+    계산은 네이티브 모듈(native/bxp_native.cpp, 같은 계산 — 수십 배 빠름)로 하고, 없으면 파이썬으로 한다.
+    """
+    from . import native
+    res_left, rtype, is_tile = _team_tables(buildings)
+
+    def flags_of(bid: int):
+        b = buildings.get(bid) or {}
+        f = (native.F_WHEAT if b.get("type", "") in WHEAT_TYPES else 0) | (native.F_TILE if is_tile.get(bid) else 0)
+        k = rtype.get(bid)
+        return f, (-1 if k is None else int(k)), int(res_left.get(bid, 0))
+
+    total = native.simulate_team(world, buildings, workers, duration, max_events, counts, flags_of)
+    if total is not None:
+        return total, workers
+    return simulate_team_py(world, buildings, workers, duration, max_events, counts)
+
+
+def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Worker], duration: float,
+                     max_events: int = 4000, counts: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
+    """simulate_team 의 파이썬 구현 (네이티브 모듈이 없을 때, 그리고 결과 비교 기준)."""
+    res_left, rtype, is_tile = _team_tables(buildings)
     total = [0, 0, 0, 0]
     r = world.radius
     walls = [((world.left + r, -1e3), (world.left + r, 1e3)), ((world.right - r, -1e3), (world.right - r, 1e3)),
