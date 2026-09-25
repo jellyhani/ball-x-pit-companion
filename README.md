@@ -75,8 +75,10 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 - 연동 플러그인은 게임 메인 스레드에서 0.1~0.2초마다 값을 읽어 named pipe 로 보냅니다. Harmony 패치를 쓰지 않고
   게임 값을 바꾸지 않습니다. 게임 쪽 읽기 비용은 설정 창 진단 탭에 표시됩니다(보통 1ms 미만).
 - 궤적·배치 계산은 별도 프로세스에서 돌아 화면이 끊기지 않습니다.
-- 채집 궤적 계산은 C++ 모듈(`native/bxp_native.cpp` → `src/engine/bxp_native.dll`, C 런타임 없이 빌드한 9KB DLL)로
-  파이썬보다 약 20배 빠르게 합니다. 결과는 파이썬 구현과 같고(`tests/test_native.py`), DLL 이 없으면 파이썬으로 계산합니다.
+- 채집 궤적과 배치 최적화는 C++ 모듈(`native/bxp_native.cpp` → `src/engine/bxp_native.dll`, C 런타임 없이 빌드한 DLL)로
+  계산합니다. 궤적은 파이썬보다 약 20배, 배치 탐색은 초당 약 180만 번(파이썬 약 2천 번)이라 같은 시간에 더 좋은 배치를
+  찾습니다. 배치는 고정 시간 대신 시작점을 바꿔 가며 탐색하다 연속 3번 더 좋아지지 않으면 멈춥니다(보통 2~3초).
+  궤적 결과·배치 점수는 파이썬 구현과 같고(`tests/test_native*.py`), DLL 이 없으면 파이썬으로 계산합니다.
 - 연동 없이도 화면 인식(Windows OCR + 아이콘 비교)으로 강화 선택창 추천은 동작합니다.
 
 ## exe 빌드

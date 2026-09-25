@@ -427,6 +427,11 @@ class Scorer:
 MOVE_COST = 0.03        # 옮기는 건물 하나당 벌점 — 실제 기지에서 0.005(42번 옮김, 효과 +4%)·0.03(22번, +7.5%)·0.06(탐색 멈춤) 비교해 정함
 
 
+# 네이티브 탐색: 한 번 0.5초(담금질 0.4 + 다듬기 0.1), 최소 4번, 연속 3번 더 좋은 배치가 없으면 멈춤
+RESTART_SECONDS = 0.5
+MIN_RESTARTS = 4
+CONVERGED = 3
+
 EXPLORE_COST = 0.005    # 담금질 중에는 벌점을 작게 (크면 처음 배치에서 못 벗어남 — 실제 기지 6번 중 4번)
 
 
@@ -462,7 +467,14 @@ def _near_spots(lay: Layout, scorer: Scorer, i: int, cand: List[Tuple[int, int]]
 
 
 def polish(lay: Layout, scorer: Scorer, origin0: Dict[int, Tuple[int, int]], seconds: float = 3.0) -> float:
-    """마무리: 건물마다 같은 크기의 모든 자리와 맞바꿔 보고 가장 좋은 것을 받아들인다 (더 나아지지 않을 때까지)."""
+    """마무리: 건물마다 같은 크기의 모든 자리와 맞바꿔 보고 가장 좋은 것을 받아들인다 (더 나아지지 않을 때까지).
+    네이티브 모듈(같은 규칙)이 있으면 그것으로."""
+    from . import native_layout
+    got = native_layout.polish(lay, scorer, origin0, seconds, MOVE_COST)
+    if got is not None:
+        org, cur = got
+        lay.apply([(i, o) for i, o in org.items() if lay.origin.get(i) != o])
+        return cur
     grid = lay.grid
     spots = {}
     cur = _objective(lay, scorer, origin0)
@@ -496,9 +508,14 @@ def polish(lay: Layout, scorer: Scorer, origin0: Dict[int, Tuple[int, int]], sec
 def anneal(lay: Layout, scorer: Scorer, seconds: float, rng: random.Random,
            t0: float = 0.8, t1: float = 0.005, origin0: Optional[Dict[int, Tuple[int, int]]] = None
            ) -> Tuple[Dict[int, Tuple[int, int]], float]:
-    """영역 맞바꾸기 담금질. 가장 좋았던 배치(자리 표)와 점수(벌점 포함)를 돌려준다."""
+    """영역 맞바꾸기 담금질. 가장 좋았던 배치(자리 표)와 점수(벌점 포함)를 돌려준다.
+    네이티브 모듈(같은 규칙, 수십 배 많이 시도)이 있으면 그것으로."""
+    from . import native_layout
     grid = lay.grid
     origin0 = origin0 if origin0 is not None else dict(lay.origin)
+    got = native_layout.anneal(lay, scorer, seconds, rng.getrandbits(64), t0, t1, origin0, EXPLORE_COST)
+    if got is not None:
+        return got[0], got[1]
     movable = [i for i, p in lay.pieces.items() if p.movable]
     if not movable:
         s, _ = scorer.score(lay)
@@ -666,6 +683,30 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     e0, d0 = scorer.score(lay0)
     rng = random.Random(seed)
     cands = [(dict(origin0), e0)]
+    search_note = ""
+    from . import native_layout
+    if native_layout._lib() is not None:
+        # 네이티브 담금질은 초당 약 180만 번 (파이썬 약 2천 번) — 0.5초 한 번이면 파이썬 3초보다 좋은 배치로
+        # 수렴한다 (실제 기지 4곳). 고정 시간 대신: 시작점을 바꿔 가며 돌리고, 연속 CONVERGED 번 더 좋은 배치가
+        # 안 나오면 멈춘다 (seconds 는 안전 상한). 경우의 수가 너무 많아 '전부 보고 최적 증명'은 불가능.
+        deadline = time.perf_counter() + seconds
+        best, stale, k = -1e18, 0, 0
+        while k < max(restarts, MIN_RESTARTS) or (stale < CONVERGED and time.perf_counter() < deadline):
+            k += 1
+            lay = Layout(grid, pieces, origin0)
+            o, _ = anneal(lay, scorer, RESTART_SECONDS * 0.8, rng, origin0=origin0)
+            lay = Layout(grid, pieces, o)
+            v = polish(lay, scorer, origin0, RESTART_SECONDS * 0.2)
+            cands.append((canonicalize(pieces, origin0, lay.origin), scorer.score(lay)[0]))
+            if v > best + max(1e-6, abs(best) * 0.001):
+                best, stale = v, 0
+            else:
+                stale += 1
+            if time.perf_counter() >= deadline:
+                break
+        search_note = (f"탐색 {k}번 (연속 {stale}번 더 좋은 배치 없음 — 수렴)" if stale >= CONVERGED
+                       else f"탐색 {k}번 (시간 상한)")
+        restarts = 0
     for k in range(restarts):
         sc = scorer
         lay = Layout(grid, pieces, origin0)
@@ -697,7 +738,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     wsum = lambda v: sum(v[r] * rw.get(r, 1.0) for r in (1, 2, 3))
     best = None
     alt = None                                          # 범위 효과만 가장 좋은 후보 (채집 발사 때문에 떨어진 것)
-    notes: List[str] = []
+    notes: List[str] = [search_note] if search_note else []
     # 이전 목표 배치(재배치 도중일 수 있음)도 후보로 — 새 계산이 2% 넘게 좋지 않으면 목표를 바꾸지 않는다
     # (실제 사용: 재배치 도중 다시 계산해 목표가 바뀌면서 채석장 둘레 돌을 빼게 됨)
     prefer_orig = None

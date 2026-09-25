@@ -67,10 +67,18 @@ class LayoutOptTest(unittest.TestCase):
         final[a], final[b] = o0[b], o0[a]
         self.assertEqual(lo.canonicalize(pieces, o0, final), o0)
 
+    @staticmethod
+    def full_score(base, origin):
+        """배치를 고르는 기준 (범위 효과 + 발사대 앞 구역). 보고하는 effect_after 는 범위 효과만."""
+        grid = grid_from_geo(base["geo"])
+        pieces, _ = lo.pieces_from_base(base, grid, lo.housing_types())
+        sc = lo.Scorer(pieces, lo._stat_types(base), lo.housing_types(), lane=lo.lane_values(base["geo"], grid))
+        return sc.score(lo.Layout(grid, pieces, origin))[0]
+
     def test_optimize_never_worse(self):
         fx, base, *_ = setup()
         plan = lo.optimize(base, None, None, seconds=1.5, restarts=1, seed=3)
-        self.assertGreaterEqual(plan.effect_after, plan.effect_before)
+        self.assertGreaterEqual(self.full_score(base, plan.origin_after), self.full_score(base, plan.origin_before) - 1e-9)
         self.assertEqual(plan.moved, sum(1 for i in plan.origin_after if plan.origin_after[i] != plan.origin_before[i]))
 
     def test_range_is_square_like_the_game(self):
@@ -178,8 +186,8 @@ class LayoutOptTest(unittest.TestCase):
         p1 = lo.optimize(base, None, None, seconds=1.5, restarts=1, seed=4)
         p2 = lo.optimize(base, None, None, seconds=1.5, restarts=1, seed=9, prefer=p1.centers_after)
         if p1.moved:
-            self.assertTrue(p2.origin_after == p1.origin_after or p2.effect_after >= p1.effect_after * 1.02,
-                            (p1.effect_after, p2.effect_after, p2.notes))
+            s1, s2 = self.full_score(base, p1.origin_after), self.full_score(base, p2.origin_after)
+            self.assertTrue(p2.origin_after == p1.origin_after or s2 > s1, (s1, s2, p2.notes))
 
 
 if __name__ == "__main__":
