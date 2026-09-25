@@ -318,9 +318,16 @@ def lane_idle(p: "Piece") -> bool:
     return not (p.type in TILE_RES or p.type in BOUNCE_TYPES or p.unfinished)
 
 
-PRESETS = {"effect": "효과 최대", "gold_u": "금광 U자"}
+PRESETS = {"effect": "효과 최대", "gold_u": "금광 U자", "plan": "계획도시"}
 PRESET_W = 20.0          # 프리셋 자리에 놓인 금광 하나의 가산 (범위 효과보다 크게 — 사용자가 고른 공략 틀을 따름)
 PRESET_CLEAR = 4.0       # 아직 금광이 없는 프리셋 자리를 다른 건물이 막는 칸마다 감점 — 0.5 는 약해서 채석장이 자리를 차지한 채 남음
+# 계획도시: 효율(범위 효과) 대신 '줄 맞춰 짓기'를 우선하는 프리셋 (사용자 요청 — 커뮤니티·게임 수치 근거 없음,
+# 순전히 기하학적 정의라 값은 임의로 정함. 실제로 보고 너무 심하거나 약하면 조정 필요).
+# 옮길 수 있는 건물끼리 원점(왼쪽 아래 타일)의 행(row) 또는 열(col)이 같으면 '줄이 섰다'고 보고,
+# 그 중 같은 종류 건물끼리면(같은 블록) 더 준다. 범위 효과 점수(대개 수십~백 단위)와 맞먹을 정도로 커서
+# 이 프리셋을 고르면 탐색이 효율보다 정렬을 확실히 우선하게 한다.
+TIDY_ROW_W = 1.0         # 같은 행/열에 있는 건물 하나당 (그 줄에 n개면 (n-1) 씩 더함)
+TIDY_TYPE_W = 2.0        # 그 중 같은 종류가 같은 행/열에 둘 이상이면 추가 (같은 블록으로 묶임)
 
 
 def gold_u_spots(geo: dict, grid: Grid, n: int = 7) -> List[Tuple[int, int]]:
@@ -343,8 +350,9 @@ class Scorer:
     def __init__(self, pieces: Dict[int, Piece], stat_types: Set[str], housing: Set[str],
                  res_weight: Optional[Dict[int, float]] = None, pad: float = 0.0,
                  preset_spots: Sequence[Tuple[int, int]] = (), preset_type: str = "kGoldMine",
-                 lane: Optional[Dict[Tuple[int, int], float]] = None):
+                 lane: Optional[Dict[Tuple[int, int], float]] = None, tidy: bool = False):
         self.pieces = pieces
+        self.tidy = tidy                   # 계획도시 프리셋: 효율 대신 줄 맞춰 짓기를 우선
         self.lane = lane or {}
         self.lane_ids = [i for i, p in pieces.items() if lane_idle(p)] if self.lane else []
         self.lane_tiles = [i for i, p in pieces.items() if p.type in TILE_RES] if self.lane else []
@@ -421,7 +429,30 @@ class Scorer:
             for s, cells in self.preset_cells.items():
                 if s not in filled:
                     total -= PRESET_CLEAR * sum(1 for c in cells if c in lay.occ)
+        if self.tidy:
+            total += self._tidy_score(lay)
         return total, detail
+
+    def _tidy_score(self, lay: Layout) -> float:
+        """계획도시: 옮길 수 있는 건물이 같은 행·열(원점 기준)에 줄지어 있을수록, 그 중 같은 종류끼리면 더 크게."""
+        row_type: Dict[int, Dict[str, int]] = {}
+        col_type: Dict[int, Dict[str, int]] = {}
+        for i, o in lay.origin.items():
+            p = self.pieces[i]
+            if not p.movable:
+                continue
+            row = row_type.setdefault(o[1], {})
+            row[p.type] = row.get(p.type, 0) + 1
+            col = col_type.setdefault(o[0], {})
+            col[p.type] = col.get(p.type, 0) + 1
+        score = 0.0
+        for by_line in (row_type, col_type):
+            for types in by_line.values():
+                n = sum(types.values())
+                if n > 1:
+                    score += TIDY_ROW_W * (n - 1)
+                score += TIDY_TYPE_W * sum(c - 1 for c in types.values() if c > 1)
+        return score
 
 
 MOVE_COST = 0.03        # 옮기는 건물 하나당 벌점 — 실제 기지에서 0.005(42번 옮김, 효과 +4%)·0.03(22번, +7.5%)·0.06(탐색 멈춤) 비교해 정함
@@ -466,11 +497,13 @@ def _near_spots(lay: Layout, scorer: Scorer, i: int, cand: List[Tuple[int, int]]
     return out or cand
 
 
-def polish(lay: Layout, scorer: Scorer, origin0: Dict[int, Tuple[int, int]], seconds: float = 3.0) -> float:
+def polish(lay: Layout, scorer: Scorer, origin0: Dict[int, Tuple[int, int]], seconds: float = 3.0,
+          native_ok: bool = True) -> float:
     """마무리: 건물마다 같은 크기의 모든 자리와 맞바꿔 보고 가장 좋은 것을 받아들인다 (더 나아지지 않을 때까지).
-    네이티브 모듈(같은 규칙)이 있으면 그것으로."""
+    네이티브 모듈(같은 규칙)이 있으면 그것으로 — 단, 네이티브가 모르는 채점 기준(예: 계획도시 tidy)을 쓸 때는
+    native_ok=False 로 파이썬 채점을 그대로 쓴다."""
     from . import native_layout
-    got = native_layout.polish(lay, scorer, origin0, seconds, MOVE_COST)
+    got = native_layout.polish(lay, scorer, origin0, seconds, MOVE_COST) if native_ok else None
     if got is not None:
         org, cur = got
         lay.apply([(i, o) for i, o in org.items() if lay.origin.get(i) != o])
@@ -506,14 +539,16 @@ def polish(lay: Layout, scorer: Scorer, origin0: Dict[int, Tuple[int, int]], sec
 
 
 def anneal(lay: Layout, scorer: Scorer, seconds: float, rng: random.Random,
-           t0: float = 0.8, t1: float = 0.005, origin0: Optional[Dict[int, Tuple[int, int]]] = None
-           ) -> Tuple[Dict[int, Tuple[int, int]], float]:
+           t0: float = 0.8, t1: float = 0.005, origin0: Optional[Dict[int, Tuple[int, int]]] = None,
+           native_ok: bool = True) -> Tuple[Dict[int, Tuple[int, int]], float]:
     """영역 맞바꾸기 담금질. 가장 좋았던 배치(자리 표)와 점수(벌점 포함)를 돌려준다.
-    네이티브 모듈(같은 규칙, 수십 배 많이 시도)이 있으면 그것으로."""
+    네이티브 모듈(같은 규칙, 수십 배 많이 시도)이 있으면 그것으로 — 단, native_ok=False 면 네이티브가 아직
+    모르는 채점 기준(계획도시 tidy)이 있다는 뜻이라 파이썬 담금질을 그대로 쓴다 (느리지만 정확)."""
     from . import native_layout
     grid = lay.grid
     origin0 = origin0 if origin0 is not None else dict(lay.origin)
-    got = native_layout.anneal(lay, scorer, seconds, rng.getrandbits(64), t0, t1, origin0, EXPLORE_COST)
+    got = native_layout.anneal(lay, scorer, seconds, rng.getrandbits(64), t0, t1, origin0, EXPLORE_COST) \
+        if native_ok else None
     if got is not None:
         return got[0], got[1]
     movable = [i for i, p in lay.pieces.items() if p.movable]
@@ -672,20 +707,24 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         return None
     preset_spots = gold_u_spots(geo, grid) if preset == "gold_u" else []
     lane = lane_values(geo, grid)
-    scorer = Scorer(pieces, stat_types, housing, res_weight, pad, preset_spots, lane=lane)
+    tidy = preset == "plan"
+    scorer = Scorer(pieces, stat_types, housing, res_weight, pad, preset_spots, lane=lane, tidy=tidy)
     plain = Scorer(pieces, stat_types, housing, res_weight, pad)        # 보고용 (프리셋 가산 없는 범위 효과)
     # 발사대 앞 구역(자원 타일은 앞에, 치여도 얻는 게 없는 건물은 뒤로)은 담금질과 후보 비교 모두에 넣는다.
     # 실제 기지 3곳에서 앞 구역을 넣은 쪽이 채집 발사 계산·범위 효과 모두 좋았다 (53.2 → 56.2, 49.8 → 52.1).
     laned = scorer
-    if preset == "gold_u":
+    if preset in ("gold_u", "plan"):
         prefer = None                                                  # 사용자가 고른 틀이므로 이전 목표를 고집하지 않음
+    # 계획도시(tidy)는 네이티브가 모르는 채점 기준이라 네이티브 탐색을 건너뛴다 — 파이썬 담금질은 느리지만
+    # (초당 약 2천 번, 네이티브는 180만 번) 정확하게 tidy 점수를 따라간다.
+    native_ok = not tidy
     lay0 = Layout(grid, pieces, origin0)
     e0, d0 = scorer.score(lay0)
     rng = random.Random(seed)
     cands = [(dict(origin0), e0)]
     search_note = ""
     from . import native_layout
-    if native_layout._lib() is not None:
+    if native_layout._lib() is not None and native_ok:
         # 네이티브 담금질은 초당 약 180만 번 (파이썬 약 2천 번) — 0.5초 한 번이면 파이썬 3초보다 좋은 배치로
         # 수렴한다 (실제 기지 4곳). 고정 시간 대신: 시작점을 바꿔 가며 돌리고, 연속 CONVERGED 번 더 좋은 배치가
         # 안 나오면 멈춘다 (seconds 는 안전 상한). 경우의 수가 너무 많아 '전부 보고 최적 증명'은 불가능.
@@ -710,9 +749,9 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     for k in range(restarts):
         sc = scorer
         lay = Layout(grid, pieces, origin0)
-        o, _ = anneal(lay, sc, seconds * 0.7 / max(1, restarts), rng, origin0=origin0)
+        o, _ = anneal(lay, sc, seconds * 0.7 / max(1, restarts), rng, origin0=origin0, native_ok=native_ok)
         lay = Layout(grid, pieces, o)
-        polish(lay, sc, origin0, seconds * 0.3 / max(1, restarts))
+        polish(lay, sc, origin0, seconds * 0.3 / max(1, restarts), native_ok=native_ok)
         cands.append((canonicalize(pieces, origin0, lay.origin), scorer.score(lay)[0]))
     blds = buildings_from_base(base)
 
@@ -791,12 +830,15 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             notes.append(f"범위 효과만 보면 +{(alt[0] - 1) * 100:.0f}% 배치가 있지만 채집 발사량이 "
                          f"{(alt[1] - 1) * 100:+.0f}% 라 권하지 않음")
         orig, s, hv = cands[0][0], e0, h0
-    if preset == "gold_u":
+    if preset in ("gold_u", "plan"):
         # 프리셋은 사용자가 고른 틀: 2% 기준·'지금이 최적' 판단 없이 가장 좋은 프리셋 후보를 쓴다
         cand_best = max(cands[1:], key=lambda c: c[1]) if len(cands) > 1 else cands[0]
         orig, s, hv = cand_best[0], cand_best[1], (harvest_eval(to_base(cand_best[0])["geo"]) if harvest_eval else None)
-        notes = [f"금광 U자: 발사대 앞 자리 {len(preset_spots)}곳 중 "
-                 f"{sum(1 for i, p in pieces.items() if p.type == 'kGoldMine' and orig.get(i) in set(preset_spots))}곳에 금광"]
+        if preset == "gold_u":
+            notes = [f"금광 U자: 발사대 앞 자리 {len(preset_spots)}곳 중 "
+                     f"{sum(1 for i, p in pieces.items() if p.type == 'kGoldMine' and orig.get(i) in set(preset_spots))}곳에 금광"]
+        else:
+            notes = []
     lay = Layout(grid, pieces, orig)
     if lane:
         def front(o):

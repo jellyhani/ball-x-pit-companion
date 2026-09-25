@@ -230,6 +230,16 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
                             best_gold = max(best_gold, gold)
                         ap.notes.append(f"U자 완성 시 채집 한 번에 골드 약 {best_gold:,.0f} 예상 (궤적 계산, 튕길 때 1~2골드 평균)")
             plan.alternatives["gold_u"] = ap
+    # 계획도시: 효율(범위 효과) 대신 같은 행·열에 줄지어 짓는 걸 우선 (사용자 요청 — 근거·게임 수치 없는 실험적 프리셋).
+    # 네이티브를 못 쓰는 순수 파이썬 담금질이라(초당 약 2천 번) 시간을 아끼지 않고 gold_u보다 넉넉히 준다.
+    alt2 = lo.optimize(snap, hv if team else None, None, seconds=seconds, restarts=4, res_weight=res_weight,
+                       seed=seed + 2, fixed=list(targets or {}), pad=pad, preset="plan")
+    if alt2 is not None:
+        ap2 = _plan_from(snap, alt2, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib)
+        ap2.preset = "plan"
+        ap2.notes.append("계획도시: 효율 대신 같은 행·열에 줄지어 짓는 걸 우선한 배치 — 근거 없는 실험적 프리셋, "
+                         "실제로 보고 판단할 것")
+        plan.alternatives["plan"] = ap2
     world = hs.world_from_geo(lo.final_base(snap, full).get("geo") or {}, 0.03)
     sweeps = {}
     if world and team:

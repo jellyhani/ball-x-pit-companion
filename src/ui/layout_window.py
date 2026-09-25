@@ -112,7 +112,7 @@ class MapCanvas(QWidget):
 
 class LayoutWindow(QWidget):
     recalc_requested = Signal()
-    preset_chosen = Signal(str)          # effect | gold_u
+    preset_chosen = Signal(str)          # effect | gold_u | plan
 
     def __init__(self, data: GameData):
         super().__init__(None)
@@ -122,7 +122,7 @@ class LayoutWindow(QWidget):
         self.setStyleSheet(f"background: {tk.css(tk.BG_SOLID)}; color: {tk.css(tk.TEXT)};")
         root = QHBoxLayout(self)
         left = QVBoxLayout()
-        self.preset_view = Segmented(["효과 최대", "금광 U자 (공략)"], 0)
+        self.preset_view = Segmented(["효과 최대", "금광 U자 (공략)", "계획도시"], 0)
         self.preset_view.changed.connect(self._on_preset)
         self.preset_view.setVisible(False)
         left.addWidget(self.preset_view)
@@ -171,7 +171,7 @@ class LayoutWindow(QWidget):
         self.sweeps: Dict[int, list] = {}
 
     def _on_preset(self, i: int):
-        name = "gold_u" if i == 1 else "effect"
+        name = {1: "gold_u", 2: "plan"}.get(i, "effect")
         self.preset_chosen.emit(name)
         if self.base is not None:
             self.set_result(self.base, self.plan_all, self.sweeps, name)

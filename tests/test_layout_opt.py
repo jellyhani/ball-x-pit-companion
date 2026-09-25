@@ -189,6 +189,35 @@ class LayoutOptTest(unittest.TestCase):
             s1, s2 = self.full_score(base, p1.origin_after), self.full_score(base, p2.origin_after)
             self.assertTrue(p2.origin_after == p1.origin_after or s2 > s1, (s1, s2, p2.notes))
 
+    def test_tidy_scores_rows_and_type_grouping(self):
+        """계획도시(tidy): 같은 행에 있으면 가산, 그 중 같은 종류끼리면 더 가산 (근거 없는 실험적 정의, 값은 임의)."""
+        _, _, grid, _, _ = setup()
+        sq = frozenset((x, y) for x in range(2) for y in range(2))
+        pieces = {1: lo.Piece(1, "kForest", 2, 2, sq, True, 0.0),
+                  2: lo.Piece(2, "kForest", 2, 2, sq, True, 0.0),
+                  3: lo.Piece(3, "kBoulder", 2, 2, sq, True, 0.0)}
+        scorer = lo.Scorer(pieces, set(), set(), tidy=True)
+        same_row = lo.Layout(grid, pieces, {1: (0, 0), 2: (2, 0), 3: (4, 0)})
+        scattered = lo.Layout(grid, pieces, {1: (0, 0), 2: (20, 6), 3: (40, 12)})
+        # 한 행에 3개(서로 다른 열) → 행 가산 (3-1); 그 중 숲 2개가 같은 종류 → 추가 (2-1). 열은 다 달라 열 가산 0.
+        expected = lo.TIDY_ROW_W * 2 + lo.TIDY_TYPE_W * 1
+        self.assertAlmostEqual(scorer.score(same_row)[0], expected)
+        self.assertAlmostEqual(scorer.score(scattered)[0], 0.0)
+        # tidy=False (기본) 이면 이 가산이 아예 없다
+        plain = lo.Scorer(pieces, set(), set())
+        self.assertAlmostEqual(plain.score(same_row)[0], 0.0)
+
+    def test_plan_preset_trades_effect_for_tidiness(self):
+        """'계획도시' 프리셋: 효율(범위 효과)이 조금 줄더라도 같은 행·열에 줄 세우는 배치를 고른다."""
+        fx, base, grid, pieces, o0 = setup()
+        plan = lo.optimize(base, None, None, seconds=2.0, restarts=1, seed=5, preset="plan")
+        self.assertIsNotNone(plan)
+        tidy_scorer = lo.Scorer(pieces, lo._stat_types(base), lo.housing_types(),
+                                lane=lo.lane_values(base["geo"], grid), tidy=True)
+        before = tidy_scorer.score(lo.Layout(grid, pieces, plan.origin_before))[0]
+        after = tidy_scorer.score(lo.Layout(grid, pieces, plan.origin_after))[0]
+        self.assertGreater(after, before)                 # 정렬 점수는 실제로 올라감
+
 
 if __name__ == "__main__":
     unittest.main()
