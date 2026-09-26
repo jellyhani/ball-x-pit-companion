@@ -22,7 +22,7 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__
 SUPPORTED = {
     "en": "English", "ja": "日本語", "schinese": "简体中文", "tchinese": "繁體中文",
     "french": "Français", "german": "Deutsch", "russian": "Русский",
-    "brazilian": "Português (Brasil)",
+    "brazilian": "Português (Brasil)", "italian": "Italiano", "polish": "Polski",
 }
 
 _cache: Dict[str, Dict[str, str]] = {}
@@ -60,6 +60,10 @@ def detect_ui_lang() -> str:
         return "russian"
     if low.startswith("pt"):
         return "brazilian"
+    if low.startswith("it"):
+        return "italian"
+    if low.startswith("pl"):
+        return "polish"
     return "ko"
 
 
