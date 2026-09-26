@@ -42,6 +42,29 @@ class HudTest(unittest.TestCase):
             self.assertIn("가운데 카드", hud.sub.text())
             hud.close()
 
+    def test_rows_not_squashed_when_view_changes_on_visible_hud(self):
+        """떠 있는 HUD 에 줄 있는 새 내용을 그려도 줄이 눌려 겹치지 않는다 (캐릭터 조합 '다른 조합' 이 빈 칸처럼
+        보이던 것: 높이가 줄을 빼고 고정돼 아이콘이 한곳에 겹침)."""
+        from src.ui.hud import HudRow, HudView, RecommendationHud
+        hud = RecommendationHud(game_data(), 1.2)
+        hud.render_view(HudView(title="기지 조언", status="가이드", status_tone="accent"))
+        hud.show()
+        app.processEvents()
+        v = HudView(title="난사광 + 회한자", subtitle="캐릭터 조합 추천 (알선소)", status="추천", status_tone="accent")
+        v.lines = [("커뮤니티 추천 2곳: 빠른 연사로 튕길수록 세지는 회한자 볼을 좁은 틈에 계속 튕김", "secondary")]
+        v.section = "다른 조합"
+        v.rows = [HudRow((), f"조합 {i}", "커뮤니티 추천 2곳") for i in range(3)]
+        v.footer = [("참고용", "tertiary")]
+        hud.render_view(v)
+        names = hud._row_widgets[1::3]
+        self.assertTrue(all(n.isVisible() and n.height() > 0 for n in names))
+        ys = [n.geometry().y() for n in names]
+        self.assertEqual(ys, sorted(set(ys)))                    # 줄마다 다른 높이 (겹치지 않음)
+        hud.setFixedHeight(120)                                  # 높이가 모자라게 고정된 상황
+        hud.fit_height()
+        self.assertGreater(hud.height(), 120)
+        hud.close()
+
     def test_font_scale_changes_every_label(self):
         from src.ui.hud import RecommendationHud
         small, large = RecommendationHud(game_data(), 1.0), RecommendationHud(game_data(), 1.2)

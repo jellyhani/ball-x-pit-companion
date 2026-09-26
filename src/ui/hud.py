@@ -246,6 +246,7 @@ class RecommendationHud(QWidget):
 
     def showEvent(self, e):
         super().showEvent(e)
+        self.fit_height()                              # 숨겨져 있을 때 그린 내용도 보일 때 높이를 다시 맞춘다
         hwnd = int(self.winId())
         try:
             self.capture_excluded = gw.set_capture_exclusion(hwnd, getattr(self, "_want_excluded", True))
@@ -345,6 +346,10 @@ class RecommendationHud(QWidget):
             self.rows.addWidget(note, r, 3, alignment=Qt.AlignmentFlag.AlignRight)
             self._row_widgets += [ic, name, note]
         for w in self._row_widgets:
+            # 이미 떠 있는 창에 새로 넣은 자식은 Qt 가 '다음 이벤트 때' 보이게 한다 — 그 전에 높이를 재면 줄이 빠진
+            # 채 고정돼 줄들이 한곳에 눌려 겹친다 (캐릭터 조합 HUD '다른 조합' 이 빈 칸처럼 보이던 것). 바로 보이게 함
+            w.show()
+        for w in self._row_widgets:
             w.show()        # 새 위젯은 이벤트 루프가 돌기 전까지 숨김 상태라 아래 높이 계산에서 빠진다 (첫 표시 때 줄이 잘림)
         self.rows.setColumnStretch(2, 1)
         has_rows = bool(v.rows)
@@ -360,14 +365,19 @@ class RecommendationHud(QWidget):
             lbl.setText(item[0])
             lbl.show()
         self.sep2.setVisible(bool(v.footer))
+        self.fit_height()
+        QTimer.singleShot(0, self.fit_height)          # 늦게 보이는 자식·글꼴 적용 뒤에 한 번 더 (높이가 모자라면 줄이 눌림)
+        self.update()
+
+    def fit_height(self):
+        """내용에 맞는 높이로 고정. 줄바꿈 글자가 있으면 adjustSize 가 높이를 넉넉히 잡아 남는 공간이 줄 사이로
+        퍼지므로 폭에 맞는 높이(heightForWidth)로 — 고정해 두면 뒤에 부르는 adjustSize 가 되돌리지 않는다."""
         self.setMinimumHeight(0)                       # 지난번 고정 높이 풀기
         self.setMaximumHeight(16777215)
         self.adjustSize()
-        # 줄바꿈 글자가 있으면 adjustSize 가 높이를 넉넉히 잡아 남는 공간이 줄 사이로 퍼진다 → 폭에 맞는 높이로
         self._root.activate()
         if self._root.hasHeightForWidth():
-            self.setFixedHeight(self._root.totalHeightForWidth(self.width()))   # 뒤에 부르는 adjustSize 가 되돌리지 않게
-        self.update()
+            self.setFixedHeight(self._root.totalHeightForWidth(self.width()))
 
     def _add_verdict_row(self, r: int, row: HudRow):
         """판정 색 막대 · 아이콘 · 이름과 이유 두 줄 · 판정 알약. 비추천·보류는 이름을 흐리게."""
