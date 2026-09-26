@@ -19,7 +19,10 @@ import os
 from typing import Dict, Optional
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "i18n")
-SUPPORTED = {"en": "English", "ja": "日本語", "schinese": "简体中文", "tchinese": "繁體中文"}
+SUPPORTED = {
+    "en": "English", "ja": "日本語", "schinese": "简体中文", "tchinese": "繁體中文",
+    "french": "Français", "german": "Deutsch",
+}
 
 _cache: Dict[str, Dict[str, str]] = {}
 _lang: Optional[str] = None
@@ -48,6 +51,10 @@ def detect_ui_lang() -> str:
         return "schinese"
     if low.startswith("en"):
         return "en"
+    if low.startswith("fr"):
+        return "french"
+    if low.startswith("de"):
+        return "german"
     return "ko"
 
 
