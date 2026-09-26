@@ -971,5 +971,6 @@
   "가이드 배치: 발사대 쪽은 자원 들판(생산 건물 {v0}개가 자기 타일 한가운데), 먼 쪽은 거처·능력치 덩어리와 나머지 건물 {v1}개": "Rehber yerleşimi: fırlatıcı tarafında kaynak tarlaları ({v0} üretim binası kendi karolarının ortasında), uzak tarafta konut/istatistik kümeleri ve diğer {v1} bina",
   "가이드 배치: 땅이 모자라 다시 짤 수 없음 — 지금 배치 유지": "Rehber yerleşimi: yeniden kurmak için yeterli arazi yok — mevcut yerleşim korunuyor",
   "지금 배치가 가이드 기준으로 더 낫거나 같음 — 옮기지 않음": "Mevcut yerleşim rehbere göre aynı ya da daha iyi — taşınacak bir şey yok",
-  "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} hasat/yenilenme konutunun menzilinde kendi kaynak karoları var (çevrilince hasat edemez — apo rehberi)"
+  "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} hasat/yenilenme konutunun menzilinde kendi kaynak karoları var (çevrilince hasat edemez — apo rehberi)",
+  "{text} — 단, {v0}은(는) 이미 {result2} 재료 ({names2})": "{text} — ama {v0} zaten {result2} için bir malzeme ({names2})"
 }

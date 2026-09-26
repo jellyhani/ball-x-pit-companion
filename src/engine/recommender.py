@@ -391,6 +391,18 @@ class Recommender:
                 cand = Reason("evo_partial", tr("{result} 재료 일부 보유", result=result), 5, tr("{result} 재료 일부", result=result))
             else:
                 continue
+            if cand.rule_id in ("evo_path", "evo_partner_max", "evo_path_level_unknown"):
+                # 짝 볼이 이미 다른 진화의 재료를 다 모은 상태면(예: 돌 + 알주머니 → 투석기) 이 카드는 그 짝을 두 진화가
+                # 나눠 쓰게 된다 — 이미 갖춘 진화보다 앞세우지 않고 어느 재료인지 밝힌다
+                taken = next(((o, r2) for o in others for r2 in d.recipes_using(o)
+                              if r2 is not r and r2.result != r.result and d.recipe_reachable(r2)
+                              and all(i in run.owned for i in r2.ingredients)), None)
+                if taken is not None:
+                    o, r2 = taken
+                    cand = Reason("evo_path_shared" if cand.rule_id != "evo_partner_max" else cand.rule_id,
+                                  tr("{text} — 단, {v0}은(는) 이미 {result2} 재료 ({names2})", text=cand.text, v0=d.name(o),
+                                     result2=d.name(r2.result), names2=" + ".join(d.name(x) for x in r2.ingredients)),
+                                  max(4.0, cand.weight * 0.5), cand.short)
             if best is None or cand.weight > best.weight:
                 if best is not None:
                     extra.append(best_result)

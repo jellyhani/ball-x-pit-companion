@@ -971,5 +971,6 @@
   "가이드 배치: 발사대 쪽은 자원 들판(생산 건물 {v0}개가 자기 타일 한가운데), 먼 쪽은 거처·능력치 덩어리와 나머지 건물 {v1}개": "Guide layout: resource fields on the launcher side ({v0} production buildings in the middle of their own tiles), and on the far side the housing/stat clusters plus {v1} other buildings",
   "가이드 배치: 땅이 모자라 다시 짤 수 없음 — 지금 배치 유지": "Guide layout: not enough land to rebuild — keeping the current layout",
   "지금 배치가 가이드 기준으로 더 낫거나 같음 — 옮기지 않음": "The current layout is as good or better by the guide — nothing to move",
-  "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} harvest/regrowth houses have their own resource tiles in range (they can't harvest when surrounded — apo guide)"
+  "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} harvest/regrowth houses have their own resource tiles in range (they can't harvest when surrounded — apo guide)",
+  "{text} — 단, {v0}은(는) 이미 {result2} 재료 ({names2})": "{text} — but {v0} is already an ingredient for {result2} ({names2})"
 }

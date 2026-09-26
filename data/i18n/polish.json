@@ -971,5 +971,6 @@
   "가이드 배치: 발사대 쪽은 자원 들판(생산 건물 {v0}개가 자기 타일 한가운데), 먼 쪽은 거처·능력치 덩어리와 나머지 건물 {v1}개": "Układ z poradnika: po stronie wyrzutni pola surowców ({v0} budynków produkcyjnych w środku własnych pól), po dalszej stronie skupiska domów/statystyk i {v1} pozostałych budynków",
   "가이드 배치: 땅이 모자라 다시 짤 수 없음 — 지금 배치 유지": "Układ z poradnika: za mało terenu na przebudowę — zostaje obecny układ",
   "지금 배치가 가이드 기준으로 더 낫거나 같음 — 옮기지 않음": "Obecny układ jest równie dobry lub lepszy według poradnika — nic do przenoszenia",
-  "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} domów zbierających/odnawiających ma własne pola surowców w zasięgu (otoczone nic nie zbierają — poradnik apo)"
+  "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} domów zbierających/odnawiających ma własne pola surowców w zasięgu (otoczone nic nie zbierają — poradnik apo)",
+  "{text} — 단, {v0}은(는) 이미 {result2} 재료 ({names2})": "{text} — ale {v0} jest już składnikiem: {result2} ({names2})"
 }

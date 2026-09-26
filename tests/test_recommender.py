@@ -48,6 +48,22 @@ class RecommenderTest(unittest.TestCase):
         self.assertNotIn("evo_ready", ids)
         self.assertIn("evo_path", ids)
 
+    def test_partner_already_used_by_another_evolution_is_marked(self):
+        # 돌 + 알주머니 → 투석기 재료가 이미 모임. 바람(돌 + 바람 → 모래폭풍)은 돌을 나눠 쓰게 되므로 약하게 + 밝힌다
+        self.with_known_max(3)
+        run = self.state(("ball:stone", 2), ("ball:eggsac", 2))
+        ev = self.rec.recommend(session([card(0, "ball:wind")]), run).evals[0]
+        ids = [x.rule_id for x in ev.reasons]
+        self.assertIn("evo_path_shared", ids)
+        shared = next(x for x in ev.reasons if x.rule_id == "evo_path_shared")
+        self.assertIn("투석기", shared.text)
+        # 혼자 쓰는 짝이면 그대로
+        self.setUp()
+        self.with_known_max(3)
+        run = self.state(("ball:stone", 2))
+        ev = self.rec.recommend(session([card(0, "ball:wind")]), run).evals[0]
+        self.assertNotIn("evo_path_shared", [x.rule_id for x in ev.reasons])
+
     def test_unknown_max_level_makes_no_numeric_claim(self):
         # 게임이 최대 레벨을 알려 주기 전(화면 인식 경로 등)에는 위키 값으로 숫자를 말하지 않는다
         run = self.state(("ball:bleed", 2), ("ball:heavy", 3))

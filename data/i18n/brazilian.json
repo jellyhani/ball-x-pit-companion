@@ -971,5 +971,6 @@
   "가이드 배치: 발사대 쪽은 자원 들판(생산 건물 {v0}개가 자기 타일 한가운데), 먼 쪽은 거처·능력치 덩어리와 나머지 건물 {v1}개": "Layout do guia: campos de recursos do lado do lançador ({v0} construções de produção no meio dos próprios blocos) e, do lado oposto, os blocos de moradia/atributos mais {v1} outras construções",
   "가이드 배치: 땅이 모자라 다시 짤 수 없음 — 지금 배치 유지": "Layout do guia: falta terreno para refazer — mantendo o layout atual",
   "지금 배치가 가이드 기준으로 더 낫거나 같음 — 옮기지 않음": "O layout atual é igual ou melhor pelo guia — nada a mudar",
-  "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} moradias de colheita/regeneração têm os próprios blocos de recurso no alcance (cercadas, não colhem nada — guia do apo)"
+  "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} moradias de colheita/regeneração têm os próprios blocos de recurso no alcance (cercadas, não colhem nada — guia do apo)",
+  "{text} — 단, {v0}은(는) 이미 {result2} 재료 ({names2})": "{text} — mas {v0} já é ingrediente de {result2} ({names2})"
 }

@@ -971,5 +971,6 @@
   "가이드 배치: 발사대 쪽은 자원 들판(생산 건물 {v0}개가 자기 타일 한가운데), 먼 쪽은 거처·능력치 덩어리와 나머지 건물 {v1}개": "Leitfaden-Layout: Ressourcenfelder auf der Werferseite ({v0} Produktionsgebäude mitten in ihren Feldern), auf der fernen Seite Wohn-/Werteblöcke und {v1} weitere Gebäude",
   "가이드 배치: 땅이 모자라 다시 짤 수 없음 — 지금 배치 유지": "Leitfaden-Layout: zu wenig Land für einen Neubau — aktuelles Layout bleibt",
   "지금 배치가 가이드 기준으로 더 낫거나 같음 — 옮기지 않음": "Das aktuelle Layout ist nach dem Leitfaden gleich gut oder besser — nichts zu verschieben",
-  "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} Ernte-/Nachwuchs-Häuser haben eigene Ressourcenfelder in Reichweite (umbaut ernten sie nichts — apo-Leitfaden)"
+  "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} Ernte-/Nachwuchs-Häuser haben eigene Ressourcenfelder in Reichweite (umbaut ernten sie nichts — apo-Leitfaden)",
+  "{text} — 단, {v0}은(는) 이미 {result2} 재료 ({names2})": "{text} — aber {v0} ist bereits Zutat für {result2} ({names2})"
 }
