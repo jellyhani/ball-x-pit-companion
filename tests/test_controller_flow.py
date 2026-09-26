@@ -110,9 +110,15 @@ class ControllerFlowTest(unittest.TestCase):
         best = self.c.char_combo[0]
         self.assertIn("char:sisyphus", (best.a, best.b), self.c.char_combo)
 
-        # 계속(6번 넘게) 비면 정말 다시 고르는 중으로 보고 고정을 놓는다
-        for _ in range(6):
+        # 실측(2026-09-26): 로드아웃은 몇 초에 한 번만 잡힌다 — 오래 비어도 이 화면 흐름 안에서는 고정을 유지
+        for _ in range(30):
             self.c._update_char_combo(flicker, "kSelectingChar")
+        best = self.c.char_combo[0]
+        self.assertIn("char:sisyphus", (best.a, best.b), self.c.char_combo)
+
+        # 화면 흐름을 떠나면(기지로 돌아감) 놓는다
+        self.c._update_char_combo({"buildings": mm}, "kNormal")
+        self.c._update_char_combo(flicker, "kSelectingChar")
         best = self.c.char_combo[0]
         self.assertNotIn("char:sisyphus", (best.a, best.b), self.c.char_combo)
 

@@ -524,13 +524,11 @@ class AppController(QObject):
             # 실제 확인: 캐릭터 고르는 화면이 떠 있는 동안 로드아웃 화면(LoadoutUI)이 몇 폴링에 한 번씩
             # 잠깐 비활성화돼 char1/char2 가 통째로 안 잡힌다 — 그때마다 '고정' 추천이 풀렸다가 방금 고른
             # 캐릭터를 무시한 일반 추천으로 돌아가는 깜빡임이 있었다(로그로 확인). 몇 번 정도는 방금 본
-            # 값을 그대로 쓰고, 계속 비면(정말 다시 고르는 중으로 보고) 놓는다.
+            # 값을 그대로 쓴다. (2026-09-26 실측: 캐릭터를 고르는 동안 로드아웃 화면은 대부분 비활성이고 몇 초에 한 번만
+            # 잡힌다 — 5번만 봐 주면 5초마다 '고정' 추천이 풀려 엉뚱한 조합이 떴다.) 화면 흐름을 떠나면(위 in_flow)
+            # 그때 놓는다. 다시 고르면 로드아웃이 잡힐 때 새 값으로 바뀐다.
             self._loadout_miss += 1
-            if self._loadout_miss <= 5:
-                char1, char2 = self._loadout_seen
-            else:
-                self._loadout_seen = (None, None)
-                char1, char2 = None, None
+            char1, char2 = self._loadout_seen
         want = state == "kSelectingChar" or (state == "kSelectingLoadout" and char1 and char2)
         if not want:
             if self.char_combo is not None:
