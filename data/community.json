@@ -243,6 +243,154 @@
     "Everflowing Goblet"
    ],
    "why": "범위·상태 이상 4배 — 범위 지대를 겹치기"
+  },
+  "char:default": {
+   "items": [
+    "Hemorrhage",
+    "Leech",
+    "Sacrifice",
+    "Spider Queen",
+    "Cornucopia",
+    "Slingshot",
+    "Turret"
+   ],
+   "why": "출혈을 걸면서 베이비볼로 몰아치기"
+  },
+  "char:cohabitants": {
+   "items": [
+    "Soul Sucker",
+    "Bomb",
+    "Maggot",
+    "Hemorrhage",
+    "Gracious Impaler",
+    "Soul Reaver",
+    "Phantom Regalia",
+    "Hourglass"
+   ],
+   "why": "양쪽으로 쏘며 흡혈·베이비볼로 화면 양쪽을 정리"
+  },
+  "char:embedded": {
+   "items": [
+    "Noxious",
+    "Radiation Beam",
+    "Swamp",
+    "Maggot",
+    "Ghostly Corset",
+    "Wagon Wheel",
+    "Silver Bullet",
+    "Magnet"
+   ],
+   "why": "긴 줄을 관통하며 중독을 겹치기"
+  },
+  "char:emptynester": {
+   "items": [
+    "Assassin",
+    "Phantom",
+    "Sandstorm",
+    "Wraith",
+    "Fleet Feet",
+    "Ethereal Cloak",
+    "Wagon Wheel"
+   ],
+   "why": "관통하는 유령 계열 볼 하나를 키우기"
+  },
+  "char:flagellant": {
+   "items": [
+    "Maggot",
+    "Spider Queen",
+    "Shotgun",
+    "Voluptuous Egg Sac",
+    "Cornucopia",
+    "Slingshot",
+    "Turret"
+   ],
+   "why": "베이비볼을 최대한 만들어 화면 전체에 튕기기"
+  },
+  "char:backpacker": {
+   "items": [
+    "Steel",
+    "Satan",
+    "Nosferatu",
+    "Vampire Lord"
+   ],
+   "why": "칸이 많으니 혼자서도 강한 진화 볼을 여러 개"
+  },
+  "char:packrat": {
+   "items": [
+    "Inferno",
+    "Storm",
+    "Magma",
+    "Armageddon",
+    "Grotesque Artillery",
+    "Windweaver",
+    "Remote Detonator",
+    "Wretched Onion"
+   ],
+   "why": "볼을 스스로 만드는 패시브를 쌓기"
+  },
+  "char:physicist": {
+   "items": [
+    "Sun",
+    "Radiation Beam",
+    "Blizzard",
+    "Noxious",
+    "Magic Staff",
+    "Radiant Feather",
+    "Gemspring",
+    "Eye of the Beholder"
+   ],
+   "why": "가운데 서서 중력에 맡기고 범위·방사능으로 녹이기"
+  },
+  "char:tactician": {
+   "items": [
+    "Assassin",
+    "Bomb",
+    "Holy Laser",
+    "Nuclear Bomb",
+    "Dynamite",
+    "Magic Staff",
+    "Pressure Valve"
+   ],
+   "why": "한 턴에 여러 적을 치는 범위 빌드"
+  },
+  "char:falconer": {
+   "items": [
+    "Storm",
+    "Blizzard",
+    "Lightning Rod",
+    "Lovestruck",
+    "Ethereal Cloak",
+    "Fleet Feet",
+    "Magic Staff",
+    "Pressure Valve"
+   ],
+   "why": "양옆에서 쏘는 번개로 줄 전체를 제어"
+  },
+  "char:carouser": {
+   "items": [
+    "Berserk",
+    "Lovestruck",
+    "Incubus",
+    "Succubus",
+    "Crown of Thorns",
+    "Wretched Onion",
+    "Everflowing Goblet",
+    "Fleet Feet"
+   ],
+   "why": "가까이서 매혹을 계속 걸고 가시·회복으로 버티기"
+  },
+  "char:tunneller": {
+   "items": [
+    "Magma",
+    "Swamp",
+    "Glacier",
+    "Brimstone",
+    "Magic Staff",
+    "Ethereal Cloak",
+    "Wretched Onion",
+    "Everflowing Goblet"
+   ],
+   "why": "범위 지대가 겹치는 자리에서 화상·중독·빙결을 쌓기"
   }
  },
  "char_pairs": [

@@ -38,6 +38,12 @@ class CommunityTest(unittest.TestCase):
                     self.assertIsNotNone(self.d.item_by_english(n), n)
         self.assertEqual(self.d.community_tier("ball:sun"), "S")
 
+    def test_char_builds_map_all_names(self):
+        for cid, b in self.d.community["char_builds"].items():
+            self.assertIn(cid, self.d.characters, cid)
+            for n in b["items"]:
+                self.assertIsNotNone(self.d.item_by_english(n), (cid, n))
+
     def test_evo_tier_only_with_owned_partner(self):
         # 독을 가졌으면 지진은 늪(S) 진화, 짝 재료가 없으면(빛) 진화 티어 보너스 없음
         ev = self.evals(self.run_with("ball:poison"), "ball:earthquake")["ball:earthquake"]

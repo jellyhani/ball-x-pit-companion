@@ -113,6 +113,11 @@ PyInstaller onedir 빌드(Qt 라이브러리는 LGPL 조건대로 별도 파일)
 - 커뮤니티 평가(`data/community.json`, 순위·이름만 정리): [Game Rant 볼 진화 티어](https://gamerant.com/ball-x-pit-evolutions-tier-list-best-balls/) (2026-06),
   [Dexerto 패시브 티어](https://www.dexerto.com/wikis/ball-x-pit/passive-tier-list/) (2026-08), Dexerto 캐릭터별 추천 빌드,
   캐릭터 조합: [Dexerto](https://www.dexerto.com/wikis/ball-x-pit/best-ball-x-pit-character-combinations/), [Screen Rant](https://screenrant.com/ball-x-pit-best-character-combinations-matchmaker/), [Steam 토론](https://steamcommunity.com/app/2062430/discussions/0/624436409753066508/)
+- 캐릭터 성향(`data/rules.json` characters.*.strategy — 추천 가중치는 추정): 게임 파일의 캐릭터 공식 설명,
+  [BALL x PIT Wiki 캐릭터·시작 볼](https://ballxpit.wiki.gg/wiki/Characters), [나무위키 캐릭터](https://namu.wiki/w/BALL%20x%20PIT/%EC%BA%90%EB%A6%AD%ED%84%B0),
+  Dexerto 캐릭터별 추천 빌드·[캐릭터 티어](https://www.dexerto.com/wikis/ball-x-pit/character-tier-list-2/),
+  [TheGamer 캐릭터 순위](https://www.thegamer.com/ball-x-pit-best-characters-tier-list/),
+  Steam 가이드 [Character Combinations](https://steamcommunity.com/sharedfiles/filedetails/?id=3600044840)
 - 기지 배치 공략: [Screen Rant](https://screenrant.com/ball-x-pit-base-layout-harvest-tips/) (공사 중인 건물을 채집 구역 가장자리로,
   잔병의 오두막 범위에 거처, 대저택 범위 채우기), [Dexerto](https://www.dexerto.com/wikis/ball-x-pit/best-base-layout/),
   위키 [Veteran's Hut](https://ballxpit.wiki.gg/wiki/Veteran's_Hut)

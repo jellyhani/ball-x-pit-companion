@@ -127,7 +127,7 @@
  },
  {
   "seq": 4547,
-  "status": "recommend",
+  "status": "close",
   "best": "ball:heavy",
   "cards": [
    [
@@ -136,7 +136,7 @@
    ],
    [
     "ball:radiationbeam",
-    "skip"
+    "alt"
    ],
    [
     "passive:etherealcloak",

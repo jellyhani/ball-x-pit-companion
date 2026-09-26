@@ -456,11 +456,16 @@ class Recommender:
             return
         keys = self._item_keys(item.id, kind, upgrade, ev)
         for cid in run.character_ids:
-            st = self.data.character_rule(cid).get("strategy")
+            rule = self.data.character_rule(cid)
+            st = rule.get("strategy")
             if not st:
                 continue
             fav = st.get("favor", {})
-            hits = [(fav[k], k) for k in keys if k in fav]
+            item_keys = keys
+            if kind == "ball" and rule.get("boosts_wiki_status_or_aoe"):
+                # 범위·상태 이상 볼은 _character 의 전용 규칙(4배, +8)이 이미 셌다 — 같은 이유로 두 번 올리지 않는다
+                item_keys = [k for k in keys if k not in ("aoe", "status")]
+            hits = [(fav[k], k) for k in item_keys if k in fav]
             if not hits:
                 continue
             best = max(hits)
