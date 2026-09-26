@@ -191,7 +191,7 @@ class FullPlan:
     harvest_after: Optional[List[int]] = None
     moved: int = 0
     notes: List[str] = field(default_factory=list)
-    turned: Dict[int, int] = field(default_factory=dict)   # 회전해서 놓는 건물 → 시계 방향 90° 횟수 (1~3, 계획도시)
+    turned: Dict[int, int] = field(default_factory=dict)   # 회전해서 놓는 건물 → 시계 방향 90° 횟수 (1~3, 가이드 배치)
 
 
 class Layout:
@@ -697,7 +697,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     stats = {b.get("type") for b in base.get("buildings") or []
              if b.get("stat") and not any(x in b["stat"] for x in ("None", "Invalid", "Count", "Max"))}
     stat_types = stats or STAT_FALLBACK
-    # 계획도시는 '쳐야 지어지는' 건물(fixed 로 넘어온 공사 중 건물)을 제자리에 묶지 않고 발사대 쪽으로 옮긴다
+    # 가이드 배치는 '쳐야 지어지는' 건물(fixed 로 넘어온 공사 중 건물)을 제자리에 묶지 않고 발사대 쪽으로 옮긴다
     pieces, origin0 = pieces_from_base(base, grid, housing, () if preset == "plan" else fixed)
     if not pieces:
         return None
@@ -853,7 +853,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
 def _optimize_city(base: dict, grid: Grid, pieces: Dict[int, Piece], origin0: Dict[int, Tuple[int, int]],
                    scorer: Scorer, plain: Scorer, harvest_eval: Optional[Callable[[dict], List[int]]],
                    pad: float, hit: Set[int] = frozenset()) -> FullPlan:
-    """계획도시 프리셋: 담금질 대신 구역을 나눠 반복 패턴으로 다시 짠다 (layout_city — 실험적, 근거 없음)."""
+    """가이드 배치: Steam 공략 3개 규칙으로 다시 짠다 (layout_city.plan_city)."""
     from .layout_city import plan_city
     geo = base.get("geo") or {}
     launcher = geo.get("launcher") or []
@@ -881,7 +881,9 @@ PAD_CANDIDATES = (0.0, 0.5625, 1.125, 1.6875)     # 0 / 반 타일 / 한 타일 
 
 def _stat_types(base: dict) -> Set[str]:
     return {b.get("type") for b in base.get("buildings") or []
-            if b.get("stat") and not any(x in b["stat"] for x in ("None", "Invalid", "Count", "Max"))} or STAT_FALLBACK
+            # 게임은 '능력치 없음'을 kNum(열거형 끝 값)으로 보낸다 — 빼지 않으면 숲·밀밭까지 전부 능력치 건물로 셌다
+            if b.get("stat") and not any(x in b["stat"] for x in ("None", "Invalid", "Count", "Max", "Num"))} \
+        or STAT_FALLBACK
 
 
 def calibrate_range(base: dict) -> Tuple[float, int, int]:
@@ -1151,7 +1153,7 @@ def _moves(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int, int]]
         p = rotated(pieces[i], k)
         out.append(Move(i, grid.center(o[0], o[1], p.w, p.h), 0.0,
                         tr("잠시 비켜 두기 (자리 비우기)") if park else
-                        tr("{v0} 이 자리로", v0=turn_text(k)) if k else tr("최적 배치 자리로"),
+                        tr("{v0} 이 자리로", v0=turn_text(k)) if k else tr("가이드 배치 자리로"),
                         rot=(rots.get(i, 0) + k) % 4 if k else -1))
     return out
 

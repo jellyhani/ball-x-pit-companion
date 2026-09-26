@@ -162,7 +162,7 @@ class BaseAimFlowTest(unittest.TestCase):
                 time.sleep(0.02)
             lines = [t for t, _ in c.base_overlay._lines]
             self.assertTrue(lines[0].startswith("미완성 먼저:"), lines)
-            self.assertTrue(any("어떤 각도로도 닿지 않음" in t and ("빈 자리로 옮기기" in t or "최적 배치대로 옮기면 닿음" in t)
+            self.assertTrue(any("어떤 각도로도 닿지 않음" in t and ("빈 자리로 옮기기" in t or "가이드 배치대로 옮기면 닿음" in t)
                                 for t in lines), lines)
             self.assertTrue(any(t.startswith("1위 ") or t.startswith("각도 차이 거의 없음") for t in lines), lines)
             self.assertTrue(c.base_overlay._path_now and c.base_overlay._path_best)

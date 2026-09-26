@@ -122,19 +122,19 @@ class LayoutWindow(QWidget):
         self.setStyleSheet(f"background: {tk.css(tk.BG_SOLID)}; color: {tk.css(tk.TEXT)};")
         root = QHBoxLayout(self)
         left = QVBoxLayout()
-        self.view = Segmented([tr("지금 배치"), tr("최적 배치")], 0)
+        self.view = Segmented([tr("지금 배치"), tr("가이드 배치")], 0)
         self.view.changed.connect(lambda _i: self._redraw())
         left.addWidget(self.view)
         self.canvas = MapCanvas()
         left.addWidget(self.canvas, 1)
-        cap = QLabel(tr("색: 밀밭 노랑 · 숲 초록 · 바위 회색. 테두리 건물은 범위 효과 건물(점선 원 = 범위). 최적 배치 = 기지를 다 치우고 다시 놓는다고 보고 건물마다 효과가 최대인 자리 (범위 효과 + 채집 발사량). 주황 번호 = 옮기는 순서 (앞 10개) — 게임에서 재배치 모드에 들어가면 다음 옮기기가 게임 화면에 표시됩니다."))
+        cap = QLabel(tr("색: 밀밭 노랑 · 숲 초록 · 바위 회색. 테두리 건물은 범위 효과 건물(점선 원 = 범위). 가이드 배치 = Steam 공략 3개(Zarcos·apo·Drake) 규칙대로 다시 짠 배치 — 발사대 쪽은 자원 들판, 먼 쪽은 잔병의 오두막 둘레 거처 덩어리와 나머지 건물. 지금 배치보다 나아질 때만 권함. 주황 번호 = 옮기는 순서 (앞 10개) — 게임에서 재배치 모드에 들어가면 다음 옮기기가 게임 화면에 표시됩니다."))
         cap.setWordWrap(True)
         cap.setStyleSheet(f"color: {tk.css(tk.TEXT_2)};")
         left.addWidget(cap)
         root.addLayout(left, 3)
         panel = QWidget()
         right = QVBoxLayout(panel)
-        right.addWidget(section_title(tr("최적 배치로 옮기기")))
+        right.addWidget(section_title(tr("가이드 배치로 옮기기")))
         self.steps = Group()
         right.addWidget(self.steps)
         right.addWidget(section_title(tr("새로 지을 건물 · 강화 추천 (배치 효과 기준)")))
@@ -167,7 +167,7 @@ class LayoutWindow(QWidget):
         self.sweeps: Dict[int, list] = {}
 
     def set_result(self, base: dict, plan: Optional[LayoutPlan], sweeps: Dict[int, list]):
-        """plan: 계획도시 배치 (layout_city)."""
+        """plan: 가이드 배치 (layout_city)."""
         self.base, self.plan, self.sweeps = base, plan, sweeps
         d = self.data
         blds = buildings_from_base(base)
@@ -175,7 +175,7 @@ class LayoutWindow(QWidget):
         if plan:
             pct = (plan.score_after / plan.score_before - 1) * 100 if plan.score_before else 0.0
             self.steps.add(row(tr("옮기기 {v0}번", v0=len(plan.swaps)), value_label(tr("범위 효과 {pct:+.0f}%", pct=pct)),
-                               tr("순서대로 옮기면 최적 배치가 됩니다 (잠시 비켜 두기 포함)") if plan.swaps else ""))
+                               tr("순서대로 옮기면 가이드 배치가 됩니다 (잠시 비켜 두기 포함)") if plan.swaps else ""))
             for note in getattr(plan, "notes", []) or []:
                 self.steps.add(row(note))
         if plan and plan.swaps:
@@ -185,9 +185,9 @@ class LayoutWindow(QWidget):
                     continue
                 if isinstance(sw, Move) and sw.target < 0 and sw.gain == 0:
                     park = sw.reason in (tr("잠시 비켜 두기 (자리 비우기)"), tr("잠시 비켜 두기 (다른 건물 자리 비우기)"))
-                    self.steps.add(row(f"{n}. {d.building_name(a.type)} → {tr('빈 곳에 잠시') if park else tr('최적 자리')}",
+                    self.steps.add(row(f"{n}. {d.building_name(a.type)} → {tr('빈 곳에 잠시') if park else tr('목표 자리')}",
                                        value_label(tr("비켜 두기") if park else tr("옮기기")),
-                                       tr("다른 건물이 들어갈 자리를 비우려고 잠시 옮김 — 나중에 최적 자리로 다시 옮김") if park else ""))
+                                       tr("다른 건물이 들어갈 자리를 비우려고 잠시 옮김 — 나중에 목표 자리로 다시 옮김") if park else ""))
                 elif isinstance(sw, Move) and sw.target >= 0:
                     t = blds.get(sw.target)
                     tname = d.building_name(t.type) if t else tr("미완성 건물")

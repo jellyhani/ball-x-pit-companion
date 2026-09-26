@@ -605,7 +605,7 @@ class ControlWindow(QWidget):
         lg = pg.add(Group())
         lb = QPushButton(tr("배치도 열기"))
         lb.clicked.connect(self.layout_requested.emit)
-        lg.add(row(tr("최적 배치 · 채집 궤적"), lb, tr("기지를 다 치우고 다시 놓는다고 본 최적 배치, 옮기는 순서, 채집 조준 각도")))
+        lg.add(row(tr("가이드 배치 · 채집 궤적"), lb, tr("Steam 공략 3개 규칙으로 다시 짠 배치, 옮기는 순서, 채집 조준 각도")))
         self.base_layout = pg.add(Group())
         self.base_layout.add(row(tr("기지 화면에 들어가면 계산합니다")))
         pg.add(section_title(tr("스파 재채집 손익")))
@@ -646,10 +646,10 @@ class ControlWindow(QWidget):
             return
         pct = (plan.score_after / plan.score_before - 1) * 100 if plan.score_before else 0.0
         if plan.swaps:
-            self.base_layout.add(row(tr("최적 배치까지 옮기기 {v0}번", v0=len(plan.swaps)), chip(tr("범위 효과 {pct:+.0f}%", pct=pct), "accent"),
+            self.base_layout.add(row(tr("가이드 배치까지 옮기기 {v0}번", v0=len(plan.swaps)), chip(tr("범위 효과 {pct:+.0f}%", pct=pct), "accent"),
                                      tr("재배치 모드에 들어가면 다음 옮기기가 게임 화면에 번호로 나옵니다")))
         else:
-            self.base_layout.add(row(tr("지금 배치가 최적에 가까움"), chip(tr("유지"), "ok")))
+            self.base_layout.add(row(tr("지금 배치가 가이드 기준으로 충분함"), chip(tr("유지"), "ok")))
         for t, _c, _sz, gain, n, *_ in (getattr(plan, "builds", None) or [])[:3]:
             from ..engine.layout_opt import TILE_RES
             what = tr("튕김 많은 자리") if t == "kGoldMine" else tr("범위 효과 +{gain:.1f}", gain=gain)

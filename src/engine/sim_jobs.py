@@ -138,7 +138,7 @@ def REACH_ANGLES():
 def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequence[dict],
                targets: Optional[Dict[int, int]] = None, need: int = 1, seconds: float = 12.0,
                prefer: Optional[Dict[int, tuple]] = None, char_levels: Optional[Dict[str, int]] = None):
-    """계획도시 배치(전체 재배치, layout_city) → 닿지 않는 미완성 건물로 길 열기 → 새 건물 자리. 자원별 추천 각도.
+    """가이드 배치(전체 재배치, layout_city) → 닿지 않는 미완성 건물로 길 열기 → 새 건물 자리. 자원별 추천 각도.
     seconds·prefer 는 예전 담금질용 — 지금은 쓰지 않는다 (호출 쪽 호환용).
 
     돌려주는 값: (LayoutPlan, 자원별 각도 순위). LayoutPlan.swaps 는 게임에서 할 옮기기 순서(잠시 비켜 두기 포함),
@@ -180,7 +180,7 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
 
     calib = lo.calibrate_range(snap)                  # 게임이 직접 센 범위 안 타일 수와 맞춤 (플러그인 1.9)
     pad = calib[0] if calib[2] else 0.0
-    # 배치 추천은 계획도시 하나 (사용자 결정 2026-09-25): 생산 유닛 격자 + 빽빽한 마을 + 금광 U자 (layout_city).
+    # 배치 추천은 가이드 배치 하나 (사용자 결정 2026-09-25·26): Steam 공략 3개 규칙 (layout_city).
     # 담금질이 아니라 정해진 규칙으로 짜서 1초 안팎, 재배치 도중 다시 계산해도 목표가 같다.
     full = lo.optimize(snap, hv if team else None, None, res_weight=res_weight,
                        fixed=list(targets or {}), pad=pad, preset="plan")
@@ -225,7 +225,7 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
         elif i in opener:
             steps.append(Move(i, to, 1.0, tr("미완성 건물로 가는 길 열기"), target=opener[i], rot=rot))
         else:
-            steps.append(Move(i, to, 0.0, tr("{v0} 이 자리로", v0=lo.turn_text(k)) if k else tr("최적 배치 자리로"), rot=rot))
+            steps.append(Move(i, to, 0.0, tr("{v0} 이 자리로", v0=lo.turn_text(k)) if k else tr("가이드 배치 자리로"), rot=rot))
     final_blds = buildings_from_base(final_base)
     plan = LayoutPlan(full.effect_before, full.effect_after, steps, full.detail_before, full.detail_after,
                       full.harvest_before, hv(final_base.get("geo") or {}) if team else full.harvest_after)

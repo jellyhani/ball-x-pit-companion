@@ -244,7 +244,7 @@ class LayoutOptTest(unittest.TestCase):
             self.assertEqual(len(near), n, prod)
 
     def test_plan_preset_packs_town_away_from_launcher(self):
-        """계획도시: 마을 건물은 발사대에서 먼 쪽에 빽빽하게 (테두리 사각형 안 빈칸이 적게), 결과는 늘 같다."""
+        """가이드 배치: 마을 건물은 발사대에서 먼 쪽에 빽빽하게 (테두리 사각형 안 빈 땅이 적게), 결과는 늘 같다."""
         from src.engine import layout_city as lc
         fx, base, grid, pieces, o0 = setup()
         plan = lo.optimize(base, None, None, preset="plan")
@@ -258,7 +258,48 @@ class LayoutOptTest(unittest.TestCase):
         tcells = {c for i in town for c in lay.cells(i)}
         mean = lambda ids: sum(lay.center(i)[1] for i in ids) / len(ids)
         self.assertGreater(mean(town), mean(prod))                     # 발사대는 아래(행 0 쪽)
-        self.assertLess(lc._waste(tcells), len(tcells) * 0.3)          # ㄱ자 건물의 빈 모서리 때문에 0 은 안 됨
+        # 테두리 사각형 안의 '빈 땅'만 센다 — 채집 거처 옆에 일부러 둔 자원 타일은 빈틈이 아님
+        occ = {c for i in plan.origin_after for c in lay.cells(i)}
+        cs, rs = [c for c, _ in tcells], [r for _, r in tcells]
+        rect = {(c, r) for c in range(min(cs), max(cs) + 1) for r in range(min(rs), max(rs) + 1)} & grid.tiles
+        self.assertLess(len(rect - occ), len(tcells) * 0.15)
+
+    def test_guide_rules_on_real_base(self):
+        """가이드(Steam Zarcos·apo·Drake): 거처는 전부 잔병의 오두막 범위 안, 채집·재생 거처는 자기 자원 타일을 범위에,
+        건물이 빠지거나 겹치지 않는다. 메모에 달성도가 나온다."""
+        from src.engine import layout_city as lc
+        fx, base, grid, pieces, o0 = setup()
+        plan = lo.optimize(base, None, None, preset="plan")
+        shp = shaped(pieces, plan)
+        lay = lo.Layout(grid, shp, plan.origin_after)
+        cells = [c for i in plan.origin_after for c in lay.cells(i)]
+        self.assertEqual(len(cells), len(set(cells)))
+        self.assertEqual(set(plan.origin_after), set(pieces))
+        vet = next(p for p in pieces.values() if p.type == lc.VETERAN)
+        homes = [i for i, p in pieces.items() if lo._slug(p.type) in lo.housing_types() and i != vet.id]
+        self.assertTrue(homes)
+        pad = 1.125                                                   # 이 기지 범위 여유 (calibrate_range 값과 같은 크기)
+        rng = (vet.range + pad) / grid.size
+        vx, vy = lay.center(vet.id)
+        far = [pieces[i].type for i in homes if abs(lay.center(i)[0] - vx) > rng or abs(lay.center(i)[1] - vy) > rng]
+        self.assertLessEqual(len(far), 1, far)                         # 거의 전부 (범위 여유에 따라 하나쯤)
+        self.assertTrue(any("잔병의 오두막 범위 안 거처" in n for n in plan.notes))
+        self.assertTrue(any("채집·재생 거처" in n for n in plan.notes))
+
+    def test_guide_plan_keeps_layout_when_already_done(self):
+        """가이드 배치를 적용한 뒤 다시 계산하면 옮길 게 없다 (지금 배치가 가이드 기준으로 같거나 나음 → 그대로)."""
+        fx, base, grid, pieces, o0 = setup()
+        plan = lo.optimize(base, None, None, preset="plan")
+        fb = lo.final_base(base, plan)
+        again = lo.optimize(fb, None, None, preset="plan")
+        self.assertEqual(again.moved, 0)
+        self.assertTrue(any("지금 배치가 가이드 기준으로" in n for n in again.notes))
+
+    def test_stat_types_ignores_knum(self):
+        """게임은 '능력치 없음'을 kNum 으로 보낸다 — 능력치 건물로 세면 안 됨 (대위 막사 대상)."""
+        base = {"buildings": [{"type": "kForest", "stat": "kNum"}, {"type": "kClinic", "stat": "kEndurance"},
+                              {"type": "kGunsmith", "stat": "kDexterity"}]}
+        self.assertEqual(lo._stat_types(base), {"kClinic", "kGunsmith"})
 
     def test_plan_puts_unused_gold_mines_at_the_back(self):
         """계획도시: 금광은 쓰지 않으니(사용자 결정) U자 자리를 비워 두지 않고 발사대에서 먼 쪽에 모아 둔다."""

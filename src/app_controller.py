@@ -978,11 +978,11 @@ class AppController(QObject):
             types = {b.get("id"): b.get("type", "") for b in base.get("buildings") or []}
             if remain:
                 first = remain[0]
-                lines = [(tr("최적 배치까지 옮기기 {v0}개 남음 — 번호 순서대로", v0=len(remain)), (245, 245, 247, 255)),
+                lines = [(tr("가이드 배치까지 옮기기 {v0}개 남음 — 번호 순서대로", v0=len(remain)), (245, 245, 247, 255)),
                          (tr("1번: {v0} → 번호 1 자리 ({reason})", v0=self.data.building_name(types.get(first.a, '')), reason=first.reason),
                           (255, 159, 10, 255))]
             else:
-                lines = [(tr("최적 배치 완료 — 재배치를 끝내도 됩니다"), (48, 209, 88, 255))]
+                lines = [(tr("가이드 배치 완료 — 재배치를 끝내도 됩니다"), (48, 209, 88, 255))]
             self.base_overlay.show_advice(game, scale, None, None, lines)
             if not self.base_overlay.isVisible():
                 self.base_overlay.show()
@@ -1040,7 +1040,7 @@ class AppController(QObject):
         need, _ = need_resource(self.meta, self._shortfalls())
         self._layout_busy = True
         char_levels = {c.get("type"): c.get("lvl") for c in self.meta.chars_raw if c.get("type")}
-        # 계획도시 배치는 정해진 규칙이라 재배치 도중 다시 계산해도 목표가 같다 → 이전 목표(prefer)를 넘길 필요 없음
+        # 가이드 배치는 정해진 규칙이라 재배치 도중 다시 계산해도 목표가 같다 → 이전 목표(prefer)를 넘길 필요 없음
         self.sim.submit("layout", snap, sim_jobs.job_layout, snap, team, self._harvest_dur, bps, targets, need, 12.0,
                         None, char_levels)
 
@@ -1098,7 +1098,7 @@ class AppController(QObject):
             return tr("재배치 모드에서 빈 자리로 옮기기: {v0} (배치도 번호 순서)", v0=', '.join(names))
         reach = getattr(plan, "reach_after", {}) or {}
         if ids and all(reach.get(i, 0) > 0 for i in ids):
-            return tr("배치도의 최적 배치대로 옮기면 닿음 (재배치 모드에서 번호 순서대로)")
+            return tr("배치도의 가이드 배치대로 옮기면 닿음 (재배치 모드에서 번호 순서대로)")
         return ""
 
     @staticmethod
