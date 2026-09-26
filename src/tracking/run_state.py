@@ -33,6 +33,7 @@ class Owned:
     copies: int = 1                 # 같은 볼을 따로 여러 개 가질 수 있다 (실제 화면 확인)
     at_max: Optional[bool] = None   # 게임이 알려 준 최대 레벨 여부 (게임 연동)
     combined: Tuple[str, ...] = ()  # 이 볼에 합쳐 넣은 볼들 — 그 볼들은 더 이상 따로 보유하지 않는다 (게임 연동)
+    instances: Tuple[InventorySlot, ...] = ()  # 같은 대표 볼의 복사본도 슬롯별 융합 구성을 보존한다.
 
     @property
     def effect_ids(self) -> Set[str]:
@@ -119,6 +120,7 @@ class RunState:
             level = s.level if s.level is not None else (prev.level if prev else None)
             if s.item_id in seen:
                 o = seen[s.item_id]
+                o.instances += (s,)
                 o.copies += 1
                 if level is not None and (o.level is None or level > o.level):
                     o.level = level
@@ -128,7 +130,7 @@ class RunState:
                     o.combined = tuple(dict.fromkeys(o.combined + s.combined))
             else:
                 seen[s.item_id] = Owned(s.item_id, data.items[s.item_id].kind, level, "screen", at_max=s.at_max,
-                                        combined=s.combined)
+                                        combined=s.combined, instances=(s,))
         notes = []
         added = [i for i in seen if i not in self.owned]
         removed = [i for i in self.owned if i not in seen]
@@ -207,6 +209,7 @@ class RunState:
         if card.label is CardLabel.NEW:
             if prev is not None:   # 같은 볼의 새 복사본
                 prev.copies += 1
+                prev.instances = ()  # 새 복사본의 실제 슬롯은 다음 게임 보유 목록에서 확인한다.
                 prev.source, prev.updated_at = source, time.time()
                 return
             level = 1
@@ -216,7 +219,9 @@ class RunState:
             level = prev.level + 1
         else:
             level = None
-        self.owned[card.item_id] = Owned(card.item_id, item.kind, level, source)
+        self.owned[card.item_id] = Owned(card.item_id, item.kind, level, source,
+                                        copies=prev.copies if prev else 1,
+                                        combined=prev.combined if prev else ())
 
     # ---- 카드 표시로 보유 여부 보정 (보유 칸을 못 읽었을 때의 보조 근거) ----
     def reconcile_cards(self, cards: Tuple[Card, ...], data: GameData) -> List[str]:
@@ -238,7 +243,9 @@ class RunState:
         self.characters = [(char_id, "manual")] if char_id else []
 
     def set_owned(self, item_id: str, kind: str, level: Optional[int]):
-        self.owned[item_id] = Owned(item_id, kind, level, "manual")
+        prev = self.owned.get(item_id)
+        self.owned[item_id] = Owned(item_id, kind, level, "manual", copies=prev.copies if prev else 1,
+                                    combined=prev.combined if prev else ())
 
     def remove_owned(self, item_id: str):
         self.owned.pop(item_id, None)

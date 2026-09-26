@@ -36,6 +36,7 @@ class FusionPick:
     reasons: List[Reason] = field(default_factory=list)
     warnings: List[Reason] = field(default_factory=list)
     selectable: bool = True           # 항목을 식별하지 못했으면 점수와 무관하게 추천에서 제외
+    display_parts: tuple = ()         # 이미 합쳐진 효과를 포함한 표시용 아이콘. 실제 재료 parts와 구분한다.
 
 
 @dataclass
@@ -87,7 +88,7 @@ class FusionAdvisor:
         # 미확인) — 게임이 그런 후보를 준 적이 없어 지금은 판단할 자료가 없다.
         balls = [s for s in (inventory or ()) if s.item_id and s.item_id.startswith("ball:")]
         evos = [self._evo(e, list(inventory or ()), run) for e in fz.evos]
-        combos = [self._combo(c, run) for c in fz.combos]
+        combos = [self._combo(c, run, inventory or ()) for c in fz.combos]
         evos.sort(key=lambda p: -p.score)
         combos.sort(key=lambda p: -p.score)
         free_pick = self._free(balls) if fz.free_upgrades else None
@@ -209,10 +210,18 @@ class FusionAdvisor:
         return pick
 
     # ---- 융합 조합 한 개 평가 ----
-    def _combo(self, c: FuserCombo, run: RunState) -> FusionPick:
+    def _combo(self, c: FuserCombo, run: RunState, inventory=()) -> FusionPick:
         d = self.data
-        title = f"{d.name(c.item1)} + {d.name(c.item2)}"
+        def members(item, idx):
+            slot = next((s for s in inventory if s.index == idx and s.item_id == item), None)
+            return tuple(dict.fromkeys((item, *(slot.combined if slot else ()))))
+        left, right = members(c.item1, c.idx1), members(c.item2, c.idx2)
+        def label(parts):
+            names = " + ".join(d.name(i) for i in parts)
+            return f"({names})" if len(parts) > 1 else names
+        title = f"{label(left)} + {label(right)}"
         pick = FusionPick("combo", title, tr("두 볼의 효과를 한 볼에"), None, (c.item1, c.item2), score=10)
+        pick.display_parts = tuple(dict.fromkeys(left + right))
         if d.item(c.item1) is None or d.item(c.item2) is None:
             pick.selectable = False
             pick.warnings.append(Reason("combo_unknown", tr("융합 재료를 읽지 못해 추천을 보류함"), 0, tr("미확인")))

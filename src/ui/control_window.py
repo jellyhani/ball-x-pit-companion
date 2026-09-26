@@ -319,8 +319,20 @@ class ControlWindow(QWidget):
                 rm.clicked.connect(lambda _=False, i=o.item_id: self._remove(i))
                 hl.addWidget(rm)
                 copies = f"  ×{o.copies}" if o.copies > 1 else ""
-                group.add(row(d.name(o.item_id) + copies, right, SOURCE_LABEL.get(o.source, o.source),
-                              _icon_label(o.item_id, 30)))
+                parts = tuple(dict.fromkeys((o.item_id, *o.combined)))
+                title = " + ".join(d.name(i) for i in parts) if o.copies == 1 else d.name(o.item_id) + copies
+                details = SOURCE_LABEL.get(o.source, o.source)
+                if o.combined:
+                    if o.copies == 1:
+                        details = tr("융합 볼 · 보유 슬롯 1칸") + " · " + details
+                    elif o.instances:
+                        # 복사본의 효과 합집합을 한 볼에 전부 합쳐진 것처럼 표시하지 않는다.
+                        details = "\n".join(tr("슬롯 {slot}: {parts}", slot=s.index + 1,
+                                                parts=" + ".join(d.name(i) for i in (s.item_id, *s.combined)))
+                                            for s in o.instances) + "\n" + details
+                    else:
+                        details = tr("합쳐진 효과 포함: {parts}", parts=" + ".join(d.name(i) for i in o.combined)) + " · " + details
+                group.add(row(title, right, details, _icon_label(parts if o.copies == 1 else o.item_id, 30)))
 
         self.damage_group.clear()
         balls = sorted(((v, i) for i, v in run.damage.items() if i.startswith("ball:")), reverse=True)

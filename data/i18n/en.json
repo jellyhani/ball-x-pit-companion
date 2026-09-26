@@ -1036,5 +1036,8 @@
   "해금 우선": "Discovery first",
   "백과사전 해금 모드: 게임에서 아직 기록되지 않은 후보 우선": "Discovery mode: prioritize candidates not yet recorded in the game",
   "이 선택 후": "After this choice",
-  "게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다.": "Prediction includes game upgrade values. Actual paths and yields may differ."
+  "게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다.": "Prediction includes game upgrade values. Actual paths and yields may differ.",
+  "융합 볼 · 보유 슬롯 1칸": "Fused ball · 1 inventory slot",
+  "슬롯 {slot}: {parts}": "Slot {slot}: {parts}",
+  "합쳐진 효과 포함: {parts}": "Includes fused effects: {parts}"
 }

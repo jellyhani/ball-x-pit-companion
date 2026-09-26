@@ -1036,5 +1036,8 @@
   "해금 우선": "Découverte prioritaire",
   "백과사전 해금 모드: 게임에서 아직 기록되지 않은 후보 우선": "Découverte : priorité aux candidats non enregistrés dans le jeu",
   "이 선택 후": "Après ce choix",
-  "게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다.": "Prévision intégrant les améliorations du jeu. Trajets et récoltes réels peuvent différer."
+  "게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다.": "Prévision intégrant les améliorations du jeu. Trajets et récoltes réels peuvent différer.",
+  "융합 볼 · 보유 슬롯 1칸": "Balle fusionnée · 1 emplacement",
+  "슬롯 {slot}: {parts}": "Emplacement {slot} : {parts}",
+  "합쳐진 효과 포함: {parts}": "Effets fusionnés inclus : {parts}"
 }

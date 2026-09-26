@@ -416,6 +416,7 @@ class AppController(QObject):
         if obs.kind == ScreenKind.LEVEL_UP and self.tracker.session is None:
             log.info("게임 연동 원본(선택창): %s", json.dumps(snap, ensure_ascii=False)[:4000])
             self._last_levelup_snap = snap
+        inventory_changed = obs.inventory is not None and obs.inventory != self._bridge_inventory
         if obs.inventory is not None:
             self._bridge_inventory = obs.inventory
             if self.tracker.session is None:
@@ -429,6 +430,9 @@ class AppController(QObject):
             events = [ev for ev in events if ev.session is not current]
             events.append(TrackerEvent("opened", current))
         self._handle(events)
+        if inventory_changed and not events and self.control.isVisible():
+            # 융합 뒤 전투로 돌아오면 선택창 이벤트가 없다. 이미 열린 보유 목록도 새 슬롯 내용으로 갱신한다.
+            self.control.refresh_run()
         self._update_hud()
 
     def _counter_outcome(self, session_id: int) -> Optional[str]:

@@ -150,6 +150,21 @@ class ControllerFlowTest(unittest.TestCase):
             self.assertTrue(self.c.hud.isVisible())
             self.assertIs(self.c.recommendation, rec)
 
+    def test_open_inventory_refreshes_when_fusion_changes_without_choice_event(self):
+        before=copy.deepcopy(LEVELUP)
+        before.update(game_state="kPlaying",levelup=None)
+        self.feed(before)
+        self.c.control.show()
+        after=copy.deepcopy(before)
+        after["battle"]["balls"][0]["combined"]=["kHeavy"]
+        del after["battle"]["balls"][1]
+        with patch.object(self.c.control,"refresh_run",wraps=self.c.control.refresh_run) as refresh:
+            self.feed(after)
+            refresh.assert_called_once()
+            self.feed(after)
+            refresh.assert_called_once()  # 같은 보유 목록을 매 프레임 다시 그리지 않는다.
+        self.assertEqual(self.c.run.owned['ball:freeze'].combined,('ball:heavy',))
+
     def test_base_advice_shows_buildable_blueprint_as_hud(self):
         """기지에서 메뉴 없이 서 있으면(kNormal) 지을 수 있는 설계도가 HUD 조언으로 뜬다 (원래 F10 창에만 있었음)."""
         meta = {"resources": [500, 0, 0, 0], "buildings": [{"type": "kHome", "lvl": 0, "state": "kNormal"}],

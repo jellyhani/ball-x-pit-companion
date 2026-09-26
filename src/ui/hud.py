@@ -47,7 +47,7 @@ def _sprite(item_id: str) -> Optional[QPixmap]:
 
 
 def icon_tile(item_ids: Sequence[Optional[str]], size: int, radius_ratio: float = 0.24) -> QPixmap:
-    """둥근 사각 타일 안에 아이콘(1개 또는 2개)을 픽셀 그대로 그린다."""
+    """한두 아이콘은 기존 배치, 세 개 이상은 네 칸에 표시한다. 넘치는 효과 수는 마지막 칸에 쓴다."""
     dpr = 2.0
     out = QPixmap(int(size * dpr), int(size * dpr))
     out.setDevicePixelRatio(dpr)
@@ -61,8 +61,8 @@ def icon_tile(item_ids: Sequence[Optional[str]], size: int, radius_ratio: float 
     p.drawPath(tile)
     ids = [i for i in item_ids if i] or [None]
     n = len(ids)
-    inner = size * (0.78 if n == 1 else 0.52)
-    for k, iid in enumerate(ids[:2]):
+    inner = size * (0.78 if n == 1 else 0.52 if n == 2 else 0.40)
+    for k, iid in enumerate(ids[:4] if n <= 4 else ids[:3]):
         src = _sprite(iid) if iid else None
         if src is None:
             continue
@@ -72,10 +72,19 @@ def icon_tile(item_ids: Sequence[Optional[str]], size: int, radius_ratio: float 
         w, h = scaled.width() / dpr, scaled.height() / dpr
         if n == 1:
             x, y = (size - w) / 2, (size - h) / 2
-        else:   # 두 개: 왼쪽 위 / 오른쪽 아래로 겹쳐 배치
+        elif n == 2:   # 두 개: 왼쪽 위 / 오른쪽 아래로 겹쳐 배치
             x = size * 0.08 if k == 0 else size - w - size * 0.08
             y = size * 0.08 if k == 0 else size - h - size * 0.08
+        else:
+            x = size * (.25 + .5 * (k % 2)) - w / 2
+            y = size * (.25 + .5 * (k // 2)) - h / 2
         p.drawPixmap(QRectF(x, y, w, h), scaled, QRectF(0, 0, scaled.width(), scaled.height()))
+    if n > 4:
+        font = tk.base_font()
+        font.setPixelSize(max(8, round(size * .23)))
+        p.setFont(font)
+        p.setPen(tk.qcolor(tk.TEXT))
+        p.drawText(QRectF(size / 2, size / 2, size / 2, size / 2), Qt.AlignmentFlag.AlignCenter, f"+{n - 3}")
     p.end()
     return out
 
@@ -521,7 +530,7 @@ class RecommendationHud(QWidget):
         best = rec.best
         tone = {"recommend": "accent", "close": "accent", "none": "warn"}.get(rec.status, "neutral")
         if best is not None:
-            icons = (best.result_id,) if best.kind == "evo" else tuple(best.parts)
+            icons = (best.result_id,) if best.kind == "evo" else (best.display_parts or tuple(best.parts))
             v = HudView(title=rec.headline, subtitle=best.detail, status=STATUS_TEXT.get(rec.status, ""),
                         status_tone=tone, icons=icons)
             v.lines = [(r.text, "secondary") for r in sorted(best.reasons, key=lambda r: -r.weight)[:2]]
@@ -533,7 +542,7 @@ class RecommendationHud(QWidget):
         for p in rec.evos + rec.combos + ([rec.free] if rec.free else []):
             if p is best:
                 continue
-            icons = (p.result_id,) if p.kind == "evo" else tuple(p.parts)
+            icons = (p.result_id,) if p.kind == "evo" else (p.display_parts or tuple(p.parts))
             verb = {"evo": tr("진화"), "combo": tr("융합"), "free": tr("강화")}[p.kind]
             note, tone2 = ((p.warnings[0].short, "warn") if p.warnings else
                            (next((r.short for r in p.reasons if r.rule_id in ("combo_ai", "evo_chain")), ""), "tertiary"))
