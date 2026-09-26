@@ -734,7 +734,7 @@ class ControlWindow(QWidget):
         t.setObjectName("pageTitle")
         v.addWidget(t)
         self.search = QLineEdit()
-        self.search.setPlaceholderText(tr("검색 (한국어 또는 영어)"))
+        self.search.setPlaceholderText(tr("검색 (모든 언어의 이름)"))
         self.search.textChanged.connect(self._filter_pedia)
         v.addWidget(self.search)
         h = QHBoxLayout()
@@ -761,7 +761,7 @@ class ControlWindow(QWidget):
         q = text.strip().lower()
         self.pedia_list.clear()
         for it in sorted(self.data.items.values(), key=lambda i: (i.kind, i.name_ko)):
-            if q and q not in it.name_ko.lower() and q not in it.name_en.lower():
+            if q and not any(q in n.lower() for n in it.all_names()):
                 continue
             li = QListWidgetItem(QIcon(icon_tile((it.id,), 26)), it.name_ko)
             li.setData(Qt.ItemDataRole.UserRole, it.id)

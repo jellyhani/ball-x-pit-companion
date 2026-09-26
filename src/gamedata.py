@@ -66,6 +66,11 @@ class Item:
     wiki_damage: Tuple[str, ...] = ()
     wiki_unlock: str = ""
     desc_template: str = ""      # 게임 설명 틀 ({[자리표시자]}) — 연동 수치로 채워 보여 준다 (describe)
+    names: Dict[str, str] = field(default_factory=dict, compare=False, hash=False)   # 게임이 지원하는 모든 언어의 이름 (검색용)
+
+    def all_names(self) -> Tuple[str, ...]:
+        """어느 언어로 검색해도 찾도록: 모든 언어 이름 + 한국어·영어 (옛 추출 파일엔 names 가 없다)."""
+        return tuple(dict.fromkeys(x for x in (self.name_ko, self.name_en, *self.names.values()) if x))
 
 
 @dataclass(frozen=True)
@@ -319,6 +324,7 @@ def load_game_data(data_dir: Optional[str] = None) -> GameData:
             name_ko=raw["name_ko"], name_en=raw["name_en"], desc_ko=raw.get("desc_ko", ""),
             wiki_status=tuple(w.get("statusEffect", [])), wiki_damage=tuple(w.get("damageType", [])),
             wiki_unlock=w.get("unlockRequirement", ""), desc_template=raw.get("desc_ko_template", ""),
+            names=dict(raw.get("names") or {}),
         )
         items[it.id] = it
         en_to_id[it.name_en] = it.id

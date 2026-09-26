@@ -195,6 +195,11 @@ def fill_template(template_ko: str, values: Dict[str, str]) -> str:
     return re.sub(r"\{\[(\w+)\]\}", lambda m: values.get(m.group(1), "?"), text)
 
 
+def all_names(langs: List[str]) -> Dict[str, str]:
+    """이름을 게임이 지원하는 모든 언어로 ({LANGS 코드: 이름}) — 백과사전 검색이 어느 언어로 쳐도 찾게 한다."""
+    return {code: langs[i] for i, (code, _) in enumerate(LANGS) if i < len(langs) and langs[i]}
+
+
 def build(game_dir: str, lang_idx: Optional[int] = None) -> dict:
     """lang_idx: LANGS 인덱스. 생략하면 윈도우 UI 언어로 자동 감지 (지원 안 하면 영어).
     name_en/desc_en 은 위키 자료(영문) 매칭에 쓰므로 항상 영어 그대로 두고, name_ko/desc_ko 자리에만
@@ -232,6 +237,7 @@ def build(game_dir: str, lang_idx: Optional[int] = None) -> dict:
             "slug": slug,
             "name_en": name_en,
             "name_ko": langs[lk],
+            "names": all_names(langs),
             "desc_en_template": desc[LANG_EN],
             "desc_ko_template": desc[lk],
         }
@@ -262,6 +268,7 @@ def build(game_dir: str, lang_idx: Optional[int] = None) -> dict:
             "slug": slug,
             "name_en": langs[LANG_EN],
             "name_ko": langs[lk],
+            "names": all_names(langs),
             "desc_ko": re.sub(r"<[^>]+>", "", desc[lk]),
             "desc_en": re.sub(r"<[^>]+>", "", desc[LANG_EN]),
         }
@@ -278,6 +285,7 @@ def build(game_dir: str, lang_idx: Optional[int] = None) -> dict:
             "slug": slug,
             "name_en": langs[LANG_EN],
             "name_ko": langs[lk],
+            "names": all_names(langs),
             "desc_ko": re.sub(r"<[^>]+>", "", fill_template(desc[lk], {})),
             "upgrade_ko": re.sub(r"<[^>]+>", "", fill_template(upg[lk], {})),
         }

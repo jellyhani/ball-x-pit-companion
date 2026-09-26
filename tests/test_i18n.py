@@ -143,3 +143,14 @@ class TrTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SearchNamesTest(unittest.TestCase):
+    def test_item_names_cover_all_game_languages(self):
+        """백과사전 검색: 게임이 지원하는 언어 이름으로 다 찾는다 (옛 추출 파일이면 한국어·영어만)."""
+        from src.gamedata import Item
+        it = Item(id="ball:wind", kind="ball", slug="wind", name_ko="바람", name_en="Wind", desc_ko="",
+                  names={"japanese": "風", "german": "Wind", "thai": "สายลม"})
+        self.assertEqual(set(it.all_names()), {"바람", "Wind", "風", "สายลม"})
+        old = Item(id="ball:wind", kind="ball", slug="wind", name_ko="바람", name_en="Wind", desc_ko="")
+        self.assertEqual(old.all_names(), ("바람", "Wind"))
