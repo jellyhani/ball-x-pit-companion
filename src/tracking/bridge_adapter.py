@@ -99,8 +99,12 @@ def convert(snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_
     state = snap.get("game_state") or ""
     battle = snap.get("battle") if isinstance(snap.get("battle"), dict) else None
     lvl = snap.get("levelup") if isinstance(snap.get("levelup"), dict) else None
-    if lvl is not None and snap.get("game_state") not in (None, "kLevelUp"):
-        # 실제 게임 확인: 융합기가 필드에 떨어질 때 게임 상태는 kPlaying 인데 선택 UI 가 잠깐 kFuser 로 잡힌다
+    ui = snap.get("ui") if isinstance(snap.get("ui"), dict) else {}
+    if lvl is not None and snap.get("game_state") not in (None, "kLevelUp") and not (
+            lvl.get("type") == "kFuser" and ui.get("screen") == "fuser"):
+        # 실제 게임 확인: 융합기가 필드에 떨어질 때 게임 상태는 kPlaying 인데 선택 UI 가 잠깐 kFuser 로 잡힌다.
+        # 반대로 실제 융합 화면의 게임 상태는 kPickTreasure (2026-09-26 live_state 확인) — 이때는 플러그인이
+        # 융합 UI 가 활성 오버레이일 때만 보내는 ui.screen == "fuser" 로 구별한다
         lvl = None
     unknown: List[str] = []
 

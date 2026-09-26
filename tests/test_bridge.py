@@ -168,6 +168,17 @@ class FusionTest(unittest.TestCase):
         self.assertEqual(rec.combos[-1].warnings[0].rule_id, "combo_bad")
         self.assertEqual(rec.combos[0].title, "출혈 + 화상")
 
+    def test_real_fuser_screen_is_pick_treasure(self):
+        # 실제 융합 화면: game_state 는 kPickTreasure, ui.screen 은 fuser
+        snap = dict(FUSER, game_state="kPickTreasure", ui={"screen": "fuser", "avoid": [[375, 120, 600, 840]]})
+        self.assertEqual(convert(snap, game_data()).observation.kind, ScreenKind.FUSION)
+
+    def test_fuser_dropping_on_field_is_ignored(self):
+        # 융합기가 필드에 떨어질 때: kPlaying + kFuser 인데 융합 UI 는 활성 아님
+        for extra in ({}, {"ui": {"screen": None}}):
+            snap = dict(FUSER, game_state="kPlaying", **extra)
+            self.assertNotEqual(convert(snap, game_data()).observation.kind, ScreenKind.FUSION)
+
     def test_game_recipes_replace_wiki(self):
         from src.gamedata import load_game_data
         from src.tracking.bridge_adapter import catalog_recipes
