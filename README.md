@@ -62,7 +62,9 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 실행: `run_overlay.bat` (게임도 함께 켜려면 `play.bat`), 종료: `stop_overlay.bat`. 설정 창은 F10.
 
-연동 모드 끄기·지우기: `tools\bepinex\bridge.ps1 disable` / `uninstall` (이 도구가 추가한 파일만 지움).
+연동 모드 끄기·지우기: `tools\bepinex\bridge.ps1 disable` / `uninstall`.
+`uninstall`은 도우미의 `BallxPitBridge.dll`만 제거하며 공유 BepInEx·다른 모드·설정·로그는 남깁니다.
+`disable`은 BepInEx 전체를 끄므로 다른 BepInEx 모드에도 적용됩니다.
 
 ## 개인정보·보안
 

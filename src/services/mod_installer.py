@@ -82,14 +82,16 @@ def read_build_id(game_dir: str) -> Optional[str]:
         return None
 
 
-def game_running() -> bool:
+def game_running() -> Optional[bool]:
     try:
-        out = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {GAME_EXE}", "/NH", "/FO", "CSV"],
+        result = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {GAME_EXE}", "/NH", "/FO", "CSV"],
                              capture_output=True, text=True, timeout=10,
-                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
-        return GAME_EXE.lower() in out.lower()
+                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if result.returncode != 0:
+            return None
+        return GAME_EXE.lower() in result.stdout.lower()
     except (OSError, subprocess.SubprocessError):
-        return False
+        return None                     # 조회 실패는 종료 확인이 아니다.
 
 
 # ---- 파일 버전 (Windows 버전 리소스) ----
@@ -132,7 +134,7 @@ class ModStatus:
     bepinex: bool = False
     enabled: Optional[bool] = None
     plugin_version: Optional[str] = None
-    running: bool = False
+    running: Optional[bool] = None
     vendor_ok: bool = False
 
     @property
@@ -180,6 +182,35 @@ def check(game_dir: Optional[str] = None) -> ModStatus:
 # ---- 설치 ----
 class InstallError(RuntimeError):
     pass
+
+
+def require_game_closed():
+    """확실하게 종료됐을 때만 설치·제거한다. 조회 실패 때는 파일을 그대로 둔다."""
+    running = game_running()
+    if running is None:
+        raise InstallError("게임 실행 여부를 확인하지 못했습니다. 파일을 변경하지 않았습니다.")
+    if running:
+        raise InstallError("게임이 실행 중입니다 — 게임을 끈 뒤 설치·제거합니다")
+
+
+def uninstall_bridge(game_dir: str) -> bool:
+    """이 도구의 DLL 하나만 제거한다. 공유 BepInEx·다른 모드·설정·로그는 보존한다."""
+    from pathlib import Path
+    require_game_closed()
+    root = Path(game_dir).resolve(strict=True)
+    if not (root / GAME_EXE).is_file():
+        raise InstallError("BALL x PIT 게임 폴더가 아닙니다.")
+    target = root / "BepInEx" / "plugins" / "BallxPitBridge.dll"
+    resolved = target.resolve()
+    # 재분석 지점·심볼릭 링크로 게임 폴더 밖을 가리키는 파일도 지우지 않는다.
+    if not resolved.is_relative_to(root):
+        raise InstallError("플러그인 경로가 게임 폴더 밖을 가리킵니다.")
+    if not target.exists():
+        return False
+    if not target.is_file() or target.is_symlink():
+        raise InstallError("플러그인 경로가 일반 파일이 아닙니다.")
+    target.unlink()
+    return True
 
 
 def _sha256(path: str) -> str:
@@ -247,8 +278,7 @@ def install(st: Optional[ModStatus] = None, say: Callable[[str], None] = log.inf
     st = st or check()
     if not st.game_dir:
         raise InstallError("게임 설치 폴더를 찾지 못했습니다")
-    if game_running():
-        raise InstallError("게임이 실행 중입니다 — 게임을 끈 뒤 설치합니다")
+    require_game_closed()
     if not st.vendor_ok:
         raise InstallError(f"설치 파일이 없습니다: {VENDOR}")
     added: List[str] = []
@@ -290,7 +320,7 @@ def wait_and_install(say: Callable[[str], None] = log.info, poll: float = 5.0,
                      stop: Callable[[], bool] = lambda: False) -> Optional[ModStatus]:
     """게임이 꺼질 때까지 기다렸다가 설치한다 (도우미 앱 백그라운드용)."""
     while not stop():
-        if not game_running():
+        if game_running() is False:
             time.sleep(2.0)   # 게임이 파일을 놓을 시간
             return install(say=say)
         time.sleep(poll)
