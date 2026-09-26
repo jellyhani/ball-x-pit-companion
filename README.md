@@ -93,6 +93,8 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 powershell -ExecutionPolicy Bypass -File build_exe.ps1
 ```
 PyInstaller onedir 빌드(Qt 라이브러리는 LGPL 조건대로 별도 파일), 테스트 통과 후에만 빌드, `dist\` 에 exe 와 zip.
+실행 파일도 격리된 자료 폴더·합성 파이프로 시작, 별도 계산 프로세스, 정상 종료를 확인한 뒤 zip으로 묶습니다.
+빌드 시 외부 도구의 DLL 검색 경로를 제한하여 Qt의 시스템 ICU 대신 다른 프로그램의 동명 DLL이 포함되는 것을 막습니다.
 
 ## 개발
 

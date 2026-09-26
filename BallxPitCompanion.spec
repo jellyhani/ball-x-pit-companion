@@ -1,6 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
 # PyInstaller build for the BALL x PIT helper (onedir: Qt/LGPL libraries stay separate, replaceable files).
 #   .venv\Scripts\pyinstaller.exe BallxPitCompanion.spec --noconfirm
+import os
+import sys
+from pathlib import Path
+
+# 빌드 도구의 PATH에 들어온 Poppler/libheif DLL이 Qt의 Windows 시스템 DLL 대신 묶이지 않게 한다.
+# 이 프로세스의 검색 경로만 제한하며 사용자 환경 변수나 시스템 설치는 변경하지 않는다.
+if sys.platform == "win32":
+    system = Path(os.environ.get("SystemRoot", r"C:\Windows"))
+    os.environ["PATH"] = os.pathsep.join(str(p) for p in (
+        Path(sys.executable).parent, Path(sys.base_prefix), Path(sys.base_prefix) / "DLLs",
+        system / "System32", system,
+    ) if p.is_dir())
+
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
 datas = [
@@ -39,6 +52,9 @@ a = Analysis(
 # 쓰지 않는 큰 파일 빼기: 소프트웨어 OpenGL(20MB), Qt 번역, Pillow AVIF 모듈
 _DROP = ("opengl32sw.dll", "_avif.", "translations")
 a.binaries = [x for x in a.binaries if not any(d in x[0] or d in x[1] for d in _DROP)]
+# Qt는 Windows가 제공하는 ICU API를 사용한다. 다른 도구의 동명 ICU는 필요한 ucnv_* 심벌이 다르다.
+a.binaries = [x for x in a.binaries if Path(x[0]).name.lower() != "icuuc.dll"
+              and not Path(x[0]).name.lower().startswith(("api-ms-win-", "ext-ms-win-"))]
 a.datas = [x for x in a.datas if not any(d in x[0] or d in x[1] for d in _DROP)]
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="BallxPitCompanion", console=False,

@@ -8,6 +8,8 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
 if ($LASTEXITCODE -ne 0) { Write-Host 'Tests failed - not building.'; exit 1 }
 & .venv\Scripts\pyinstaller.exe BallxPitCompanion.spec --noconfirm
 if ($LASTEXITCODE -ne 0) { exit 1 }
+& .venv\Scripts\python.exe tools\verify_frozen.py dist\BallxPitCompanion\BallxPitCompanion.exe
+if ($LASTEXITCODE -ne 0) { Write-Host 'Frozen runtime check failed - not packaging.'; exit 1 }
 $ver = (Select-String -Path tools\bepinex\BallxPitBridge\BallxPitBridge.csproj -Pattern '<Version>(.+)</Version>').Matches[0].Groups[1].Value
 $zip = "dist\BallxPitCompanion-plugin$ver.zip"
 if (Test-Path $zip) { Remove-Item $zip }
