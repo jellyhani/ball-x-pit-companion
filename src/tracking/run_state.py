@@ -171,7 +171,7 @@ class RunState:
             card = outcome.card
             if card.item_id is None:
                 self.pending_unknown_pick = True
-                self._log(tr("{position} 카드를 골랐지만 무엇인지 읽지 못함", position=card.position))
+                self._log(tr("{position} 카드를 골랐지만 무엇인지 읽지 못함", position=tr(card.position)))
                 return True
             if data.items[card.item_id].kind != "pet":     # 펫 강화는 볼·패시브 칸에 들어가지 않는다
                 self._apply_card(card, data, "pick")

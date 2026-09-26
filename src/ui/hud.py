@@ -415,7 +415,7 @@ class RecommendationHud(QWidget):
         status = rec.confidence or STATUS_TEXT.get(rec.status, "")
         if best is not None:
             v = HudView(title=tr("1위 {v0}", v0=d.name(best.card.item_id)),
-                        subtitle=tr("{action_text} · {position} 카드", action_text=best.action_text, position=best.card.position),
+                        subtitle=tr("{action_text} · {position} 카드", action_text=best.action_text, position=tr(best.card.position)),
                         status=status, status_tone="ok" if rec.confidence == tr("확실") else tone, icons=(best.card.item_id,))
             v.lines = [(best.effect, "primary")] if best.effect else []
             v.lines += [(r.text, "secondary") for r in best.top_reasons(1 if best.effect else 2)]   # 결론 + 이유 한두 줄
@@ -425,7 +425,7 @@ class RecommendationHud(QWidget):
             # 판단 보류여도 순서는 보여 준다 (근거가 약하다는 것을 함께)
             fb = rec.fallback or rec.ranked[0]
             v = HudView(title=tr("1위 {v0} (무난한 선택)", v0=d.name(fb.card.item_id)),
-                        subtitle=tr("{action_text} · {position} 카드", action_text=fb.action_text, position=fb.card.position),
+                        subtitle=tr("{action_text} · {position} 카드", action_text=fb.action_text, position=tr(fb.card.position)),
                         status=status, status_tone=tone, icons=(fb.card.item_id,))
             v.lines = [(fb.effect, "primary")] if fb.effect else []
             v.lines.append((tr("어느 카드도 현재 덱과 뚜렷하게 이어지지 않음 — 새로고침도 고려"), "tertiary"))
@@ -466,7 +466,7 @@ class RecommendationHud(QWidget):
     def _row(self, e: ActionEval, rec: Recommendation) -> HudRow:
         verdict = card_verdict(rec, e)
         if not e.evaluated:
-            return HudRow((None,), tr("{position} 카드", position=e.card.position), "", verdict=verdict)
+            return HudRow((None,), tr("{position} 카드", position=tr(e.card.position)), "", verdict=verdict)
         n = card_rank(rec, e)
         act = tr("레벨 {level_after}", level_after=e.level_after) if e.action.startswith("upgrade") and e.level_after else e.action_text
         # 게임 카드에 이미 순위 배지가 있으니 이름을 앞에, 행동·이유는 아랫줄 한마디로

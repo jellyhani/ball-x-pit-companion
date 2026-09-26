@@ -208,11 +208,12 @@ class Recommender:
             status, headline = "hold", tr("뚜렷한 차이 없음")
             limitations.append(tr("현재 조합과 연결되는 선택지를 찾지 못함"))
         elif close:
-            status, headline = "close", tr("{position} 추천 · 차이 작음", position=best.card.position)
+            status, headline = "close", tr("{position} 추천 · 차이 작음", position=tr(best.card.position))
         else:
-            status, headline = "recommend", tr("{position} 선택 추천", position=best.card.position)
+            status, headline = "recommend", tr("{position} 선택 추천", position=tr(best.card.position))
         if len(known) == 1 and unknown:
-            status, headline = ("recommend", tr("{position} 선택 추천", position=best.card.position)) if best.strong else ("hold", tr("판단 보류"))
+            status, headline = (("recommend", tr("{position} 선택 추천", position=tr(best.card.position))) if best.strong
+                               else ("hold", tr("판단 보류")))
 
         margin = best.score - ranked[1].score if len(ranked) > 1 else 99.0
         decisive = any(r.rule_id in ("evo_ready", "passive_recipe_ready") for r in best.reasons)
@@ -770,4 +771,4 @@ class Recommender:
             return None, ""
         why = bad[0].text
         more = tr(" · 이번 런 {seen}번째 등장", seen=seen) if seen >= 2 else ""
-        return e.card, (tr("삭제 추천: {v0} ({position}) — {why}{more} · 삭제 {banish_left}회 남음", v0=self.data.name(e.card.item_id), position=e.card.position, why=why, more=more, banish_left=s.banish_left))
+        return e.card, (tr("삭제 추천: {v0} ({position}) — {why}{more} · 삭제 {banish_left}회 남음", v0=self.data.name(e.card.item_id), position=tr(e.card.position), why=why, more=more, banish_left=s.banish_left))

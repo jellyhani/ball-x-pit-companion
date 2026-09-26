@@ -95,8 +95,6 @@
   "추천 각도 계산 중…": "Calculating recommended angle…",
   "추천 각도 범위 {lo:.0f}°~{hi:.0f}° (추정) — 마우스를 좌우 끝까지 밀면 게임 한계를 배웁니다": "Recommended angle range {lo:.0f}°–{hi:.0f}° (estimate) — push the mouse fully left and right to learn the game's limits",
   "게임 연동 (BepInEx 플러그인) · 메시지 {messages}건": "Game link (BepInEx plugin) · {messages} messages",
-  " · 클릭 통과 ": " · Click-through ",
-  " · 클릭 기록 ": " · Click logging ",
   "사용": "Available",
   "불가": "Unavailable",
   "게임 쪽 읽기 {v0:.1f}ms/회": "Game-side read {v0:.1f} ms/call",
@@ -121,10 +119,8 @@
   " · 게임 {game_version}": " · Game {game_version}",
   "{v0}×{v1} · 위치 {origin} · DPI {dpi}": "{v0}×{v1} · position {origin} · DPI {dpi}",
   " · 최소화": " · Minimized",
-  "캡처 제외 ": "Capture exclusion ",
   "켜짐": "On",
   "꺼짐": "Off",
-  "단축키 ": "Hotkeys ",
   "읽지 못함 (가장 비슷: {v0})": "Unreadable (closest: {v0})",
   "보유 칸: ": "Held slots: ",
   "{name}: 중앙값 {v0:.0f}ms · p95 {p95:.0f}ms": "{name}: median {v0:.0f} ms · p95 {p95:.0f} ms",
@@ -889,5 +885,7 @@
   "화면 움직임": "Screen moving",
   "이전 화면과 같음": "Same as the previous screen",
   "보스 격퇴": "Boss defeated",
-  "중단": "Abandoned"
+  "중단": "Abandoned",
+  "캡처 제외: {status} · 클릭 통과: {through}": "Capture exclusion: {status} · Click-through: {through}",
+  "단축키: {hotkey} · 클릭 기록: {mouse}": "Hotkeys: {hotkey} · Click tracking: {mouse}"
 }

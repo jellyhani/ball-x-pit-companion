@@ -676,7 +676,7 @@ class AppController(QObject):
                  self.data.name(out.card.item_id) if out.card else out.kind, out.evidence,
                  "" if out.card else f" | 횟수 열림 {self._session_counters.get(session.session_id)} → 지금 {self._counters}")
         if out.kind == "picked" and out.card is not None:
-            self.hud.show_message(self.data.name(out.card.item_id), tr("선택 반영 · {position} 카드", position=out.card.position),
+            self.hud.show_message(self.data.name(out.card.item_id), tr("선택 반영 · {position} 카드", position=tr(out.card.position)),
                                   tk.OK, 1600, item_id=out.card.item_id)
         self.control.refresh_run()
         self._update_hud()
@@ -734,7 +734,7 @@ class AppController(QObject):
                 self.run.apply_outcome(out, self.data)
                 log.info("세션 %s 종료: %s (%s)", out.session_id, out.kind, out.evidence)
                 if out.kind == "picked" and out.card is not None:
-                    self.hud.show_message(self.data.name(out.card.item_id), tr("선택 반영 · {position} 카드 ({evidence})", position=out.card.position, evidence=out.evidence),
+                    self.hud.show_message(self.data.name(out.card.item_id), tr("선택 반영 · {position} 카드 ({evidence})", position=tr(out.card.position), evidence=out.evidence),
                                           tk.OK, 1600, item_id=out.card.item_id)
                 elif out.kind == "rerolled":
                     self.force_until = time.monotonic() + 3.0
@@ -1389,10 +1389,12 @@ class AppController(QObject):
             tr("게임 버전"): self.logw.game_version or tr("미확인"),
             tr("데이터 빌드"): f"Steam {self.data.game_build_id}",
             "OCR": self.ocr_status.message,
-            "HUD": tr("캡처 제외 ") + {True: tr("확인"), False: tr("실패"), None: tr("아직 표시 안 됨")}[self.hud.capture_excluded]
-                   + tr(" · 클릭 통과 ") + {True: tr("켜짐"), False: tr("꺼짐"), None: "-"}[self.hud.click_through],
-            tr("입력"): (tr("단축키 ") + (tr("사용") if self.inputs.keyboard_ok else tr("불가"))
-                   + tr(" · 클릭 기록 ") + (tr("사용") if self.inputs.mouse_ok else tr("불가"))),
+            "HUD": tr("캡처 제외: {status} · 클릭 통과: {through}",
+                     status={True: tr("확인"), False: tr("실패"), None: tr("아직 표시 안 됨")}[self.hud.capture_excluded],
+                     through={True: tr("켜짐"), False: tr("꺼짐"), None: "-"}[self.hud.click_through]),
+            tr("입력"): tr("단축키: {hotkey} · 클릭 기록: {mouse}",
+                        hotkey=(tr("사용") if self.inputs.keyboard_ok else tr("불가")),
+                        mouse=(tr("사용") if self.inputs.mouse_ok else tr("불가"))),
             tr("버린 늦은 결과"): tr("{stale_results}건", stale_results=self.stale_results),
             tr("연동 부하"): (tr("게임 쪽 읽기 {v0:.1f}ms/회", v0=self._plugin_cost) if self._plugin_cost is not None
                       else tr("게임 쪽 읽기 - (플러그인 1.7부터)"))

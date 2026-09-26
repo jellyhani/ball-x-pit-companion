@@ -213,6 +213,6 @@ class ChoiceTracker:
             for card in s.cards:
                 if _inside(fx, fy, card.rect):
                     return PickOutcome(s.session_id, "picked", card=card,
-                                       evidence=tr("{position} 카드 클릭", position=card.position), options=s.cards)
+                                       evidence=tr("{position} 카드 클릭", position=tr(card.position)), options=s.cards)
         return PickOutcome(s.session_id, "unknown", evidence=tr("선택 근거 없음 (키보드·패드 선택이거나 클릭 위치 불명)"),
                            options=s.cards)
