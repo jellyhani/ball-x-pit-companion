@@ -109,7 +109,7 @@ TONE = {
     "danger": tk.DANGER, "dim": (235, 235, 245, 120),
 }
 # 카드 판정 → 색 이름 (tokens.VERDICT 와 같은 색)
-VERDICT_TONE = {"best": "accent", "alt": "ok", "banish": "warn", "skip": "danger", "neutral": "neutral",
+VERDICT_TONE = {"best": "accent", "alt": "ok", "banish": "warn", "skip": "danger", "neutral": "neutral", "pick": "accent",
                 "unknown": "tertiary"}
 
 
@@ -406,7 +406,7 @@ class RecommendationHud(QWidget):
             vb.addWidget(why)
         pill = _Pill(self)
         label = tk.VERDICT.get(row.verdict, (None, ""))[1]
-        if row.badge and row.verdict in ("neutral", "skip", "alt"):
+        if row.badge and row.verdict in ("neutral", "skip", "alt", "pick"):
             label = row.badge                            # 순위 + 판정 (예: '2위 비슷함', '3위 비추천', 보류면 '2위')
         pill.set(label, tone, t.font(t.px(12), W.DemiBold), t.px(8), t.px(3))
         self.rows.addWidget(bar, r, 0)
@@ -438,6 +438,10 @@ class RecommendationHud(QWidget):
                         subtitle=tr("{action_text} · {position} 카드", action_text=fb.action_text, position=tr(fb.card.position)),
                         status=status, status_tone=tone, icons=(fb.card.item_id,))
             v.lines = [(fb.effect, "primary")] if fb.effect else []
+            # 왜 그나마 1위인지 (덱 계열·캐릭터 궁합·평가·내 기록 중 가장 큰 근거)와 걸리는 점
+            v.lines += [(r.text, "secondary") for r in fb.top_reasons(1)]
+            if fb.warnings:
+                v.lines.append((fb.warnings[0].text, "warn"))
             v.lines.append((tr("어느 카드도 현재 덱과 뚜렷하게 이어지지 않음 — 새로고침도 고려"), "tertiary"))
         else:
             v = HudView(title=rec.headline, subtitle=rec.limitations[0] if rec.limitations else "",

@@ -34,6 +34,7 @@ VERDICT = {
     "banish": (WARN, tr("삭제 추천")),
     "skip": (DANGER, tr("비추천")),
     "neutral": (TEXT_2, tr("보류")),
+    "pick": (ACCENT, tr("보류")),        # 판단 보류 중 그나마 나은 하나 (이름표는 '1위 무난')
     "unknown": (TEXT_3, tr("읽지 못함")),
 }
 

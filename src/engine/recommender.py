@@ -129,7 +129,7 @@ def card_badge(rec: "Recommendation", e: ActionEval) -> str:
         return tr("1위 {v0}", v0=rec.confidence or tr("추천"))
     if v == "alt":
         return tr("{n}위 비슷함", n=n)
-    if v == "neutral":
+    if v in ("neutral", "pick"):
         return tr("1위 무난") if n == 1 else tr("{n}위", n=n)
     return tr("{n}위 비추천", n=n)
 
@@ -146,7 +146,8 @@ def card_verdict(rec: "Recommendation", e: ActionEval) -> str:
     if rec.best is not None and e is rec.best:
         return "best"
     if rec.best is None:
-        return "neutral"          # 판단 보류: 어느 쪽도 권하지 않음
+        # 판단 보류: 확신은 못 하지만 그나마 나은 하나('무난')는 짚어 준다 — 전부 회색이면 뭘 골라야 할지 알 수 없다
+        return "pick" if rec.fallback is not None and e is rec.fallback else "neutral"
     if e in rec.close_to:
         return "alt"
     return "skip"
@@ -237,7 +238,7 @@ class Recommender:
             best=best if status != "hold" else None, evals=evals, close_to=close,
             reroll_status=rs, reroll_text=rt, banish_text=banish_text, banish_card=banish_card,
             situation=situation, plan_text=self._plan_line(plan, best if status != "hold" else None),
-            reroll_odds=odds, fallback=best if status == "hold" and best.score > 0 and not best.warnings else None,
+            reroll_odds=odds, fallback=best if status == "hold" and best.score > 0 else None,
             limitations=limitations, ranked=ranked, confidence=confidence, plan_locked=plan.locked,
         )
 

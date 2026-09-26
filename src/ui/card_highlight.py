@@ -85,7 +85,7 @@ class CardHighlight(QWidget):
                 p.drawRoundedRect(r, 9, 9)
             pen = QPen(c)
             pen.setWidthF({"best": 3.0, "alt": 2.5}.get(kind, 2.0))
-            if kind in ("skip", "neutral", "banish"):
+            if kind in ("skip", "neutral", "banish", "pick"):
                 pen.setStyle(Qt.PenStyle.DashLine)
             p.setPen(pen)
             p.setBrush(Qt.BrushStyle.NoBrush)

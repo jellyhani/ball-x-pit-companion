@@ -468,7 +468,7 @@
   "cards": [
    [
     "ball:stone",
-    "neutral"
+    "pick"
    ],
    [
     "passive:armor",
@@ -510,7 +510,7 @@
   "cards": [
    [
     "passive:magicstaff",
-    "neutral"
+    "pick"
    ],
    [
     "passive:backstabdagger",

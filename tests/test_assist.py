@@ -137,14 +137,16 @@ class VerdictTest(unittest.TestCase):
         self.assertEqual(v[1], "best")
         self.assertEqual(v[2], "unknown")
         self.assertIn(v[0], ("alt", "skip"))
-        # 판단 보류면 모두 보류 (초록 '비슷함'을 섞지 않는다)
+        # 판단 보류면 초록 '비슷함'은 섞지 않고, 그나마 나은 하나만 '무난'(pick) 으로 짚는다
         run2 = RunState()
         run2.start_run()
         run2.apply_inventory(slots(("ball:burn", 1)), d)
         s2 = session([card(i, x) for i, x in enumerate(("ball:lightningbug", "ball:warp", "ball:petrify"))])
         r2 = rec.recommend(s2, run2)
         self.assertEqual(r2.status, "hold")
-        self.assertTrue(all(card_verdict(r2, e) in ("neutral", "banish") for e in r2.evals))
+        kinds = [card_verdict(r2, e) for e in r2.evals]
+        self.assertTrue(all(k in ("neutral", "banish", "pick") for k in kinds), kinds)
+        self.assertLessEqual(kinds.count("pick"), 1)
 
 
 class ExpeditionTest(unittest.TestCase):
