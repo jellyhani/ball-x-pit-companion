@@ -344,6 +344,8 @@ class RecommendationHud(QWidget):
             self.rows.addWidget(name, r, 2)
             self.rows.addWidget(note, r, 3, alignment=Qt.AlignmentFlag.AlignRight)
             self._row_widgets += [ic, name, note]
+        for w in self._row_widgets:
+            w.show()        # 새 위젯은 이벤트 루프가 돌기 전까지 숨김 상태라 아래 높이 계산에서 빠진다 (첫 표시 때 줄이 잘림)
         self.rows.setColumnStretch(2, 1)
         has_rows = bool(v.rows)
         self.sep1.setVisible(has_rows or bool(v.section))
