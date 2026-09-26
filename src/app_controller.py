@@ -410,7 +410,14 @@ class AppController(QObject):
             if self.tracker.session is None:
                 self.run.apply_inventory(obs.inventory, self.data)
             self._resolve_pending_pick(obs.inventory)
-        self._handle(self.tracker.observe(obs, time.monotonic(), immediate=True))
+        events = self.tracker.observe(obs, time.monotonic(), immediate=True)
+        current = self.tracker.session
+        if (current is not None and current.session_id in self._echo_sessions
+                and not self._is_after_pick_echo(current)):
+            # 잔상으로 보류한 동안 카드가 그대로면 updated가 오지 않는다. 보호 시간이 끝나면 한 번 재처리한다.
+            events = [ev for ev in events if ev.session is not current]
+            events.append(TrackerEvent("opened", current))
+        self._handle(events)
         self._update_hud()
 
     def _counter_outcome(self, session_id: int) -> Optional[str]:
@@ -665,8 +672,9 @@ class AppController(QObject):
         if card is None and not expired:
             return
         self._pending_pick = None
-        self._picked_sig = (session.signature, time.monotonic())
         if card is not None:
+            # 창을 닫기만 했거나 확인 시간이 지났다는 이유로 실제 선택의 잔상이라고 판단하지 않는다.
+            self._picked_sig = (session.signature, time.monotonic())
             out = PickOutcome(out.session_id, "picked", card, tr("게임 상태로 확인"), out.options)
         self.run.apply_outcome(out, self.data)
         self.run.apply_inventory(inventory, self.data)
@@ -690,6 +698,7 @@ class AppController(QObject):
                     # 고른 직후 닫히는 애니메이션 동안 같은 카드가 다시 잡힌 것 — 새 선택창이 아니다
                     self._echo_sessions.add(s.session_id)
                     continue
+                self._echo_sessions.discard(s.session_id)
                 if ev.kind == "opened":
                     if self._counters is not None:
                         self._session_counters[s.session_id] = dict(self._counters)

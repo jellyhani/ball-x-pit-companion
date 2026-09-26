@@ -9,6 +9,7 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 from PySide6.QtWidgets import QApplication
 
@@ -92,6 +93,62 @@ class ControllerFlowTest(unittest.TestCase):
         self.feed(after)
         self.feed(after)
         self.assertTrue(any("선택: 냉동" in h for h in self.c.run.history), self.c.run.history)
+
+    def test_dismiss_and_reopen_unchanged_choices_restores_hud(self):
+        """선택 없이 닫기 → 판정 대기 만료 → 같은 카드 재진입을 여러 번 반복한다."""
+        self.c._game_active = lambda: True
+        closed = copy.deepcopy(LEVELUP)
+        closed.update(game_state="kPlaying", levelup=None)
+        with patch("src.app_controller.time.monotonic", return_value=100.) as clock:
+            self.feed(LEVELUP)
+            self.assertTrue(self.c.hud.isVisible())
+            for i in range(3):
+                clock.return_value = 101. + i * 10
+                self.feed(closed)
+                clock.return_value += 4
+                self.feed(closed)
+                self.assertIsNone(getattr(self.c, "_picked_sig", None))
+                clock.return_value += .1
+                self.feed(LEVELUP)
+                self.assertIsNotNone(self.c.recommendation)
+                self.assertTrue(self.c.hud.isVisible())
+                self.assertEqual(self.c._echo_sessions, set())
+                # 이후 입력 내용이 그대로여도 계속 보여야 한다.
+                self.feed(LEVELUP)
+                self.assertTrue(self.c.hud.isVisible())
+
+    def test_confirmed_pick_echo_expires_even_without_card_changes(self):
+        """진짜 선택 직후의 잔상은 숨기되 같은 화면이 유지되면 보호 시간 뒤 복구한다."""
+        self.c._game_active = lambda: True
+        closed = copy.deepcopy(LEVELUP)
+        closed.update(game_state="kPlaying", levelup=None)
+        closed["battle"]["passives"] = [{"idx": 0, "type": "kEtherealCloak", "lvl": 0}]
+        reopened = copy.deepcopy(LEVELUP)
+        reopened["battle"] = copy.deepcopy(closed["battle"])
+        with patch("src.app_controller.time.monotonic", return_value=200.) as clock:
+            self.feed(LEVELUP)
+            clock.return_value = 201.
+            self.feed(closed)
+            self.assertIsNotNone(self.c._picked_sig)
+            clock.return_value = 201.2
+            self.feed(reopened)
+            self.assertIsNone(self.c.recommendation)
+            clock.return_value = 210.
+            self.feed(reopened)
+            self.assertIsNotNone(self.c.recommendation)
+            self.assertTrue(self.c.hud.isVisible())
+            self.assertEqual(self.c._echo_sessions, set())
+
+    def test_f9_hide_and_show_preserves_current_recommendation(self):
+        self.c._game_active = lambda: True
+        self.feed(LEVELUP)
+        rec = self.c.recommendation
+        for _ in range(3):
+            self.c.toggle_hud()
+            self.assertFalse(self.c.hud.isVisible())
+            self.c.toggle_hud()
+            self.assertTrue(self.c.hud.isVisible())
+            self.assertIs(self.c.recommendation, rec)
 
     def test_base_advice_shows_buildable_blueprint_as_hud(self):
         """기지에서 메뉴 없이 서 있으면(kNormal) 지을 수 있는 설계도가 HUD 조언으로 뜬다 (원래 F10 창에만 있었음)."""
