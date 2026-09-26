@@ -145,6 +145,8 @@ class FusionAdvisor:
         # 결과가 다음 진화 재료가 되는가
         owned = {s.item_id for s in balls}
         for r in d.recipes_using(result):
+            if not d.recipe_reachable(r):
+                continue
             others = [x for x in r.ingredients if x != result]
             if others and all(o in owned for o in others):
                 pick.reasons.append(Reason("evo_chain", tr("다음 진화 {v0}의 재료를 이미 보유", v0=d.name(r.result)), 8,

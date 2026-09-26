@@ -51,6 +51,8 @@ def build_roadmap(run: RunState, data: GameData, include: Optional[Set[str]] = N
         have = [i for i in r.ingredients if i in run.owned]
         missing = [i for i in r.ingredients if i not in run.owned]
         forced = include is not None and r.result in include
+        if not forced and not data.recipe_reachable(r):
+            continue        # 재료가 해금 안 됨 — 만들 수 없는 진화는 진행 목록·추천에서 뺀다 (전체 진화표·백과사전엔 남음)
         if r.result in run.owned or (not forced and (not have or len(missing) > 1)):
             continue
         kind = data.items[r.result].kind
@@ -79,8 +81,16 @@ def build_roadmap(run: RunState, data: GameData, include: Optional[Set[str]] = N
 
 
 def browsable_targets(data: GameData) -> List[Recipe]:
-    """덱 목표 지정 UI 용 — 재료 보유 여부와 상관없이 고를 수 있는 진화 목표 전체 (이름순)."""
-    return sorted(data.recipes, key=lambda r: data.name(r.result))
+    """덱 목표 지정 UI 용 — 재료 보유 여부와 상관없이 고를 수 있는 진화 목표 (이름순).
+    결과가 같은 레시피가 여럿이면 하나만 (냉동 광선 = 냉동 + 레이저 수평/수직), 해금 안 된 재료로만 되는 목표는 뺀다."""
+    out: List[Recipe] = []
+    seen: Set[str] = set()
+    for r in sorted(data.recipes, key=lambda r: (data.name(r.result), not data.recipe_reachable(r))):
+        if r.result in seen or not data.recipe_reachable(r):
+            continue
+        seen.add(r.result)
+        out.append(r)
+    return out
 
 
 def fusion_pairs(run: RunState, data: GameData) -> List[tuple]:

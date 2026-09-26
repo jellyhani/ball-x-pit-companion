@@ -65,6 +65,7 @@ class Item:
     wiki_status: Tuple[str, ...] = ()
     wiki_damage: Tuple[str, ...] = ()
     wiki_unlock: str = ""
+    desc_template: str = ""      # 게임 설명 틀 ({[자리표시자]}) — 연동 수치로 채워 보여 준다 (describe)
 
 
 @dataclass(frozen=True)
@@ -100,6 +101,8 @@ class GameData:
     buildings: Dict[str, dict] = field(default_factory=dict)   # 건물 slug → {name_ko, desc_ko, ...}
     community: dict = field(default_factory=dict)   # 커뮤니티 평가·추천 빌드 (data/community.json, 의견)
     level_schedules: Dict[str, Tuple[Tuple[int, ...], Tuple[int, ...]]] = field(default_factory=dict)  # 지역 → (보스 턴, 융합기 턴)
+    # 해금된 볼·패시브 (게임 연동의 선택지 후보 목록에서 모은 것, tracking/unlocks.py). None = 아직 모름 → 거르지 않음
+    available: Optional[set] = None
 
     def __post_init__(self):
         for it in self.items.values():
@@ -120,6 +123,15 @@ class GameData:
         ch = self.characters.get(item_id or "")
         return ch.name_ko if ch else tr("미확인")
 
+    def describe(self, item_id: str) -> str:
+        """게임 설명. 추출 때 비어 있던 수치('?')는 게임 연동으로 받은 레벨별 수치로 '1/2/3' 처럼 채운다."""
+        it = self.item(item_id)
+        if it is None:
+            return ""
+        from .engine.desc_fill import fill
+        filled = fill(it.desc_template, self.level_props.get(item_id), self.max_level(it.kind))
+        return filled or it.desc_ko
+
     def item_by_log_id(self, log_id: str) -> Optional[str]:
         """Player.log 의 'kReachersSpear' 같은 내부 이름을 항목 ID로 바꾼다."""
         key = log_id[1:] if log_id.startswith("k") and log_id[1:2].isupper() else log_id
@@ -133,6 +145,32 @@ class GameData:
 
     def recipes_for(self, result_id: str) -> List[Recipe]:
         return [r for r in self.recipes if r.result == result_id]
+
+    def note_available(self, item_ids) -> bool:
+        """해금된 것으로 확인된 항목을 더한다. 새로 더한 게 있으면 True."""
+        new = {i for i in item_ids if i} - (self.available or set())
+        if not new:
+            return False
+        self.available = (self.available or set()) | new
+        return True
+
+    def obtainable(self, item_id: str, _seen: Optional[set] = None) -> bool:
+        """이번 런에서 얻을 수 있는지: 기본 항목은 해금돼 있어야 하고, 진화 결과는 레시피 하나라도 재료가 모두 얻을 수
+        있어야 한다. 해금 목록을 모르면 (연동 전) 항상 True."""
+        if self.available is None or item_id in self.available:
+            return True
+        made = self.recipes_for(item_id)
+        if not made:
+            return False
+        seen = (_seen or set()) | {item_id}
+        return any(all(i not in seen and self.obtainable(i, seen) for i in r.ingredients) for r in made)
+
+    def recipe_reachable(self, r: Recipe) -> bool:
+        return all(self.obtainable(i) for i in r.ingredients)
+
+    def locked_ingredients(self, r: Recipe) -> List[str]:
+        """레시피 재료 중 아직 해금 안 된 것 (표시용)."""
+        return [i for i in r.ingredients if not self.obtainable(i)]
 
     def has_tag(self, item_id: str, tag: str) -> bool:
         t = self.rules.get("tags", {}).get(tag)
@@ -280,7 +318,7 @@ def load_game_data(data_dir: Optional[str] = None) -> GameData:
             id=raw["id"], kind=raw["kind"], slug=raw["slug"],
             name_ko=raw["name_ko"], name_en=raw["name_en"], desc_ko=raw.get("desc_ko", ""),
             wiki_status=tuple(w.get("statusEffect", [])), wiki_damage=tuple(w.get("damageType", [])),
-            wiki_unlock=w.get("unlockRequirement", ""),
+            wiki_unlock=w.get("unlockRequirement", ""), desc_template=raw.get("desc_ko_template", ""),
         )
         items[it.id] = it
         en_to_id[it.name_en] = it.id

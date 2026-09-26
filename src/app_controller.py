@@ -36,6 +36,7 @@ from .services.input_watch import InputWatcher
 from .services.log_watcher import LogEvent, PlayerLogWatcher
 from .services.recognition_worker import RecognitionService, ScanResult
 from .services.settings import APP_DIR, Settings
+from .tracking import unlocks
 from .tracking.bridge_adapter import BridgeState, catalog_recipes, catalog_schedules, convert, infer_pick
 from .tracking.choice_tracker import ChoiceTracker, TrackerEvent
 from .tracking.meta_state import RESOURCES, MetaState, parse_meta
@@ -70,6 +71,8 @@ class AppController(QObject):
         super().__init__()
         self.app = app
         self.data = data or load_game_data()
+        if self.data.available is None:
+            self.data.available = unlocks.load(unlocks.default_path())   # 잠긴 재료가 든 진화를 추천에서 빼는 데 씀
         self.settings = Settings.load()
         self.run = RunState()
         self.tracker = ChoiceTracker()
@@ -408,6 +411,7 @@ class AppController(QObject):
             if c.shown_level and c.item_id:
                 self.data.note_level_seen(self.data.items[c.item_id].kind, c.shown_level)
         self.run.apply_character(obs.character_id, obs.extra_characters, source="game")
+        self._note_unlocks(obs)
         self._update_fusion(obs)
         if obs.kind == ScreenKind.LEVEL_UP and self.tracker.session is None:
             log.info("게임 연동 원본(선택창): %s", json.dumps(snap, ensure_ascii=False)[:4000])
@@ -628,6 +632,16 @@ class AppController(QObject):
         self.base_advice = items
         log.info("기지 조언: %s", items)
         self.hud.render_view(v)
+
+    def _note_unlocks(self, obs: ScreenObservation):
+        """강화 선택창의 후보 목록 + 화면 카드 + 보유 + 삭제한 것 = 해금된 전체 (tracking/unlocks.py)."""
+        if obs.pool is None:
+            return
+        ids = [i for i, _ in obs.pool.entries()] + list(obs.pool.prev) + [c.item_id for c in obs.cards]
+        ids += [s.item_id for s in obs.inventory or ()] + list(obs.progress.banished if obs.progress else ())
+        if self.data.note_available(ids):
+            unlocks.save(unlocks.default_path(), self.data.available)
+            log.info("해금 목록 갱신: %d개", len(self.data.available))
 
     def _update_fusion(self, obs: ScreenObservation):
         """융합 화면(진화·융합·무료 강화)이 열려 있으면 무엇과 무엇을 합칠지 추천한다."""

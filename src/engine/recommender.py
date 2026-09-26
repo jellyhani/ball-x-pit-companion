@@ -352,6 +352,8 @@ class Recommender:
         best_result = ""
         extra: List[str] = []
         for r in d.recipes_using(item_id):
+            if not d.recipe_reachable(r):
+                continue            # 재료가 아직 해금 안 됨 (예: 주취자를 안 열어 매혹이 없음) — 만들 수 없는 진화
             others = list(r.ingredients)
             others.remove(item_id)
             owned_others = [run.owned.get(o) for o in others]
@@ -487,7 +489,7 @@ class Recommender:
         # 진화로 가는 카드면 그 결과의 티어를, 아니면 카드 자신의 티어를 본다
         # 진화 결과는 나머지 재료를 이미 가진 레시피만 (가능성만 있는 진화까지 세면 거의 모든 카드가 S 가 된다)
         results = [r.result for r in d.recipes_using(item_id)
-                   if all(i == item_id or i in run.owned for i in r.ingredients)]
+                   if all(i == item_id or i in run.owned for i in r.ingredients) and d.recipe_reachable(r)]
         tiers = [(d.community_tier(res), res) for res in results if d.community_tier(res)]
         if tiers:
             tier, res = min(tiers, key=lambda t: "SABCD".index(t[0]))

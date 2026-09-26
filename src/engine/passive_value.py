@@ -17,7 +17,7 @@ from ..i18n import tr
 PROPS: Dict[str, Tuple[str, str, bool, str]] = {
     "kBonusDamagePct": (tr("추가 피해"), "%", False, "power"),
     "kBonusDamagePctTenth": (tr("추가 피해"), "‰", False, "power"),
-    "kCritChance": (tr("치명타 수치"), "", False, "power"),
+    "kCritChance": (tr("치명타 확률"), "‰", False, "power"),     # 게임 값 0.1% 단위 (위키: 600 → 60%)
     "kFireRatePct": (tr("발사 속도"), "%", False, "power"),
     "kAOEDmgPct": (tr("범위 피해"), "%", False, "aoe"),
     "kBallLvl": (tr("볼 레벨"), "", False, "power"),

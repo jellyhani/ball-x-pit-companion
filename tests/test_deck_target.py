@@ -17,8 +17,11 @@ class DeckTargetTest(unittest.TestCase):
         cls.d = load_game_data()
         cls.recipe = next(r for r in cls.d.recipes if len(r.ingredients) == 2)
 
-    def test_browsable_targets_covers_all_recipes(self):
-        self.assertEqual(len(browsable_targets(self.d)), len(self.d.recipes))
+    def test_browsable_targets_covers_all_results_once(self):
+        """진화 결과마다 한 번씩 (냉동 광선 = 냉동 + 레이저 수평/수직 처럼 레시피가 둘이어도 목록엔 하나)."""
+        results = [r.result for r in browsable_targets(self.d)]
+        self.assertEqual(len(results), len(set(results)))
+        self.assertEqual(set(results), {r.result for r in self.d.recipes})
 
     def test_forced_target_shows_up_with_zero_ingredients(self):
         run = RunState()

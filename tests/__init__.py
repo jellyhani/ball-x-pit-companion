@@ -9,6 +9,8 @@ import unittest
 # 테스트는 한국어 원문 기준으로 확인한다 — 영어 윈도우(CI 등)에서 화면 문구가 번역돼 실패하지 않게.
 # 환경 변수라 계산용 별도 프로세스(SimWorker)에도 그대로 간다. 다른 언어로 확인하려면 BXP_LANG=en 으로 실행.
 os.environ.setdefault("BXP_LANG", "ko")
+# 해금 목록(tracking/unlocks.py)은 읽지도 저장하지도 않는다 — 이 PC 의 해금 상태나 앞 테스트에 따라 결과가 달라지지 않게
+os.environ["BXP_UNLOCKS_FILE"] = "-"
 os.environ["BXP_CATALOG_FILE"] = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fixtures", "game_recipes.json")
 
 import src.gamedata as _gd  # noqa: E402

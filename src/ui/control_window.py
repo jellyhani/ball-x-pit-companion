@@ -448,7 +448,7 @@ class ControlWindow(QWidget):
     def _refresh_all_recipes(self):
         d, run = self.data, self.run
         q = self.evo_search.text().strip().lower()
-        key = (q, frozenset(run.owned), len(d.recipes), d.recipe_source)
+        key = (q, frozenset(run.owned), len(d.recipes), d.recipe_source, len(d.available or ()))
         if key == getattr(self, "_recipes_key", None):
             return     # 보유 목록·검색어가 그대로면 다시 그리지 않는다
         self._recipes_key = key
@@ -461,7 +461,11 @@ class ControlWindow(QWidget):
             have = sum(1 for i in r.ingredients if i in run.owned)
             parts = " + ".join(d.name(i) + (" ✓" if i in run.owned else "") for i in r.ingredients)
             tone = "ok" if have == len(r.ingredients) else "accent" if have else "neutral"
-            self.all_recipes_group.add(row(d.name(r.result), chip(tr("재료 {have}/{v0}", have=have, v0=len(r.ingredients)), tone), parts,
+            locked = d.locked_ingredients(r)
+            if locked:
+                parts += " · " + tr("해금 안 된 재료: {v0}", v0=", ".join(d.name(i) for i in locked))
+            status = chip(tr("잠김"), "neutral") if locked else chip(tr("재료 {have}/{v0}", have=have, v0=len(r.ingredients)), tone)
+            self.all_recipes_group.add(row(d.name(r.result), status, parts,
                                            _icon_label(r.result, 30)))
             shown += 1
             if shown >= 60:
@@ -774,7 +778,7 @@ class ControlWindow(QWidget):
         it = d.items[cur.data(Qt.ItemDataRole.UserRole)]
         head = Group()
         head.add(row(it.name_ko, chip(KIND_LABEL[it.kind]), it.name_en, _icon_label(it.id, 44)))
-        desc = QLabel(it.desc_ko or tr("설명 없음"))
+        desc = QLabel(d.describe(it.id) or tr("설명 없음"))
         desc.setWordWrap(True)
         desc.setStyleSheet(f"background: transparent; color: {TEXT2}; padding: 10px 14px 12px 14px;")
         head.add(desc)
@@ -785,7 +789,9 @@ class ControlWindow(QWidget):
             self.pedia_body.addWidget(section_title(tr("만드는 법 · {src}", src=src)))
             g = Group()
             for r in made:
-                g.add(row(" + ".join(d.name(i) for i in r.ingredients), None, "",
+                locked = d.locked_ingredients(r)
+                g.add(row(" + ".join(d.name(i) for i in r.ingredients), chip(tr("잠김"), "neutral") if locked else None,
+                          tr("해금 안 된 재료: {v0}", v0=", ".join(d.name(i) for i in locked)) if locked else "",
                           _icon_label(tuple(r.ingredients[:2]), 30)))
             self.pedia_body.addWidget(g)
         into = d.recipes_using(it.id)
@@ -793,7 +799,11 @@ class ControlWindow(QWidget):
             self.pedia_body.addWidget(section_title(tr("재료로 쓰이는 곳 · {src}", src=src)))
             g = Group()
             for r in into:
-                g.add(row(d.name(r.result), None, " + ".join(d.name(i) for i in r.ingredients),
+                locked = d.locked_ingredients(r)
+                sub = " + ".join(d.name(i) for i in r.ingredients)
+                if locked:
+                    sub += " · " + tr("해금 안 된 재료: {v0}", v0=", ".join(d.name(i) for i in locked))
+                g.add(row(d.name(r.result), chip(tr("잠김"), "neutral") if locked else None, sub,
                           _icon_label(r.result, 30)))
             self.pedia_body.addWidget(g)
         lv = d.level_props.get(it.id)
@@ -809,7 +819,7 @@ class ControlWindow(QWidget):
         tags = [d.tag_label(t) for t in d.rules.get("tags", {}) if d.has_tag(it.id, t)]
         if tags:
             self.pedia_body.addWidget(_caption(tr("분류: ") + ", ".join(tags)))
-        self.pedia_body.addWidget(_caption(tr("이름·설명은 게임 파일 원문, 설명 속 수치는 위키 값입니다.")))
+        self.pedia_body.addWidget(_caption(tr("이름·설명은 게임 파일 원문, 설명 속 수치는 게임 연동으로 받은 값입니다 (여러 개면 레벨 1/2/3).")))
         self.pedia_body.addStretch(1)
 
     # ---- 진단 ----
