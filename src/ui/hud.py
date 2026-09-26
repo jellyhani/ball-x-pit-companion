@@ -349,8 +349,6 @@ class RecommendationHud(QWidget):
             # 이미 떠 있는 창에 새로 넣은 자식은 Qt 가 '다음 이벤트 때' 보이게 한다 — 그 전에 높이를 재면 줄이 빠진
             # 채 고정돼 줄들이 한곳에 눌려 겹친다 (캐릭터 조합 HUD '다른 조합' 이 빈 칸처럼 보이던 것). 바로 보이게 함
             w.show()
-        for w in self._row_widgets:
-            w.show()        # 새 위젯은 이벤트 루프가 돌기 전까지 숨김 상태라 아래 높이 계산에서 빠진다 (첫 표시 때 줄이 잘림)
         self.rows.setColumnStretch(2, 1)
         has_rows = bool(v.rows)
         self.sep1.setVisible(has_rows or bool(v.section))
