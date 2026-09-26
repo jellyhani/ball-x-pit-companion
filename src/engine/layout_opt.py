@@ -59,9 +59,9 @@ EFFECTS: Dict[str, Tuple[object, float, str, str, str]] = {
     "kSingleFamilyHome": (1, 0.25, "harvest", "upgraded", tr("근처 밭에서 주기적으로 채집 (강화 효과)")),
     "kCozyHome": (2, 0.37, "harvest", "upgraded", tr("근처 숲에서 주기적으로 채집 (강화 효과)")),
     "kHovel": (3, 0.8, "harvest", "upgraded", tr("근처 바위에서 주기적으로 채집 (강화 효과)")),
-    "kVilla": (1, 0.3, "regen", "upgraded", tr("근처 밀밭 재생 속도 상승 (레벨 3은 범위 +1칸)")),
-    "kCampground": (2, 0.3, "regen", "upgraded", tr("근처 숲 재생 속도 상승 (레벨 3은 범위 +1칸)")),
-    "kRockyHill": (3, 0.3, "regen", "upgraded", tr("근처 바위 재생 속도 상승 (레벨 3은 범위 +1칸)")),
+    "kVilla": (1, 0.3, "regen", "upgraded", tr("근처 밀밭 재생 속도 상승 (게임 범위 기준)")),
+    "kCampground": (2, 0.3, "regen", "upgraded", tr("근처 숲 재생 속도 상승 (게임 범위 기준)")),
+    "kRockyHill": (3, 0.3, "regen", "upgraded", tr("근처 바위 재생 속도 상승 (게임 범위 기준)")),
     "kMansion": ("all", 0.2, "count", "upgraded", tr("근처 건물마다 분당 골드 1 (최대 29)")),
     "kCaptainQuarters": ("stat", 1.0, "count", "upgraded", tr("인근 능력치 보너스 건물 +1 — 능력치 건물을 모두 범위 안에")),
     "kVeteranHut": ("housing", 0.6, "count", "upgraded", tr("인근 거처 입주민 추가 경험치 (캐릭터 레벨 4·7·9에서 20·25·30%) — 거처를 모두 범위 안에")),
@@ -149,7 +149,6 @@ UNLIMITED_COST: Dict[str, Tuple[int, int, int, int]] = {
     "kDenseWheat": (100, 1, 0, 0), "kGrandTree": (150, 0, 1, 0), "kGraniteSlab": (250, 0, 0, 1),
 }
 REGEN_TYPES = {"kVilla", "kCampground", "kRockyHill"}
-LVL3_RANGE_BONUS = 1.125  # 커뮤니티: 레벨 3 재생 건물의 실제 효과 범위는 표시보다 1칸 넓다 (게임 값 비교로 확인 예정)
 FIXED_TYPES = {"kHome"}
 UNFINISHED_STATES = {"kScaffold", "kUpgrading"}
 
@@ -290,8 +289,7 @@ def pieces_from_base(base: dict, grid: Grid, housing: Set[str], fixed: Sequence[
             elif int(info.get("lvl") or 0) < 1:
                 factor = 0.5
         rng_ = b.range
-        if b.type in REGEN_TYPES and int(info.get("lvl") or 0) >= 2:   # 게임 레벨은 0부터 — 2 = 화면 레벨 3
-            rng_ += LVL3_RANGE_BONUS
+        # 범위는 게임 GetRange 값을 그대로 쓴다. 공략의 '표시보다 +1칸'을 이미 계산된 값에 다시 더하지 않는다.
         # 공사 중인 건물도 옮길 수 있다 (커뮤니티: 채집 구역 가장자리로 옮겨 일꾼이 치게 — Screen Rant 기지 공략)
         unfinished = info.get("state") in UNFINISHED_STATES and is_recommended_building(b.type)
         movable = b.type not in FIXED_TYPES and i not in fixed
@@ -846,6 +844,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         return out
 
     producer0 = producer_coverage(origin0, {})
+    production_pin: Set[int] = set()
     if guide:
         raw = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
         # 게임이 직접 센 현재 범위와 기하 계산이 일치할 때만 가상 자리 후보를 만든다.
@@ -855,6 +854,15 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
                         all(isinstance(v, int) and v >= 0 for v in raw[i]["in_range"].values()) and
                         sum(raw[i]["in_range"].values()) == producer0[i]]
         producer0 = {i: producer0[i] for i in producer_ids}
+        for i in producer_ids:
+            if pieces[i].unfinished:
+                continue
+            production_pin.add(i)
+            x, y = lay0.center(i)
+            production_pin.update(t for t in producer_targets[PRODUCERS[pieces[i].type]]
+                                  if in_range(lay0.center(t)[0] - x, lay0.center(t)[1] - y, pieces[i].range + pad))
+        # 가동 중 생산 구역을 보존하는 시작점. 뒤에서 탈락시키기만 하면 모든 탐색이 밀밭을 빼는 데 낭비된다.
+        starts[0] = (origin0, {}, production_pin)
 
     def producer_gain(orig, turn):
         after = producer_coverage(orig, turn)
@@ -862,6 +870,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             return 0
         return max((after[i] - count for i, count in producer0.items()), default=0)
 
+    house_counts = {}
     if guide:
         # 이미 배정된 생산 건물이 자기 자원 타일을 거의 못 쓰면, 건물 하나만 빈 자리로 옮기는 후보를 먼저 넣는다.
         # 실제 기지: 채석장 범위 바위 1/12, 빈 자리 한 곳으로 옮기면 4/12인데 전체 점수 2% 문턱에 묻혔다.
@@ -886,14 +895,63 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
                 add_cand({**origin0, i: best_spot[1]}, {})
         # 가이드 배치: 허브 규칙을 먼저 고친 배치에서도 담금질을 시작한다 — 담금질만으로는 '다른 건물을 비켜야
         # 들어가는' 거처를 못 넣었다 (실제 기지: 잔병의 오두막 범위 거처 7/12 에서 멈춤 → 고치면 10/12, 12번 옮김)
-        from .layout_guide import coverage, hub_groups, repair
+        from .layout_guide import coverage, covered_members, hub_groups, repair
         groups = hub_groups(pieces, scorer)
-        rep = repair(grid, pieces, origin0, groups, pad, lane, entrance)
-        if rep is not None and (rep[0] != origin0 or rep[1]):
+        group0 = covered_members(grid, pieces, origin0, groups, pad)
+        # 거처를 생산 구역 옆으로 옮기는 공략 규칙을 직접 후보화한다.
+        # 범위 수치는 게임 현재 계수와 맞을 때만 사용하며, 다른 허브 효과를 잃는 후보는 아래에서 거른다.
+        house_candidates = []
+        for i, p in pieces.items():
+            eff = EFFECTS.get(p.type)
+            count = raw.get(i, {}).get("in_range")
+            if (not eff or not isinstance(eff[0], int) or eff[3] != "upgraded" or p.factor < 1.0
+                    or not p.movable or not isinstance(count, dict) or not count
+                    or not all(isinstance(v, int) and v >= 0 for v in count.values())):
+                continue
+            targets = scorer.targets[eff[0]]
+            def reached(at):
+                x, y = grid.center(*at, p.w, p.h)
+                return sum(in_range(lay0.center(t)[0] - x, lay0.center(t)[1] - y, p.range + pad) for t in targets)
+            n0 = reached(origin0[i])
+            if n0 != sum(count.values()):
+                continue
+            house_counts[i] = (eff[0], n0)
+            house_spots = []
+            for at in sorted(grid.tiles):
+                cells = {(at[0] + dx, at[1] + dy) for dx, dy in p.rel}
+                if not cells <= grid.tiles or cells & entrance or any(lay0.occ.get(c) not in (None, i) for c in cells):
+                    continue
+                n = reached(at)
+                if n <= n0:
+                    continue
+                o = {**origin0, i: at}
+                members = covered_members(grid, pieces, o, groups, pad)
+                if any(not prev <= members[h] for h, prev in group0.items()):
+                    continue
+                key = (sum(map(len, members.values())), n, -abs(at[0] - origin0[i][0]) - abs(at[1] - origin0[i][1]))
+                house_spots.append((key, o))
+            # 범위가 같아도 충돌 위치가 달라 채집 경로는 다르다. 가장 가까운 한 자리로 확정하지 않는다.
+            # 6은 검색량 제한이며 게임 효과 수치가 아니다. 각 후보는 아래 채집·도달 검사로 비교한다.
+            house_spots.sort(key=lambda item: item[0], reverse=True)
+            for _, o in house_spots[:6]:
+                house_candidates.append(o)
+                add_cand(o, {})
+        variants = [(pieces, groups, lane)]
+        if production_pin:
+            protected = pinned_of({}, production_pin)
+            variants.append((protected, groups, lane))
+            # 건설 앞구역을 강제하는 단계가 안전한 거처 개선까지 취소하지 않도록 허브별 후보도 비교한다.
+            variants.extend((protected, [group], {}) for group in groups)
+        for repair_pieces, repair_groups, repair_lane in variants:
+            rep = repair(grid, repair_pieces, origin0, repair_groups, pad, repair_lane, entrance)
+            if rep is None or (rep[0] == origin0 and not rep[1]):
+                continue
             # 고친 배치에서 시작하는 담금질은 규칙을 지킨 허브·거처를 묶고 나머지(자원 타일 등)만 옮긴다
             # (묶지 않으면 거처를 범위 밖으로 빼서 효과를 올렸다: 범위 거처 12 → 8)
             from .layout_guide import satisfied
             pin = satisfied(grid, shaped_of(rep[1]), rep[0], groups, pad, lane)
+            if repair_pieces is not pieces:
+                pin.update(production_pin)
             rep_pieces = shaped_of(rep[1])
             rep_lay = Layout(grid, rep_pieces, rep[0])
             pin.update(i for i, p in rep_pieces.items() if p.unfinished and
@@ -1002,15 +1060,30 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
                           any(lane.get(c, 0.0) > 0 for c in lay.cells(i)))
         occupied = {c for i in o for c in lay.cells(i)}
         clear = len(entrance - occupied)
-        return (build_front, clear, coverage(grid, sp, o, groups, pad))
+        # 입구와 허브가 앞구역 점수 때문에 희생되지 않게 한다. 실제 공사 도달은 reach_ok에서 별도로 검사한다.
+        return (clear, coverage(grid, sp, o, groups, pad), build_front if reach_ok is None else 0)
 
     cov0 = cov_of(origin0)
     plain0 = plain.score(lay0)[0]
 
+    def house_gain(orig):
+        """게임과 맞춘 자원 거처의 빈 범위를 살리는 개선은 전체 점수 2%에 묻지 않는다."""
+        sp = shaped_of(turn_of.get(id(orig), {}))
+        lay = Layout(grid, sp, orig)
+        gained = 0
+        for i, (kind, n0) in house_counts.items():
+            x, y = lay.center(i)
+            n1 = sum(in_range(lay.center(t)[0] - x, lay.center(t)[1] - y, sp[i].range + pad)
+                     for t in scorer.targets[kind])
+            if n1 < n0:
+                return 0
+            gained += n1 - n0
+        return gained
+
     def meaningful_guide(orig, hv):
         """이전 목표의 남은 이동이 실제 범위·채집·생산 규칙 중 하나라도 개선하는지."""
         turn = turn_of.get(id(orig), {})
-        if cov_of(orig) > cov0 or producer_gain(orig, turn) >= 2:
+        if cov_of(orig) > cov0 or producer_gain(orig, turn) >= 2 or house_gain(orig) > 0:
             return True
         if plain.score(Layout(grid, shaped_of(turn), orig))[0] > plain0 + 1e-6:
             return True
@@ -1019,8 +1092,10 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     for orig, s in cands:
         current = orig is cands[0][0]
         nb = to_base(orig)
-        if guide and not current and not preserves_production(base, nb, pad):
-            continue
+        if guide and not current:
+            from .layout_guide import preserves_guide
+            if not preserves_production(base, nb, pad) or not preserves_guide(base, nb, pad):
+                continue
         hv = harvest_eval(nb["geo"]) if harvest_eval and not current else h0
         if reach_ok is not None and not current and not reach_ok(nb):
             continue                                    # 미완성 건물로 가는 길을 막는 배치는 뺀다
@@ -1046,6 +1121,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         if best[0] < pt[0] * 1.02 and (not guide or (cov_of(prefer_orig) >= best_cov and
                                                             producer_gain(prefer_orig, turn_of.get(id(prefer_orig), {})) >=
                                                             producer_gain(best[1], turn_of.get(id(best[1]), {})) and
+                                                            house_gain(prefer_orig) >= house_gain(best[1]) and
                                                             meaningful_guide(prefer_orig, pt[3]))):
             best = pt
             notes.append(tr("이전 목표 배치를 유지했습니다 (새 계산의 개선이 2% 미만)."))
@@ -1055,7 +1131,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         _, orig, s, hv = best
     if best[1] is prefer_orig and prefer_orig is not None:
         pass
-    elif best[0] < 2.0 * 1.02 and not (guide and (cov_of(orig) > cov0 or
+    elif best[0] < 2.0 * 1.02 and not (guide and (cov_of(orig) > cov0 or house_gain(orig) > 0 or
                                                  producer_gain(orig, turn_of.get(id(orig), {})) >= 2)):
         notes.append(tr("이번 탐색에서 범위 효과와 채집 예상량을 합쳐 2% 넘는 개선을 찾지 못했습니다."))
         if alt is not None and alt[0] > 1.02:
@@ -1089,7 +1165,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     moved = sum(1 for i in orig if orig[i] != origin0[i] or turn.get(i))
     if guide:
         from .layout_city import guide_report
-        head = [tr("가이드 배치: 지금 배치에서 출발해 공략 규칙(잔병의 오두막·대위 막사·강철 요새 범위에 전부, 쳐야 하는 건물은 발사대 앞)을 크게 쳐서 이득이 큰 것만 {v0}개 옮김", v0=moved)]
+        head = [tr("가이드 배치: 지금 배치에서 출발해 핵심 범위 효과·생산 구역·입구를 보존하며 {v0}개 옮김", v0=moved)]
         if turn:
             head.append(tr("{v0}개는 회전해서 놓아야 빈틈 없이 맞물림 (ㄱ·ㅜ 자 모양 포함)", v0=len(turn)))
         notes = head + notes + guide_report(grid, shaped, orig, plain, pad)
@@ -1127,10 +1203,10 @@ PAD_CANDIDATES = (0.0, 0.5625, 1.125, 1.6875)     # 0 / 반 타일 / 한 타일 
 
 
 def _stat_types(base: dict) -> Set[str]:
-    return {b.get("type") for b in base.get("buildings") or []
-            # 게임은 '능력치 없음'을 kNum(열거형 끝 값)으로 보낸다 — 빼지 않으면 숲·밀밭까지 전부 능력치 건물로 셌다
-            if b.get("stat") and not any(x in b["stat"] for x in ("None", "Invalid", "Count", "Max", "Num"))} \
-        or STAT_FALLBACK
+    from .construction_policy import has_captain_targets
+    # 직접 '없음'이라고 받은 값은 옛 버전용 기본 목록으로 뒤집지 않는다.
+    return {t for t in {b.get("type") for b in base.get("buildings") or []} if t
+            and has_captain_targets({t}, base, STAT_FALLBACK)}
 
 
 def calibrate_range(base: dict) -> Tuple[float, int, int]:

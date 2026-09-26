@@ -208,10 +208,12 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
     """최적화 결과(FullPlan) → 게임에서 할 옮기기 순서·새로 지을 것·강화 추천이 붙은 LayoutPlan."""
     from . import layout_opt as lo
     from .layout import LayoutPlan, Move, buildings_from_base, plan_access
+    from .layout_guide import preserves_guide
     final_base = lo.final_base(snap, full)
     entrance = lo.entrance_cells(snap.get("geo") or {}, grid)
     access, final_base, reserved = (plan_access(final_base, list(targets), reach, avoid=entrance,
-                                               accept_fn=lambda nb: lo.preserves_production(snap, nb, pad)) if targets and team
+                                               accept_fn=lambda nb: lo.preserves_production(snap, nb, pad)
+                                               and preserves_guide(snap, nb, pad)) if targets and team
                                     else ([], final_base, set()))
     pieces, cur = lo.pieces_from_base(snap, grid, lo.housing_types())
     target_origin = dict(full.origin_after)
@@ -244,8 +246,10 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
         plan.reach_after = {b: v for b, v in reach(final_base.get("geo") or {}).items() if b in targets}
         plan.reach_after.update({b: 0 for b in targets if b not in plan.reach_after})
     plan.notes = list(full.notes)
+    names = None
     for b in snap.get("buildings") or []:
-        if b.get("type") != "kIdleStoneMine" or b.get("id") not in final_blds:
+        eff = lo.EFFECTS.get(b.get("type"))
+        if not eff or not isinstance(eff[0], int) or b.get("id") not in final_blds:
             continue
         i = b["id"]
         if i not in cur or full.origin_after.get(i) == full.origin_before.get(i):
@@ -255,11 +259,15 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
             continue
         q = final_blds[i]
         after = sum(lo.in_range(t.x - q.x, t.y - q.y, q.range + pad)
-                    for t in final_blds.values() if t.type in lo.TILE_RES and lo.TILE_RES[t.type] == 3)
-        plan.notes.append(tr("채석장 바위: 게임 현재 {before}개 → 목표 자리 계산 {after}개 (이동 뒤 게임 값 확인)",
-                             before=sum(counted.values()), after=after))
+                    for t in final_blds.values() if lo.TILE_RES.get(t.type) == eff[0])
+        if names is None:
+            names = lo._game_text().get("buildings") or {}
+        name = (names.get(lo._slug(b["type"])) or {}).get("name_ko") or b["type"]
+        plan.notes.append(tr("{name} 자원 범위: 게임 현재 {before}개 → 목표 자리 계산 {after}개 (이동 뒤 게임 값 확인)",
+                             name=name, before=sum(counted.values()), after=after))
     plan.calibration = calib
-    from .construction_policy import is_recommended_building
+    from .construction_policy import (is_recommended_building, construction_guidance, PRIORITY_GROUP_ORDER,
+                                      has_captain_targets)
     options = [bp for bp in blueprints if is_recommended_building(bp.get("type", ""))]
     plan.build_costs = {bp["type"]: tuple(bp["cost"]) for bp in options if bp.get("cost") is not None}
     # 게임이 추가 건설 가능하다고 보낸 항목만 쓴다. 보유 건물을 근거로 설계도를 만들어 내지 않는다.
@@ -267,7 +275,16 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
     if not plan.construction_pending:
         plan.builds = lo.suggest_builds(snap, options, res_weight, pad, resources=resources)
         plan.builds += lo.suggest_tiles(snap, res_weight, pad, build_options=options, resources=resources)
-    plan.builds.sort(key=lambda x: -x[3])
+    owned = {b.get("type") for b in snap.get("buildings") or []}
+    def build_priority(item):
+        kind = item[0]
+        group, _, _ = construction_guidance(kind, "build",
+            has_housing=any(lo._slug(t) in lo.housing_types() for t in owned if t),
+            has_stats=has_captain_targets(owned, snap, lo.STAT_FALLBACK),
+            has_infinite_stats=bool(owned & lo.STATUE_TYPES),
+            has_construction=bool(targets))
+        return (PRIORITY_GROUP_ORDER[group], -item[3])
+    plan.builds.sort(key=build_priority)
     # 금광은 추천하지 않는다 (사용자 결정 2026-09-26: 무한 모드로 골드 충분 — 철거 후보는 suggest_demolish)
     plan.builds = [b for b in plan.builds if is_recommended_building(b[0])]
     plan.builds = [b for b in plan.builds if not grid.cells(b[1][0], b[1][1], b[2][0], b[2][1]) & entrance]

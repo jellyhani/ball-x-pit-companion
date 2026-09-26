@@ -154,7 +154,7 @@ class LayoutWindow(QWidget):
         left.addWidget(scope)
         self.canvas = MapCanvas()
         left.addWidget(self.canvas, 1)
-        cap = QLabel(tr("색: 밀밭 노랑 · 숲 초록 · 바위 회색. 테두리 건물은 범위 효과 건물(점선 원 = 범위). 가이드 배치 = 지금 배치에서 출발해 Steam 공략 3개(Zarcos·apo·Drake) 규칙(잔병의 오두막 범위에 거처 전부 · 대위 막사 범위에 능력치 건물 · 쳐야 하는 건물은 강철 요새 범위의 발사대 앞)을 먼저 맞추고, 효과가 크게 오르는 것만 옮긴 배치. 주황 번호 = 옮기는 순서 (앞 10개) — 게임에서 재배치 모드에 들어가면 다음 옮기기가 게임 화면에 표시됩니다."))
+        cap = QLabel(tr("색: 밀밭 노랑 · 숲 초록 · 바위 회색. 점선 테두리는 범위 효과입니다. 가이드 배치는 기존 핵심 효과·생산 구역·입구를 보존하는 이동 후보입니다. 오른쪽에서 충족하지 못한 조건을 확인하세요. 재배치 모드에서는 다음 이동 위치를 게임 화면에 표시합니다."))
         cap.setWordWrap(True)
         cap.setStyleSheet(f"color: {tk.css(tk.TEXT_2)};")
         left.addWidget(cap)
@@ -194,7 +194,7 @@ class LayoutWindow(QWidget):
         self.sweeps: Dict[int, list] = {}
 
     def set_result(self, base: dict, plan: Optional[LayoutPlan], sweeps: Dict[int, list]):
-        """plan: 가이드 배치 (layout_city)."""
+        """plan: 현재 배치에서 출발한 가이드 이동안."""
         self.base, self.plan, self.sweeps = base, plan, sweeps
         d = self.data
         blds = buildings_from_base(base)
@@ -248,7 +248,8 @@ class LayoutWindow(QWidget):
                                     tr("초록 점선 자리 · 범위 안 {n}개", n=n) + (tr(" · 주변 {moved}개도 옮기면 이 값", moved=moved) if moved else "")
                                     + tr(" (지은 뒤 강화·일꾼 배정 기준)") + cost_txt))
         for _i, t, what, gain in (getattr(plan, "activations", None) or []) if plan else []:
-            self.builds.add(row(f"{what}: {d.building_name(t)}", value_label(tr("범위 효과 +{gain:.1f}", gain=gain)),
+            label = (tr("공략 후순위") + " · ") if t == "kMansion" else ""
+            self.builds.add(row(f"{label}{what}: {d.building_name(t)}", value_label(tr("범위 효과 +{gain:.1f}", gain=gain)),
                                 tr("지금은 효과를 절반으로 계산 중 — ") + (tr("일꾼을 배정하면") if what == tr("일꾼 배정") else tr("강화하면")) + tr(" 전부 켜짐")))
         if plan is not None and not getattr(plan, "construction_pending", False) and not (getattr(plan, "builds", None) or getattr(plan, "activations", None)):
             self.builds.add(row(tr("추천할 새 건물·강화 없음"), None, tr("지을 수 있는 설계도 중 범위 효과 건물이 없음")))

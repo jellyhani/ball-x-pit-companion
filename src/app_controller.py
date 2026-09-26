@@ -588,14 +588,15 @@ class AppController(QObject):
                 self._base_advice_key = None
                 self.hud.hide()
             return
-        todo = suggest_base(self.meta, self.data, limit=3)
+        todo = suggest_base(self.meta, self.data, limit=3, base=self._base_snap)
         demolish = list(getattr(self.layout_plan, "demolish", None) or [])[:3]
         from .engine.harvest import advise_workers
         from .engine.layout_opt import GUIDE_DEMOLISH
         need, _ = need_resource(self.meta, self._shortfalls())
         workers = advise_workers(self.meta, self.meta.chars_raw, [b.type for b in self.meta.buildings],
                                  self.data, need)[:3]
-        key = (tuple((sg.kind, sg.type, sg.cost, sg.affordable, sg.missing_text) for sg in todo),
+        key = (tuple((sg.kind, sg.type, sg.cost, sg.affordable, sg.missing_text,
+                      sg.priority_group, sg.reason, sg.source) for sg in todo),
                tuple((t, s) for _, t, s, *_r in demolish), tuple((a.char_id, a.building, a.action) for a in workers))
         if not todo and not demolish and not workers:
             if self.base_advice is not None:
@@ -608,7 +609,7 @@ class AppController(QObject):
         from .ui.hud import HudRow, HudView
         d = self.data
         verb = {"finish": tr("완성"), "build": tr("짓기"), "upgrade": tr("강화")}
-        items = [(f"{verb[sg.kind]}: {sg.name}", sg.status) for sg in todo]
+        items = [(f"{verb[sg.kind]}: {sg.name}", f"{sg.policy_label} · {sg.status}") for sg in todo]
         items += [(tr("철거 후보: {v0}", v0=d.building_name(t)), tr("가이드") if t in GUIDE_DEMOLISH else tr("기여 {score:.1f}", score=score))
                   for _i, t, score, *_r in demolish]
         items += [(tr("일꾼 빼기: {v0}의 {v1} → 발사로", v0=d.building_name(a.building), v1=d.name(a.char_id)) if a.action == "remove" else
@@ -813,12 +814,12 @@ class AppController(QObject):
             self.base_overlay.set_capture_excluded(want)
 
     def _shortfalls(self) -> dict:
-        """곧 지을·올릴 것(기지 조언 상위 5개 중 모자란 것)의 자원별 부족분 합."""
+        """공략 핵심 신규 건물의 부족분. 일반 후보를 사용자가 고른 건설 목표로 간주하지 않는다."""
         out: dict = {}
         if self.meta is None:
             return out
-        for sg in suggest_base(self.meta, self.data, limit=5):
-            if sg.affordable:
+        for sg in suggest_base(self.meta, self.data, limit=5, base=self._base_snap):
+            if sg.affordable or sg.priority_group != "guide_core":
                 continue
             for k, v in self.meta.shortfall(tuple(int(x) for x in sg.cost)).items():
                 out[k] = out.get(k, 0) + v
@@ -852,6 +853,7 @@ class AppController(QObject):
                     self._harvest_pending = True
             self._base_state = state
         self._base_snap = base
+        self.control.set_base_context(base)
         self._update_char_combo(base, state)
         self._update_base_advice(base, state)
         if base is not None:
@@ -1051,7 +1053,10 @@ class AppController(QObject):
         # 목표 고정: 이전 목표 배치를 넘겨, 새 계산이 2% 넘게 좋지 않으면 목표를 바꾸지 않는다 — 조금 옮기고 다시
         # 계산할 때마다 목표가 바뀌어 헛걸음하던 것 (기록: 71 → 79 → 92 → 118번)
         prev = getattr(self.layout_plan, "final", None) if self.layout_plan else None
-        self.sim.submit("layout", snap, sim_jobs.job_layout, snap, team, self._harvest_dur, bps, targets, need, 8.0,
+        # 일반 기지에서 처음 계산할 때도 현재 게임의 전체 채집 시간을 사용한다.
+        # 마지막 조준 시 남은 시간이나 앱 초기 기본값으로 새 배치를 평가하지 않는다.
+        duration = float((snap.get("geo") or {}).get("harvest_len") or self._harvest_dur)
+        self.sim.submit("layout", snap, sim_jobs.job_layout, snap, team, duration, bps, targets, need, 8.0,
                         dict(prev) if prev else None, char_levels, tuple(self.meta.resources))
 
     def _update_spa(self, base: dict):

@@ -201,9 +201,12 @@ class BaseTest(unittest.TestCase):
         self.assertEqual(m.records["ball:burn"].damage_per_run, 90000)
         self.assertEqual(m.damage_rank("ball:burn"), (1, 6))
         sg = suggest(m, d)
-        self.assertEqual(sg[0].type, "kExorcist")          # 런에 직접 영향 (삭제) → 맨 앞
-        self.assertFalse(sg[0].affordable)                 # 나무 60 필요, 40 보유
-        self.assertIn("나무 20", sg[0].missing_text)
+        # 공략에 없는 일반 후보는 설명의 '삭제' 낱말만으로 맨 앞에 놓지 않는다.
+        exorcist = next(s for s in sg if s.type == "kExorcist")
+        self.assertTrue(sg[0].affordable)
+        self.assertTrue(all(s.priority_group == "neutral" for s in sg))
+        self.assertFalse(exorcist.affordable)             # 나무 60 필요, 40 보유
+        self.assertIn("나무 20", exorcist.missing_text)
         self.assertEqual(d.building_name("kExorcist"), "엑소시스트")
 
 

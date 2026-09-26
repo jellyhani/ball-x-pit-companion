@@ -20,33 +20,61 @@ HUB_TRIES = 12      # 허브 자리 후보 수 (많을수록 느림 — 후보 �
 
 def hub_groups(pieces: dict, scorer) -> List[Tuple[object, List[int]]]:
     """(허브 건물, 범위에 넣을 건물 id) — 강철 요새 → 잔병의 오두막 → 대위 막사 순 (layout_city.guide_report 와 같은 분류)."""
-    from .layout_city import CAPTAIN, PRODUCERS, VETERAN
-    from .layout_opt import STATUE_TYPES, TILE_RES
+    from .layout_city import CAPTAIN, VETERAN
     kind = {i: p.type for i, p in pieces.items()}
-    field = {i for i, t in kind.items() if t in TILE_RES or t in PRODUCERS or t == "kGoldMine"}
     pick = lambda t: next((pieces[i] for i in sorted(pieces) if kind[i] == t), None)
     veteran, captain, brick = pick(VETERAN), pick(CAPTAIN), pick("kBrickHouse")
-    builds = [i for i in sorted(pieces) if i not in field and kind[i] != "kBrickHouse"
-              and (kind[i] in STATUE_TYPES or pieces[i].unfinished)]
-    house = set(scorer.targets.get("housing", ()))
-    homes = [i for i in sorted(pieces) if i in house and i not in field and i not in builds
-             and (veteran is None or i != veteran.id)]
-    stats = [i for i in sorted(pieces) if i in set(scorer.targets.get("stat", ())) and i not in house
-             and i not in field and i not in builds and (captain is None or i != captain.id)]
+    # 효과 대상은 중첩된다. 무한 강화 건물은 요새와 막사, 능력치 거처는 오두막과 막사 양쪽 대상이다.
+    # apo Naturalist Update의 Captain's Quarters 절도 새 능력치 거처를 명시한다.
+    members = lambda key, hub: [i for i in sorted(scorer.targets.get(key, ()))
+                               if hub is None or i != hub.id]
+    builds = members("build", brick)
+    homes = members("housing", veteran)
+    stats = members("stat", captain)
     return [(h, m) for h, m in ((brick, builds), (veteran, homes), (captain, stats)) if h is not None and m]
+
+
+def covered_members(grid: Grid, pieces: dict, origin: Dict[int, Cell], groups, pad: float) -> dict:
+    """효과별로 실제 포함된 대상 집합. 총합이 같아도 다른 효과를 잃는 후보를 구별한다."""
+    from .layout_opt import in_range
+    out = {}
+    for h, members in groups:
+        q = pieces[h.id]
+        hx, hy = grid.center(*origin[h.id], q.w, q.h)
+        out[h.id] = set()
+        for m in members:
+            p = pieces[m]
+            x, y = grid.center(*origin[m], p.w, p.h)
+            if in_range(x - hx, y - hy, q.range + pad):
+                out[h.id].add(m)
+    return out
 
 
 def coverage(grid: Grid, pieces: dict, origin: Dict[int, Cell], groups, pad: float) -> int:
     """허브 범위 안에 든 건물 수 (가이드 달성도 합)."""
-    from .layout_opt import in_range
-    n = 0
-    for h, members in groups:
-        hx, hy = grid.center(*origin[h.id], h.w, h.h)
-        for m in members:
-            p = pieces[m]
-            x, y = grid.center(*origin[m], p.w, p.h)
-            n += in_range(x - hx, y - hy, h.range + pad)
-    return n
+    return sum(map(len, covered_members(grid, pieces, origin, groups, pad).values()))
+
+
+def preserves_guide(base: dict, candidate: dict, pad: float = 0.0) -> bool:
+    """입구를 새로 막거나 이미 받는 공략 핵심 효과를 빼앗는 이동은 거부한다. 길 열기에도 같은 조건을 쓴다."""
+    from . import layout_opt as lo
+    from .layout import grid_from_geo
+    grid = grid_from_geo(base.get("geo") or {})
+    if grid is None:
+        return True
+    p0, o0 = lo.pieces_from_base(base, grid, lo.housing_types())
+    p1, o1 = lo.pieces_from_base(candidate, grid, lo.housing_types())
+    if not set(p0) <= set(p1):
+        return False
+    groups = hub_groups(p0, lo.Scorer(p0, lo._stat_types(base), lo.housing_types(), pad=pad))
+    before = covered_members(grid, p0, o0, groups, pad)
+    after = covered_members(grid, p1, o1, groups, pad)
+    if any(not members <= after[h] for h, members in before.items()):
+        return False
+    entrance = lo.entrance_cells(base.get("geo") or {}, grid)
+    occupied0 = set(lo.Layout(grid, p0, o0).occ) & entrance
+    occupied1 = set(lo.Layout(grid, p1, o1).occ) & entrance
+    return occupied1 <= occupied0
 
 
 class _State:

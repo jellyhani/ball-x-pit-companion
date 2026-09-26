@@ -649,23 +649,20 @@ def _guide_notes(lay, shaped, final, captain, veteran, stats, house_ids, homes, 
 
 def guide_report(grid: Grid, pieces: dict, origin: Dict[int, Cell], scorer, pad: float = 0.0) -> List[str]:
     """아무 배치나 가이드 규칙 달성도를 메모로 (가이드 배치 담금질 결과용 — plan_city 와 같은 분류)."""
-    from .layout_opt import STATUE_TYPES, TILE_RES, Layout
+    from .layout_opt import TILE_RES, Layout
+    from .layout_guide import hub_groups
     kind = {i: p.type for i, p in pieces.items()}
     by_res: Dict[int, list] = {1: [], 2: [], 3: []}
     for i, t in kind.items():
         if t in TILE_RES:
             by_res[TILE_RES[t]].append(pieces[i])
-    field = {i for i, t in kind.items() if t in TILE_RES or t in PRODUCERS or t == "kGoldMine"}
     pick = lambda t: next((pieces[i] for i in pieces if kind[i] == t), None)
     veteran, captain, brick = pick(VETERAN), pick(CAPTAIN), pick("kBrickHouse")
-    builds = [pieces[i] for i in pieces if i not in field and kind[i] != "kBrickHouse"
-              and (kind[i] in STATUE_TYPES or pieces[i].unfinished)]
-    bid = {p.id for p in builds}
+    groups = {h.type: [pieces[i] for i in ids] for h, ids in hub_groups(pieces, scorer)}
+    builds = groups.get("kBrickHouse", [])
     house_ids = set(scorer.targets.get("housing", ()))
-    homes = [pieces[i] for i in pieces if i in house_ids and i not in field and i not in bid
-             and (veteran is None or i != veteran.id)]
-    stats = [pieces[i] for i in pieces if i in set(scorer.targets.get("stat", ())) and i not in house_ids
-             and i not in field and i not in bid and (captain is None or i != captain.id)]
+    homes = groups.get(VETERAN, [pieces[i] for i in house_ids])
+    stats = groups.get(CAPTAIN, [])
     return _guide_notes(Layout(grid, pieces, origin), pieces, origin, captain, veteran, stats, list(house_ids), homes,
                         by_res, brick, builds, pad, grid.size)
 

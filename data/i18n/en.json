@@ -977,5 +977,21 @@
   "Steam 공략의 일부 규칙을 참고한 적은 이동안입니다. 최적 배치를 보장하지 않습니다.": "This low-move suggestion uses some rules from Steam guides. It does not guarantee an optimal layout.",
   "채석장 바위: 게임 현재 {before}개 → 목표 자리 계산 {after}개 (이동 뒤 게임 값 확인)": "Quarry rocks: the game counts {before} now → {after} calculated at the target (check the game's count after moving)",
   "색: 밀밭 노랑 · 숲 초록 · 바위 회색. 테두리 건물은 범위 효과 건물(점선 원 = 범위). 가이드 배치 = 지금 배치에서 출발해 Steam 공략 3개(Zarcos·apo·Drake) 규칙(잔병의 오두막 범위에 거처 전부 · 대위 막사 범위에 능력치 건물 · 쳐야 하는 건물은 강철 요새 범위의 발사대 앞)을 먼저 맞추고, 효과가 크게 오르는 것만 옮긴 배치. 주황 번호 = 옮기는 순서 (앞 10개) — 게임에서 재배치 모드에 들어가면 다음 옮기기가 게임 화면에 표시됩니다.": "Colors: wheat yellow · forest green · rock gray. Bordered buildings have area effects (dotted circle = range). Guide layout = starting from your current layout, first meet the rules of 3 Steam guides (Zarcos·apo·Drake) — all housing in the Veteran's Hut range · stat buildings in the Captain's Quarters range · buildings you must hit in front of the launcher within the Iron Fortress range — then move only what clearly raises the effect. Orange numbers = the order to move (first 10) — once you enter rearrange mode in the game, the next move is shown on the game screen.",
-  "가이드 배치: 지금 배치에서 출발해 공략 규칙(잔병의 오두막·대위 막사·강철 요새 범위에 전부, 쳐야 하는 건물은 발사대 앞)을 크게 쳐서 이득이 큰 것만 {v0}개 옮김": "Guide layout: starting from your current layout, weighting the guide rules heavily (everything in range of the Veteran's Hut · Captain's Quarters · Iron Fortress, buildings you must hit in front of the launcher), moving only the {v0} that pay off"
+  "가이드 배치: 지금 배치에서 출발해 공략 규칙(잔병의 오두막·대위 막사·강철 요새 범위에 전부, 쳐야 하는 건물은 발사대 앞)을 크게 쳐서 이득이 큰 것만 {v0}개 옮김": "Guide layout: starting from your current layout, weighting the guide rules heavily (everything in range of the Veteran's Hut · Captain's Quarters · Iron Fortress, buildings you must hit in front of the launcher), moving only the {v0} that pay off",
+  "공략 핵심": "Guide priority",
+  "일반 후보": "General candidate",
+  "공략 후순위": "Lower guide priority",
+  "대저택의 골드 수입은 공략에서 후순위입니다.": "The guides give the Mansion's gold income a lower priority.",
+  "거처를 범위에 모으는 공략의 중심 — 현재 거처 보유 확인, 실제 범위·입주민 레벨 확인 필요": "A guide centerpiece for grouping housing within range — existing housing confirmed; actual range and resident levels need checking",
+  "능력치 건물을 범위에 모으는 공략의 중심 — 현재 능력치 건물 보유 확인, 실제 범위 확인 필요": "A guide centerpiece for grouping stat buildings within range — existing stat buildings confirmed; actual range needs checking",
+  "미완성·무한 강화 건물의 공사를 돕는 공략의 중심 — 채집 때 맞힐 수 있는 배치 필요": "A guide centerpiece for helping construction of unfinished buildings and buildings with unlimited upgrades — place it where workers can hit it during harvest",
+  "게임에서 가능한 항목입니다. 공략이 이 항목의 우선순위를 정하지는 않았습니다.": "This option is available in the game. The guides do not assign it a priority.",
+  "근처 밀밭 재생 속도 상승 (게임 범위 기준)": "Increases nearby wheat field regrowth speed (using the game's range)",
+  "근처 숲 재생 속도 상승 (게임 범위 기준)": "Increases nearby forest regrowth speed (using the game's range)",
+  "근처 바위 재생 속도 상승 (게임 범위 기준)": "Increases nearby rock regrowth speed (using the game's range)",
+  "가이드 배치: 지금 배치에서 출발해 핵심 범위 효과·생산 구역·입구를 보존하며 {v0}개 옮김": "Guide layout: starting from your current layout, move {v0} buildings while preserving key area effects, production areas, and the entrance",
+  "{name} 자원 범위: 게임 현재 {before}개 → 목표 자리 계산 {after}개 (이동 뒤 게임 값 확인)": "{name} resource coverage: the game counts {before} now → {after} calculated at the target (check the game's count after moving)",
+  "조건을 지키는 더 나은 이동을 찾지 못했습니다.": "No better move satisfying the constraints was found.",
+  "공략 핵심 건물을 먼저 표시하며, 비용·해금은 게임 값을 사용합니다. 일반 후보 사이의 효율 순위는 계산하지 않습니다.": "Key guide buildings are shown first; costs and unlock status come from the game. General candidates are not ranked by efficiency.",
+  "색: 밀밭 노랑 · 숲 초록 · 바위 회색. 점선 테두리는 범위 효과입니다. 가이드 배치는 기존 핵심 효과·생산 구역·입구를 보존하는 이동 후보입니다. 오른쪽에서 충족하지 못한 조건을 확인하세요. 재배치 모드에서는 다음 이동 위치를 게임 화면에 표시합니다.": "Colors: wheat yellow · forest green · rock gray. Dotted outlines show area effects. The guide layout proposes moves that preserve existing key effects, production areas, and the entrance. Check unmet conditions on the right. In rearrange mode, the next move's location is shown on the game screen."
 }

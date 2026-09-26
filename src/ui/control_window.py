@@ -600,12 +600,12 @@ class ControlWindow(QWidget):
         self.base_res = pg.add(Group())
         pg.add(section_title(tr("다음에 할 일")))
         self.base_todo = pg.add(Group())
-        pg.add(_caption(tr("런에 직접 영향을 주는 건물(레벨 업·삭제·새로고침·부활 등이 설명에 있는 것)을 먼저, 그다음 지금 지을 수 있는 순서입니다. 건물 효과의 크기는 비교하지 않습니다.")))
+        pg.add(_caption(tr("공략 핵심 건물을 먼저 표시하며, 비용·해금은 게임 값을 사용합니다. 일반 후보 사이의 효율 순위는 계산하지 않습니다.")))
         pg.add(section_title(tr("배치도")))
         lg = pg.add(Group())
         lb = QPushButton(tr("배치도 열기"))
         lb.clicked.connect(self.layout_requested.emit)
-        lg.add(row(tr("가이드 배치 · 채집 궤적"), lb, tr("Steam 공략 3개 규칙으로 다시 짠 배치, 옮기는 순서, 채집 조준 각도")))
+        lg.add(row(tr("가이드 배치 · 채집 궤적"), lb, tr("Steam 공략의 일부 규칙을 참고한 적은 이동안입니다. 최적 배치를 보장하지 않습니다.")))
         self.base_layout = pg.add(Group())
         self.base_layout.add(row(tr("기지 화면에 들어가면 계산합니다")))
         pg.add(section_title(tr("스파 재채집 손익")))
@@ -648,7 +648,7 @@ class ControlWindow(QWidget):
             self.base_layout.add(row(tr("가이드 배치까지 옮기기 {v0}번", v0=len(plan.swaps)), chip(tr("범위 효과 {pct:+.0f}%", pct=pct), "accent"),
                                      tr("재배치 모드에 들어가면 다음 옮기기가 게임 화면에 번호로 나옵니다")))
         else:
-            self.base_layout.add(row(tr("지금 배치가 가이드 기준으로 충분함"), chip(tr("유지"), "ok")))
+            self.base_layout.add(row(tr("조건을 지키는 더 나은 이동을 찾지 못했습니다."), chip(tr("유지"), "neutral")))
         for t, _c, _sz, gain, n, *_ in (getattr(plan, "builds", None) or [])[:3]:
             from ..engine.layout_opt import TILE_RES
             what = tr("가이드") if t in TILE_RES else tr("범위 효과 +{gain:.1f}", gain=gain)
@@ -657,8 +657,20 @@ class ControlWindow(QWidget):
         if getattr(plan, "construction_pending", False):
             self.base_layout.add(row(tr("재배치 완료 후 건설 위치를 다시 계산합니다.")))
         for _i, t, what, gain in (getattr(plan, "activations", None) or [])[:3]:
-            self.base_layout.add(row(f"{what}: {d.building_name(t)}", chip(tr("범위 효과 +{gain:.1f}", gain=gain), "neutral"),
+            label = (tr("공략 후순위") + " · ") if t == "kMansion" else ""
+            self.base_layout.add(row(f"{label}{what}: {d.building_name(t)}", chip(tr("범위 효과 +{gain:.1f}", gain=gain), "neutral"),
                                      tr("지금은 효과를 절반으로 계산 중")))
+
+    def set_base_context(self, base: Optional[dict]):
+        """능력치 대상의 게임 값을 건설 조언에도 전달한다. 대상 구성이 바뀔 때만 화면을 갱신한다."""
+        if not base:
+            return
+        key = frozenset((b.get("type"), b.get("stat")) for b in base.get("buildings") or [])
+        self._base = base
+        if key != getattr(self, "_base_context_key", None):
+            self._base_context_key = key
+            if getattr(self, "meta", None) is not None:
+                self.set_meta(self.meta)
 
     def set_meta(self, meta: MetaState, resource_note: Optional[str] = None):
         self.meta = meta
@@ -669,7 +681,7 @@ class ControlWindow(QWidget):
         if resource_note:
             self.base_res.add(row(resource_note))
         self.base_todo.clear()
-        todo = suggest_base(meta, d)
+        todo = suggest_base(meta, d, base=getattr(self, "_base", None))
         for sg in todo:
             if sg.kind == "finish":
                 self.base_todo.add(row(sg.name, chip(tr("먼저 완성"), "warn"), " · ".join(x for x in (sg.cost_text, sg.desc) if x)))
@@ -678,8 +690,8 @@ class ControlWindow(QWidget):
             what = tr("짓기") if sg.kind == "build" else tr("강화")
             cat = CAT_LABEL.get(sg.category, "")
             need = "" if sg.affordable or not sg.missing_text else tr("{missing_text} 부족", missing_text=sg.missing_text)
-            sub = " · ".join(x for x in (f"{what} {sg.cost_text}", need, cat, sg.desc) if x)
-            self.base_todo.add(row(sg.name, chip(sg.status if sg.affordable else tr("자원 부족"), tone), sub))
+            sub = " · ".join(x for x in (f"{what} {sg.cost_text}", need, cat, sg.reason, sg.source, sg.desc) if x)
+            self.base_todo.add(row(sg.name, chip(f"{sg.policy_label} · {sg.status}", tone), sub))
         if not todo:
             self.base_todo.add(row(tr("지을 수 있는 설계도·올릴 수 있는 건물 없음")))
         self.base_workers.clear()
