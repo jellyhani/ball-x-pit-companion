@@ -447,6 +447,12 @@ class RecommendationHud(QWidget):
             v = HudView(title=rec.headline, subtitle=rec.limitations[0] if rec.limitations else "",
                         status=STATUS_TEXT.get(rec.status, ""), status_tone=tone)
         top = best if best is not None else (rec.fallback or (rec.ranked[0] if rec.ranked else None))
+        if rec.discovery_text:
+            v.lines.insert(0, (rec.discovery_text, "primary"))
+            if len(v.lines) > 3:
+                warnings = [line for line in v.lines[1:] if line[1] == "warn"][:1]
+                details = [line for line in v.lines[1:] if line[1] != "warn"]
+                v.lines = v.lines[:1] + details[:2 - len(warnings)] + warnings
         # 나머지는 순위 순서로 (게임 화면 위치는 각 줄에 적혀 있다)
         others = sorted((e for e in rec.evals if e is not top),
                         key=lambda e: card_rank(rec, e) or 99)

@@ -77,7 +77,9 @@ class AppController(QObject):
         self.run = RunState()
         self.tracker = ChoiceTracker()
         self.recommender = Recommender(self.data)
+        self.recommender.discovery_mode = self.settings.encyclopedia_mode
         self.fusion = FusionAdvisor(self.data)
+        self.fusion.discovery_mode = self.settings.encyclopedia_mode
         self.fusion_rec: Optional[FusionRecommendation] = None
         self.char_combo = None                    # 캐릭터 선택 화면의 조합 추천 (알선소가 있을 때)
         self._char_combo_key = None                # (state, char1, char2) — 바뀔 때만 다시 계산
@@ -302,7 +304,11 @@ class AppController(QObject):
                     json.dump(snap, f, ensure_ascii=False)
             except OSError:
                 pass
+            previous_discovery = getattr(self.meta, "discovery", None)
             self.meta = parse_meta(snap["meta"], self.data)
+            worker_order = snap["meta"].get("worker_order")
+            if isinstance(worker_order, list):
+                self._team_order = [c for c in worker_order if isinstance(c, str)]
             if getattr(self, "_harvest_pending", False) and self.meta.resources:
                 self._harvest_pending = False
                 row = self.harvest_log.finish(list(self.meta.resources))
@@ -312,6 +318,11 @@ class AppController(QObject):
             self.fusion.meta = self.meta
             # 건물 개수 × 공략의 고정 생산량으로 새 생산 건물 건설을 권하지 않는다.
             self.control.set_meta(self.meta)
+            if self.settings.encyclopedia_mode and previous_discovery != self.meta.discovery:
+                if self.tracker.session is not None:
+                    self.recommendation = self.recommender.recommend(self.tracker.session, self.run)
+                    self.hud.show_recommendation(self.recommendation, self.tracker.session.points_left)
+                    self._update_hud()
             return
         if isinstance(snap.get("catalog"), dict):
             self.snapshots.set_catalog(snap)
@@ -1055,7 +1066,7 @@ class AppController(QObject):
         prev = getattr(self.layout_plan, "final", None) if self.layout_plan else None
         # 일반 기지에서 처음 계산할 때도 현재 게임의 전체 채집 시간을 사용한다.
         # 마지막 조준 시 남은 시간이나 앱 초기 기본값으로 새 배치를 평가하지 않는다.
-        duration = float((snap.get("geo") or {}).get("harvest_len") or self._harvest_dur)
+        duration = hs.initial_harvest_duration(snap, team, self._harvest_dur)
         limits = self.aim_range.limits
         key = self._layout_fingerprint(snap)
         self._layout_for = key
@@ -1068,8 +1079,11 @@ class AppController(QObject):
         from .engine.sim_signature import layout_signature
         options = self.meta.build_options if self.meta.build_options is not None else self.meta.blueprints
         need, _ = need_resource(self.meta, self._shortfalls())
-        duration = float((base.get("geo") or {}).get("harvest_len") or self._harvest_dur)
-        return layout_signature(base, self.meta.chars_raw, [b.construction_data() for b in options],
+        from .engine import harvest_sim as hs
+        team = hs.team_from_chars(self.meta.chars_raw, getattr(self, "_team_order", None))
+        duration = hs.initial_harvest_duration(base, team, self._harvest_dur)
+        return layout_signature(base, (self.meta.chars_raw, getattr(self, "_team_order", None)),
+                                [b.construction_data() for b in options],
                                 tuple(self.meta.resources), duration, need, self.aim_range.limits)
 
     def _update_spa(self, base: dict):
@@ -1202,7 +1216,7 @@ class AppController(QObject):
             return [hs.to_screen(h, x, y) for x, y in pts]
         blds = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
         targets = {u.id: u.hits_left for u in unf}
-        dur = self._harvest_dur
+        dur = hs.initial_harvest_duration(base, team, self._harvest_dur)
         # 배치·남은 자원·필요 자원·미완성 건물이 바뀔 때만 각도 탐색을 다시 한다
         lo, hi = self.aim_range.limits
         from .engine.sim_signature import aim_signature
@@ -1260,7 +1274,7 @@ class AppController(QObject):
                           (140, 140, 150, 255)))
         from .engine.harvest_sim import model_limitations
         if model_limitations(team, blds):
-            lines.append((tr("채집 예상은 일부 강화 효과와 기본 채집량을 검증 중인 참고 계산입니다."),
+            lines.append((tr("게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다."),
                           (255, 190, 110, 255)))
         lines.append((tr("흰색: 현재 조준 · 파랑: 추천 · 점: 예상 반사 · Shift: 길게 보기"), (170, 180, 195, 255)))
         lines.append((tr("첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다."), (140, 140, 150, 255)))
@@ -1415,6 +1429,12 @@ class AppController(QObject):
             self._render_base(self._base_snap, self._base_state)
 
     def _on_settings_changed(self):
+        self.recommender.discovery_mode = self.settings.encyclopedia_mode
+        self.fusion.discovery_mode = self.settings.encyclopedia_mode
+        if self.tracker.session is not None:
+            self.recommendation = self.recommender.recommend(self.tracker.session, self.run)
+        elif self.fusion_rec is not None and self.bridge_state is not None:
+            self._update_fusion(self.bridge_state.observation)
         if autostart.is_enabled() != self.settings.start_with_windows:
             autostart.set_enabled(self.settings.start_with_windows)
         self.hud.compact = self.settings.hud_compact

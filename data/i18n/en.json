@@ -1022,5 +1022,19 @@
   "조준 경로 길이": "Aim path length",
   "현재 조준 1 / 3 / 7회 반사 · 추천은 1회 · Shift를 누르는 동안 둘 다 7회": "Current aim: 1 / 3 / 7 bounces · Suggested: 1 · Hold Shift for 7 on both",
   "흰색: 현재 조준 · 파랑: 추천 · 점: 예상 반사 · Shift: 길게 보기": "White: current aim · Blue: suggested · Dots: predicted bounces · Shift: extend",
-  "첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다.": "Predicted path of the first worker. Distant dashed segments may differ from actual motion."
+  "첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다.": "Predicted path of the first worker. Distant dashed segments may differ from actual motion.",
+  "백과사전 해금 모드": "Encyclopedia discovery mode",
+  "보유 볼에서 이어지는 미발견 상위 볼·융합 조합을 우선 추천": "Prioritize undiscovered evolutions and fusion pairs linked to your balls",
+  "백과사전 해금 모드: 게임의 발견 기록을 기다리는 중": "Discovery mode: waiting for game discovery records",
+  "백과사전 해금 모드: 자동 선택 캐릭터입니다": "Discovery mode: this character selects automatically",
+  "백과사전 해금 모드: 보유 볼과 빈 슬롯을 확인하는 중": "Discovery mode: checking owned balls and free slots",
+  "백과사전 해금 모드: 이번 선택지에 연결되는 미해금 목표 없음": "Discovery mode: no undiscovered target linked to these choices",
+  "미발견 {target}: {parts} → 진화": "Undiscovered {target}: {parts} → evolution",
+  "미기록 융합: {parts}": "Unrecorded fusion: {parts}",
+  "추가 획득 {missing} · 재료 강화 {upgrades} · 융합기 필요": "Acquire {missing} more · Material upgrades {upgrades} · Fuser required",
+  "중간 진화 후 추가 강화 필요": "Further upgrades needed after intermediate evolution",
+  "해금 우선": "Discovery first",
+  "백과사전 해금 모드: 게임에서 아직 기록되지 않은 후보 우선": "Discovery mode: prioritize candidates not yet recorded in the game",
+  "이 선택 후": "After this choice",
+  "게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다.": "Prediction includes game upgrade values. Actual paths and yields may differ."
 }

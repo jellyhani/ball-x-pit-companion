@@ -24,7 +24,7 @@ namespace BallxPitBridge
     [BepInPlugin("dev.ballxpit.bridge", "BALL x PIT Bridge", Plugin.Version)]
     public class Plugin : BasePlugin
     {
-        public const string Version = "1.15.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
+        public const string Version = "1.16.1";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
         internal static ManualLogSource L;
 
         public override void Load()
@@ -1474,6 +1474,14 @@ namespace BallxPitBridge
                 WriteBuildings(w, m);
                 WriteHeroStats(w, m);
                 WritePassiveStats(w, m);
+                WriteDiscovery(w, m);
+                if (m.CharWorkerOrder != null)
+                {
+                    w.WriteStartArray("worker_order");
+                    for (int i = 0; i < m.CharWorkerOrder.Count; i++)
+                        w.WriteStringValue(m.CharWorkerOrder[i].ToString());
+                    w.WriteEndArray();
+                }
                 w.WriteStartArray("chars");
                 var chars = m.Chars;
                 if (chars != null)
@@ -1699,6 +1707,38 @@ namespace BallxPitBridge
                     w.WriteNumber("launches", s.TotalLaunches);
                     w.WriteEndObject();
                 }
+            w.WriteEndObject();
+        }
+
+        /// <summary>등장 가능 여부와 백과사전 발견 여부를 별도로 읽는다. 0회도 명시해 미확인과 구분한다.</summary>
+        static void WriteDiscovery(Utf8JsonWriter w, MetaSaveData m)
+        {
+            var heroes = InfoDB.I?.Heroes;
+            var stats = m.HeroStats;
+            if (heroes == null || stats == null) return;
+            w.WriteStartObject("discovery");
+            for (int i = 0; i < heroes.Length; i++)
+            {
+                var info = heroes[i];
+                if (info == null) continue;
+                int idx = (int)info.Type;
+                if (idx < 0 || idx >= stats.Length || stats[idx] == null) continue;
+                var stat = stats[idx];
+                w.WriteStartObject(info.Type.ToString());
+                w.WriteNumber("obtained", stat.NumObtained);
+                w.WriteBoolean("in_game", info.IncludeInGame());
+                w.WriteBoolean("available", info.IsUnlocked());
+                w.WriteBoolean("merged", info.IsMerged());
+                var combos = stat.NumCombos;
+                if (combos != null)
+                {
+                    w.WriteStartObject("combos");
+                    for (int j = 0; j < combos.Length; j++)
+                        if (combos[j] > 0) w.WriteNumber(((HeroType)j).ToString(), combos[j]);
+                    w.WriteEndObject();
+                }
+                w.WriteEndObject();
+            }
             w.WriteEndObject();
         }
 

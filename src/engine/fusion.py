@@ -52,6 +52,7 @@ class FusionRecommendation:
 class FusionAdvisor:
     def __init__(self, data: GameData):
         self.data = data
+        self.discovery_mode = False
         self.meta: Optional[MetaState] = None
 
     def _record(self, pick: FusionPick, item_id: Optional[str]):
@@ -70,6 +71,13 @@ class FusionAdvisor:
             pick.score -= 2
 
     def recommend(self, fz: Optional[FuserOptions], inventory: Optional[tuple], run: RunState) -> FusionRecommendation:
+        rec = self._recommend_normal(fz, inventory, run)
+        if self.discovery_mode:
+            from .discovery import apply_fusion_discovery
+            return apply_fusion_discovery(rec, self.meta, self.data)
+        return rec
+
+    def _recommend_normal(self, fz: Optional[FuserOptions], inventory: Optional[tuple], run: RunState) -> FusionRecommendation:
         d = self.data
         if fz is None:
             return FusionRecommendation("none", tr("융합 후보를 받지 못했습니다"), None, [], [],

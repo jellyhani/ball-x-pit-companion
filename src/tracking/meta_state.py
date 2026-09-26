@@ -66,6 +66,7 @@ class MetaState:
     levels: List[dict] = field(default_factory=list)
     battles: Optional[int] = None
     chars_raw: List[dict] = field(default_factory=list)     # 게임 연동 원본 (작업 상태·채집 강화)
+    discovery: Optional[Dict[str, dict]] = None    # 게임의 발견 횟수·현재 등장 가능 여부·융합 기록. None은 미수신.
 
     def resource_text(self, cost: Tuple[int, ...]) -> str:
         return " · ".join(f"{RESOURCES[i]} {v}" for i, v in enumerate(cost) if v and i < len(RESOURCES))
@@ -105,6 +106,17 @@ def _ints(v) -> Tuple[int, ...]:
 def parse_meta(meta: dict, data: GameData) -> MetaState:
     st = MetaState(resources=_ints(meta.get("resources")), battles=meta.get("battles"),
                    bonuses=dict(meta.get("bonuses") or {}), levels=list(meta.get("levels") or []))
+    if isinstance(meta.get("discovery"), dict):
+        st.discovery = {}
+        for enum_name, row in meta["discovery"].items():
+            iid = data.item_by_log_id(enum_name)
+            if not iid or not isinstance(row, dict) or type(row.get("obtained")) is not int:
+                continue
+            entry = dict(row)
+            if isinstance(row.get("combos"), dict):
+                entry["combos"] = {partner: count for name, count in row["combos"].items()
+                                   if (partner := data.item_by_log_id(name)) and type(count) is int and count > 0}
+            st.discovery[iid] = entry
     for b in meta.get("buildings") or []:
         st.buildings.append(BuildingState(b.get("type", ""), int(b.get("lvl") or 0), b.get("state", ""),
                                           b.get("can_upgrade"), _ints(b.get("upgrade_cost"))))

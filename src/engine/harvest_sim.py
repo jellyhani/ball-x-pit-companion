@@ -8,7 +8,7 @@
 - 밀밭은 통과하며 채집한다 (튕기지 않음). 돌·나무 채집지는 자원이 남아 있으면 튕기며 채집하고,
   '돌 관통'·'나무 관통' 채집 강화가 있으면 통과하며 채집한다. 비어 있는 채집지는 누구나 통과한다
   (먼저 날아간 작업자가 비운 바위를 뒤 작업자가 통과 — 8명 궤적으로 확인). 그 밖의 건물은 튕긴다.
-채집량 가정(확인 중): 채집할 수 있는 건물에 처음 닿으면 그 건물에 쌓인 자원을 가져간다.
+채집량·시간·범위는 게임 1.301의 실제 메서드를 확인해 캐릭터별 강화 값을 반영한다.
 """
 from __future__ import annotations
 
@@ -296,15 +296,46 @@ def _game_bonus(bonuses: dict, key: str) -> Optional[int]:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
 
+def harvest_effects(upgrades: dict, bonuses: dict):
+    """1.301 게임 본문 확인: Harvest=1+강화 레벨, 시간 보너스=GetBonusAmt*0.2초.
+
+    BuildingInst.Harvest RVA 464990, BaseGridMgr.WorkerHarvestResource 4552C0,
+    BallObj.InitWorker 5B7360. 범위는 기본 0.125 + 긴 낫 레벨*0.5.
+    """
+    levels = lambda key: max(0, int(upgrades.get(key) or 0))
+    amounts = [1] + [1 + levels("kFaster" + resource) for resource in ("Wheat", "Wood", "Stone")]
+    clock = [0] + [(_game_bonus(bonuses, "k" + resource + "Time")
+                    if _game_bonus(bonuses, "k" + resource + "Time") is not None
+                    else levels("k" + resource + "Time")) for resource in ("Wheat", "Wood", "Stone")]
+    return amounts, clock, .125 + .5 * levels("kWheatRange")
+
+
+def initial_harvest_duration(base: dict, team: Sequence[dict], fallback=16.0) -> float:
+    """BaseMgr.InitWorkerMode(458670): 건물 기본 시간 + 작업자마다 1초 + 시간 엄수 보너스.
+    조준 중 게임이 보낸 시계에는 이미 이 보너스가 들어 있으므로 중복 가산하지 않는다.
+    """
+    current = base.get("harvest_secs_left")
+    if base.get("state") == "kAimWorkers" and isinstance(current, (int, float)) and current > 0:
+        return float(current)
+    basic = (base.get("geo") or {}).get("harvest_len")
+    if not isinstance(basic, (int, float)) or basic <= 0:
+        return float(fallback)
+    return float(basic) + len(team) + sum(
+        _game_bonus(m.get("harvest_bonus") or {}, "kExtraHarvestLength")
+        if _game_bonus(m.get("harvest_bonus") or {}, "kExtraHarvestLength") is not None
+        else 2 * max(0, int((m.get("upgrades") or {}).get("kExtraHarvestLength") or 0)) for m in team)
+
+
 def model_limitations(team: Sequence[dict], buildings: Dict[int, dict]) -> List[str]:
     """입력에서 검증하지 못한 게임 효과. 화면 문구는 호출자가 번역한다."""
     missing = set()
-    kinds = {b.get("type") for b in buildings.values() if b.get("type") in RESOURCE_TILE_TYPES}
-    if kinds:
-        # GetBonusAmt 원값이 최종 채집량인지 기본량에 더할 값인지 게임 메서드 본문을 확인하지 못했다.
-        missing.add("unverified_resource_yield")
     supported = {"kHarvestSpeed", "kPierceWood", "kPierceStone", "kPierceBuildings", "kMoreBuildPts",
-                 "kFarmSpeed", "kLumberyardSpeed", "kStoneMineSpeed"}
+                 "kFarmSpeed", "kLumberyardSpeed", "kStoneMineSpeed", "kExtraGoldMined",
+                 "kFasterWheat", "kFasterWood", "kFasterStone", "kWheatTime", "kWoodTime", "kStoneTime",
+                 "kExtraHarvestLength", "kWheatRange"}
+    # 게임은 매 프레임 원형 겹침을 검사한다. 여기서는 연속 이동 충돌을 계산하므로 모서리 오차가 남는다.
+    if any(b.get("type") in RESOURCE_TILE_TYPES for b in buildings.values()):
+        missing.add("continuous_pickup_approximation")
     for member in team:
         bonuses = member.get("harvest_bonus") or {}
         upgrades = member.get("upgrades") or {}
@@ -333,7 +364,7 @@ def simulate_team(world: World, buildings: Dict[int, dict], workers: List[Worker
                   build_points: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
     """여러 작업자를 시간 순서로 함께 돌린다 (한 명이 비운 채집지를 다른 작업자는 통과).
 
-    채집: 자원이 남은 채집지에 처음 닿으면 쌓인 자원을 모두 가져간다(가정, 실제 채집량과 맞춰 보는 중).
+    채집: 자원별 강화 레벨만큼 1회 채집량을 늘리고, 채집 시간 증가는 캐릭터·자원마다 20회로 제한한다.
     계산은 네이티브 모듈(native/bxp_native.cpp, 같은 계산 — 수십 배 빠름)로 하고, 없으면 파이썬으로 한다.
     """
     from . import native
@@ -364,6 +395,8 @@ def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Wor
              ((-1e3, world.top - r), (1e3, world.top - r)), ((-1e3, world.bottom + r), (1e3, world.bottom + r))]
     for w in workers:
         w.path = [(w.x, w.y, w.t)]
+    effects = {id(w): harvest_effects(w.upgrades, w.harvest_bonus) for w in workers}
+    clock_counts = {id(w): [0, 0, 0, 0] for w in workers}
 
     def blocks(bid: int, w: Worker) -> bool:
         b = buildings.get(bid) or {}
@@ -381,13 +414,18 @@ def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Wor
         return True
 
     def harvest(bid: int, w: Worker):
+        nonlocal duration
         n = res_left.get(bid, 0)
         kind = rtype.get(bid)
         if n > 0 and kind is not None:
-            # 원값→최종 채집량의 의미가 미확인이다. 저장량 전부라는 기존 모형 가정을 명시적으로 보고한다.
+            amounts, clock, _ = effects[id(w)]
+            n = min(n, amounts[kind])
             res_left[bid] -= n
             w.gain[kind] += n
             total[kind] += n
+            if clock[kind] and clock_counts[id(w)][kind] < 20:
+                duration += clock[kind] * .2
+                clock_counts[id(w)][kind] += 1
 
     def next_event(w: Worker):
         if w.t >= duration or w.speed <= 0:
@@ -402,12 +440,13 @@ def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Wor
                     best = (h[0], h[1], h[2], None, True)
         for sh in world.shapes:
             solid = blocks(sh.bid, w)
+            pickup_r = effects[id(w)][2] if not solid and is_tile.get(sh.bid) else r
             # 빈 타일은 사건을 만들지 않는다. 통과 채집도 실제 접촉 시각의 사건으로 처리한다.
             if not solid and res_left.get(sh.bid, 0) <= 0:
                 continue
-            if not solid and _inside_shape(sh, w.x, w.y, r):
+            if not solid and _inside_shape(sh, w.x, w.y, pickup_r):
                 continue
-            h = _hit_shape(sh, w.x, w.y, w.dx, w.dy, r)
+            h = _hit_shape(sh, w.x, w.y, w.dx, w.dy, pickup_r)
             if not h:
                 continue
             if best is None or h[0] < best[0]:
@@ -492,10 +531,12 @@ LAUNCH_GAP = 0.26        # 작업자 발사 간격 (초, 실제 궤적 평균)
 
 
 def team_from_chars(chars_raw: Sequence[dict], order: Optional[Sequence[str]] = None) -> List[dict]:
-    """발사될 작업자: 캐릭터 채집 강화, 시작 속도(채집 속도 강화 +1 — 실제 궤적에서 5·6 확인).
-    건물에서 일하는 캐릭터(state kWorking)는 뺀다 — 실제 궤적 8건에서 13명 중 동시에 날아간 수가 10~11명
-    (= 13 − 건물 일꾼 2~3명, harvest_traces.jsonl 2026-09-25)."""
-    chars = [c for c in chars_raw if c.get("type") and c.get("state") != "kWorking"]
+    """게임 BaseMgr.SetUpActiveWorkers(45D090), CanBeSentToWork(47D090)와 같은 참가 조건.
+    금광·자동 발사대 배정, 출전·회복 중, 영향력자는 제외한다. 일반 생산 건물 배정자는 참가한다.
+    """
+    chars = [c for c in chars_raw if c.get("type") and c.get("type") != "kInfluencer"
+             and c.get("state") in (None, "kIdle", "kWorking")
+             and not (c.get("state") == "kWorking" and c.get("work") in (None, "kGoldMine", "kIdleLauncher"))]
     if order:
         rank = {t: i for i, t in enumerate(order)}
         chars.sort(key=lambda c: rank.get(c["type"], 99))

@@ -1022,5 +1022,19 @@
   "조준 경로 길이": "Lunghezza della traiettoria",
   "현재 조준 1 / 3 / 7회 반사 · 추천은 1회 · Shift를 누르는 동안 둘 다 7회": "Mira attuale: 1 / 3 / 7 rimbalzi · Consiglio: 1 · Tieni premuto Shift: entrambi 7",
   "흰색: 현재 조준 · 파랑: 추천 · 점: 예상 반사 · Shift: 길게 보기": "Bianco: mira attuale · Blu: consiglio · Punti: rimbalzi previsti · Shift: estendi",
-  "첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다.": "Traiettoria prevista del primo lavoratore. I tratti lontani tratteggiati possono differire dal movimento reale."
+  "첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다.": "Traiettoria prevista del primo lavoratore. I tratti lontani tratteggiati possono differire dal movimento reale.",
+  "백과사전 해금 모드": "Modalità scoperta enciclopedia",
+  "보유 볼에서 이어지는 미발견 상위 볼·융합 조합을 우선 추천": "Dai priorità a evoluzioni e fusioni inedite legate alle tue palle",
+  "백과사전 해금 모드: 게임의 발견 기록을 기다리는 중": "Scoperta: in attesa dei dati del gioco",
+  "백과사전 해금 모드: 자동 선택 캐릭터입니다": "Scoperta: questo personaggio sceglie automaticamente",
+  "백과사전 해금 모드: 보유 볼과 빈 슬롯을 확인하는 중": "Scoperta: controllo delle palle e degli slot liberi",
+  "백과사전 해금 모드: 이번 선택지에 연결되는 미해금 목표 없음": "Scoperta: nessun obiettivo inedito collegato a queste scelte",
+  "미발견 {target}: {parts} → 진화": "{target} da scoprire: {parts} → evoluzione",
+  "미기록 융합: {parts}": "Fusione non registrata: {parts}",
+  "추가 획득 {missing} · 재료 강화 {upgrades} · 융합기 필요": "Da acquisire: {missing} · Potenziamenti materiali: {upgrades} · Richiede fusore",
+  "중간 진화 후 추가 강화 필요": "Servono altri potenziamenti dopo le evoluzioni intermedie",
+  "해금 우선": "Priorità scoperta",
+  "백과사전 해금 모드: 게임에서 아직 기록되지 않은 후보 우선": "Scoperta: priorità ai candidati non ancora registrati nel gioco",
+  "이 선택 후": "Dopo questa scelta",
+  "게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다.": "Previsione con i valori dei potenziamenti del gioco. Percorsi e raccolti reali possono differire."
 }

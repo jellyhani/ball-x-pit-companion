@@ -18,6 +18,7 @@ class Settings:
     watch_enabled: bool = True          # 자동 감시
     font_scale: float = 1.0             # 1.0 보통, 1.2 크게
     aim_path_length: str = "normal"     # short | normal | long: 현재 조준 반사 경로 길이
+    encyclopedia_mode: bool = False     # 전투 점수보다 도달 가능한 백과사전 미발견 목표를 우선
     hud_auto_show: bool = True          # 선택창에서 HUD 자동 표시
     card_outline: bool = True           # 추천 카드에 얇은 테두리
     hide_from_capture: str = "auto"     # auto(화면 인식 중에만) | always | never

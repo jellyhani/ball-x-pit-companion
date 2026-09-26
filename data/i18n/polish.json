@@ -1022,5 +1022,19 @@
   "조준 경로 길이": "Długość toru celowania",
   "현재 조준 1 / 3 / 7회 반사 · 추천은 1회 · Shift를 누르는 동안 둘 다 7회": "Obecny cel: 1 / 3 / 7 odbić · Zalecany: 1 · Przytrzymaj Shift: oba 7",
   "흰색: 현재 조준 · 파랑: 추천 · 점: 예상 반사 · Shift: 길게 보기": "Biały: obecny cel · Niebieski: zalecany · Kropki: przewidywane odbicia · Shift: wydłuż",
-  "첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다.": "Przewidywany tor pierwszego pracownika. Odległe przerywane odcinki mogą różnić się od rzeczywistego ruchu."
+  "첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다.": "Przewidywany tor pierwszego pracownika. Odległe przerywane odcinki mogą różnić się od rzeczywistego ruchu.",
+  "백과사전 해금 모드": "Tryb odkrywania encyklopedii",
+  "보유 볼에서 이어지는 미발견 상위 볼·융합 조합을 우선 추천": "Preferuj nieodkryte ewolucje i fuzje powiązane z posiadanymi kulami",
+  "백과사전 해금 모드: 게임의 발견 기록을 기다리는 중": "Odkrywanie: oczekiwanie na dane gry",
+  "백과사전 해금 모드: 자동 선택 캐릭터입니다": "Odkrywanie: ta postać wybiera automatycznie",
+  "백과사전 해금 모드: 보유 볼과 빈 슬롯을 확인하는 중": "Odkrywanie: sprawdzanie kul i wolnych miejsc",
+  "백과사전 해금 모드: 이번 선택지에 연결되는 미해금 목표 없음": "Odkrywanie: brak nieodkrytego celu dla tych opcji",
+  "미발견 {target}: {parts} → 진화": "Nieodkryte {target}: {parts} → ewolucja",
+  "미기록 융합: {parts}": "Niezarejestrowana fuzja: {parts}",
+  "추가 획득 {missing} · 재료 강화 {upgrades} · 융합기 필요": "Do zdobycia: {missing} · Ulepszenia składników: {upgrades} · Wymagany fuzor",
+  "중간 진화 후 추가 강화 필요": "Dalsze ulepszenia potrzebne po ewolucjach pośrednich",
+  "해금 우선": "Najpierw odkrycia",
+  "백과사전 해금 모드: 게임에서 아직 기록되지 않은 후보 우선": "Odkrywanie: preferuj opcje jeszcze niezarejestrowane w grze",
+  "이 선택 후": "Po tym wyborze",
+  "게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다.": "Prognoza uwzględnia ulepszenia z gry. Rzeczywiste trasy i zbiory mogą się różnić."
 }

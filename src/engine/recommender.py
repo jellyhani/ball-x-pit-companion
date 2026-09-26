@@ -109,6 +109,7 @@ class Recommendation:
     limitations: List[str] = field(default_factory=list)
     ranked: List[ActionEval] = field(default_factory=list)   # 읽은 카드 전체의 순위 (보류여도 순서는 있다)
     confidence: str = ""              # 확실 | 추천 | 근소 | 근거 약함 — 1위와 2위의 차이·근거로 정한다
+    discovery_text: str = ""          # 백과사전 목표. 전투 성능 이유와 분리해서 표시한다.
 
 
 def card_rank(rec: "Recommendation", e: ActionEval) -> Optional[int]:
@@ -180,12 +181,20 @@ def situation_text(p: Optional[RunProgress]) -> str:
 class Recommender:
     def __init__(self, data: GameData):
         self.data = data
+        self.discovery_mode = False
         self.meta: Optional[MetaState] = None     # 게임 연동 meta (내 누적 기록)
         self.draw_weights: Optional[dict] = None  # 뽑기 관측으로 추정한 종류별 가중치 (없으면 균등 가정)
         self.history: List = []                   # 내 런 기록 (RunRecord) — 캐릭터별 항목 성적
 
     # ---- 공개 ----
     def recommend(self, session: ChoiceSession, run: RunState) -> Recommendation:
+        rec = self._recommend_normal(session, run)
+        if self.discovery_mode:
+            from .discovery import apply_discovery
+            return apply_discovery(rec, session, run, self.data, self.meta)
+        return rec
+
+    def _recommend_normal(self, session: ChoiceSession, run: RunState) -> Recommendation:
         d = self.data
         version = d.rules.get("version", "")
         limitations = run.limitations(d)

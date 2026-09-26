@@ -1022,5 +1022,19 @@
   "조준 경로 길이": "Nişan yolu uzunluğu",
   "현재 조준 1 / 3 / 7회 반사 · 추천은 1회 · Shift를 누르는 동안 둘 다 7회": "Mevcut nişan: 1 / 3 / 7 sekme · Önerilen: 1 · Shift basılıyken ikisi de 7",
   "흰색: 현재 조준 · 파랑: 추천 · 점: 예상 반사 · Shift: 길게 보기": "Beyaz: mevcut nişan · Mavi: önerilen · Noktalar: tahmini sekmeler · Shift: uzat",
-  "첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다.": "İlk işçinin tahmini yolu. Uzaktaki kesikli bölümler gerçek hareketten farklı olabilir."
+  "첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다.": "İlk işçinin tahmini yolu. Uzaktaki kesikli bölümler gerçek hareketten farklı olabilir.",
+  "백과사전 해금 모드": "Ansiklopedi keşif modu",
+  "보유 볼에서 이어지는 미발견 상위 볼·융합 조합을 우선 추천": "Toplarınla bağlantılı keşfedilmemiş evrim ve birleşimlere öncelik ver",
+  "백과사전 해금 모드: 게임의 발견 기록을 기다리는 중": "Keşif: oyunun keşif kayıtları bekleniyor",
+  "백과사전 해금 모드: 자동 선택 캐릭터입니다": "Keşif: bu karakter otomatik seçim yapar",
+  "백과사전 해금 모드: 보유 볼과 빈 슬롯을 확인하는 중": "Keşif: toplar ve boş yuvalar kontrol ediliyor",
+  "백과사전 해금 모드: 이번 선택지에 연결되는 미해금 목표 없음": "Keşif: bu seçeneklere bağlı keşfedilmemiş hedef yok",
+  "미발견 {target}: {parts} → 진화": "Keşfedilmemiş {target}: {parts} → evrim",
+  "미기록 융합: {parts}": "Kaydedilmemiş birleşim: {parts}",
+  "추가 획득 {missing} · 재료 강화 {upgrades} · 융합기 필요": "Alınacak: {missing} · Malzeme yükseltmeleri: {upgrades} · Birleştirici gerekli",
+  "중간 진화 후 추가 강화 필요": "Ara evrimlerden sonra ek yükseltmeler gerekli",
+  "해금 우선": "Önce keşif",
+  "백과사전 해금 모드: 게임에서 아직 기록되지 않은 후보 우선": "Keşif: oyunda henüz kaydedilmemiş adaylara öncelik ver",
+  "이 선택 후": "Bu seçimden sonra",
+  "게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다.": "Tahmin, oyundaki yükseltme değerlerini içerir. Gerçek yollar ve verimler farklı olabilir."
 }

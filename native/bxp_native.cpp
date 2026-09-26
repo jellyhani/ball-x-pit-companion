@@ -137,7 +137,7 @@ bool inside_shape(const Geo& g, int i, double x, double y, double r) {
 
 }  // namespace
 
-BXP_API int bxp_version() { return 2; }
+BXP_API int bxp_version() { return 3; }
 
 // 여러 작업자를 시간 순서로 함께 돌린다 (harvest_sim.simulate_team 과 같음).
 //   world: left, right, bottom, top, radius
@@ -154,7 +154,9 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
                               double duration, int max_events,
                               int* out_total, int* out_gain, int* out_counts,
                               double* out_path, int path_cap, double* event_values, int* event_kinds,
-                              const int* build_bonus, int* out_build_points) {
+                              const int* build_bonus, int* out_build_points,
+                              const int* harvest_amount, const int* clock_bonus, const double* pickup_radius,
+                              int* clock_counts) {
     const double left = world[0], right = world[1], bottom = world[2], top = world[3], r = world[4];
     Geo g{kind, pt_off, pt_cnt, pts, circ, bb};
     int npath = 0;
@@ -201,10 +203,11 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
         }
         for (int i = 0; i < n_shapes; i++) {
             bool blocking = blocks(slot[i], wi);
+            double pickup_r = !blocking && (flags[slot[i]] & F_TILE) ? pickup_radius[wi] : r;
             if (!blocking && res[slot[i]] <= 0) continue;
-            if (!blocking && inside_shape(g, i, w[0], w[1], r)) continue;
+            if (!blocking && inside_shape(g, i, w[0], w[1], pickup_r)) continue;
             double t, nx, ny;
-            if (hit_shape(g, i, w[0], w[1], w[2], w[3], r, t, nx, ny) && (!have || t < bt)) {
+            if (hit_shape(g, i, w[0], w[1], w[2], w[3], pickup_r, t, nx, ny) && (!have || t < bt)) {
                 have = true; bt = t; bnx = nx; bny = ny; bshape = i; solid = blocking ? 1 : 0;
             }
         }
@@ -237,7 +240,14 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
             int sl = slot[shape], n = res[sl], kd = rtype[sl];
             changed = n > 0;
             if (n > 0 && kd >= 0) {
+                const int idx = 4 * wi + kd;
+                if (n > harvest_amount[idx]) n = harvest_amount[idx];
                 res[sl] -= n; out_gain[4 * wi + kd] += n; out_total[kd] += n;
+                // 게임 BaseMgr.IncreaseHarvestClock: 캐릭터·자원마다 최대 20회.
+                if (clock_bonus[idx] > 0 && clock_counts[idx] < 20) {
+                    duration += clock_bonus[idx] * 0.2;
+                    clock_counts[idx]++;
+                }
             }
             if (solid) out_counts[sl] += 1;
             if (solid && (flags[sl] & F_BUILD)) out_build_points[sl] += 1 + build_bonus[wi];

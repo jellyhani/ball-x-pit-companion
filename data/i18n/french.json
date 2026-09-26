@@ -1022,5 +1022,19 @@
   "조준 경로 길이": "Longueur de la trajectoire",
   "현재 조준 1 / 3 / 7회 반사 · 추천은 1회 · Shift를 누르는 동안 둘 다 7회": "Visée actuelle : 1 / 3 / 7 rebonds · Conseil : 1 · Maintenir Shift : 7 pour les deux",
   "흰색: 현재 조준 · 파랑: 추천 · 점: 예상 반사 · Shift: 길게 보기": "Blanc : visée actuelle · Bleu : conseil · Points : rebonds prévus · Shift : prolonger",
-  "첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다.": "Trajectoire prévue du premier ouvrier. Les pointillés éloignés peuvent différer du mouvement réel."
+  "첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다.": "Trajectoire prévue du premier ouvrier. Les pointillés éloignés peuvent différer du mouvement réel.",
+  "백과사전 해금 모드": "Mode découverte du bestiaire",
+  "보유 볼에서 이어지는 미발견 상위 볼·융합 조합을 우선 추천": "Privilégier les évolutions et fusions inédites liées à vos balles",
+  "백과사전 해금 모드: 게임의 발견 기록을 기다리는 중": "Découverte : attente des données du jeu",
+  "백과사전 해금 모드: 자동 선택 캐릭터입니다": "Découverte : ce personnage choisit automatiquement",
+  "백과사전 해금 모드: 보유 볼과 빈 슬롯을 확인하는 중": "Découverte : vérification des balles et des emplacements libres",
+  "백과사전 해금 모드: 이번 선택지에 연결되는 미해금 목표 없음": "Découverte : aucun objectif inédit lié à ces choix",
+  "미발견 {target}: {parts} → 진화": "{target} non découvert : {parts} → évolution",
+  "미기록 융합: {parts}": "Fusion non enregistrée : {parts}",
+  "추가 획득 {missing} · 재료 강화 {upgrades} · 융합기 필요": "Acquisitions restantes : {missing} · Améliorations des ingrédients : {upgrades} · Fusionneur requis",
+  "중간 진화 후 추가 강화 필요": "Améliorations supplémentaires après évolution intermédiaire",
+  "해금 우선": "Découverte prioritaire",
+  "백과사전 해금 모드: 게임에서 아직 기록되지 않은 후보 우선": "Découverte : priorité aux candidats non enregistrés dans le jeu",
+  "이 선택 후": "Après ce choix",
+  "게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다.": "Prévision intégrant les améliorations du jeu. Trajets et récoltes réels peuvent différer."
 }

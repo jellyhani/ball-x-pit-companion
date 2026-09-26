@@ -47,7 +47,7 @@ class HarvestEventTest(unittest.TestCase):
         return results
 
     def test_cannot_harvest_after_deadline(self):
-        for duration, expected in ((.1, 0), (.3, 4)):
+        for duration, expected in ((.1, 0), (.3, 1)):
             for name, total, workers, _ in self.run_case(
                     [box(1, 2)], {1: tile(1, "kDenseWheat", 1, 4)},
                     [hs.Worker(1, 1, 1, 0, 5, 0)], duration):
@@ -55,7 +55,7 @@ class HarvestEventTest(unittest.TestCase):
                 self.assertAlmostEqual(workers[0].t, duration)
 
     def test_first_contact_wins_even_if_worker_spawned_later(self):
-        workers = [hs.Worker(1, 1, 1, 0, 5, 0), hs.Worker(2.5, 1, 1, 0, 5, .1)]
+        workers = [hs.Worker(1, 1, 1, 0, 5, 0), hs.Worker(2.5, 1, 1, 0, 5, .1, {"kFasterStone": 2})]
         for name, total, result, counts in self.run_case(
                 [box(1, 3)], {1: tile(1, "kBoulder", 3)}, workers, .6):
             self.assertEqual(total[3], 3, name)
@@ -68,7 +68,7 @@ class HarvestEventTest(unittest.TestCase):
         workers = [hs.Worker(1, 1, 1, 0, 5, 0), hs.Worker(1, 3, 1, 0, 5, 0)]
         buildings = {1: tile(1, "kBoulder", 3), 2: tile(2, "kForest", 2)}
         for name, total, result, counts in self.run_case([box(1, 3), box(2, 3, 3)], buildings, workers, .6):
-            self.assertEqual(total, [0, 0, 3, 3], name)
+            self.assertEqual(total, [0, 0, 1, 1], name)
             self.assertEqual(counts, {1: 1, 2: 1}, name)
             self.assertEqual([w.dx for w in result], [-1, -1], name)
 
@@ -90,7 +90,7 @@ class HarvestEventTest(unittest.TestCase):
     def test_missing_collision_for_one_worker_does_not_end_other_workers(self):
         workers = [hs.Worker(-10, 1, -1, 0, 5, 0), hs.Worker(1, 1, 1, 0, 5, 0)]
         for name, total, _, counts in self.run_case([box(1, 3)], {1: tile(1, "kBoulder", 3)}, workers, .6):
-            self.assertEqual(total[3], 3, name)
+            self.assertEqual(total[3], 1, name)
             self.assertEqual(counts, {1: 1}, name)
 
     def test_worker_launched_after_harvest_has_no_yield(self):
@@ -103,11 +103,11 @@ class HarvestEventTest(unittest.TestCase):
         for kind, resource, upgrade in (("kDenseWheat", 1, "kFasterWheat"), ("kForest", 2, "kFasterWood")):
             worker = hs.Worker(1, 1, 1, 0, 5, 0, {upgrade: 1}, harvest_bonus={upgrade: 2})
             for name, total, _, _ in self.run_case([box(1, 3)], {1: tile(1, kind, resource, 8)}, [worker], .8):
-                self.assertEqual(total[resource], 8, (name, kind))
+                self.assertEqual(total[resource], 2, (name, kind))
             limits = hs.model_limitations([{"upgrades": {upgrade: 1}, "harvest_bonus": {upgrade: 2}}],
                                          {1: tile(1, kind, resource, 8)})
-            self.assertIn("unverified_resource_yield", limits)
-            self.assertIn("unsupported_harvest_upgrade:" + upgrade, limits)
+            self.assertIn("continuous_pickup_approximation", limits)
+            self.assertNotIn("unsupported_harvest_upgrade:" + upgrade, limits)
 
     def test_game_speed_percent_is_applied_to_actual_base_speed(self):
         w = world([box(1, 8)])
@@ -168,11 +168,10 @@ class HarvestAdviceUnitsTest(unittest.TestCase):
     def test_unverified_game_effects_are_reported_instead_of_silently_supported(self):
         b = {1: tile(1, "kBoulder", 3)}
         team = [{"upgrades": {"kHarvestSpeed": 1, "kMoreBuildPts": 1, "kWoodTime": 1}}]
-        self.assertEqual(hs.model_limitations(team, b), ["missing_build_point_bonus", "missing_harvest_speed_bonus",
-                         "unsupported_harvest_upgrade:kWoodTime", "unverified_resource_yield"])
+        self.assertEqual(hs.model_limitations(team, b), ["continuous_pickup_approximation", "missing_build_point_bonus", "missing_harvest_speed_bonus"])
         team = [{"upgrades": {"kFasterStone": 1}, "harvest_bonus": {"kFasterStone": 2}}]
         self.assertEqual(hs.model_limitations(team, b),
-                         ["unsupported_harvest_upgrade:kFasterStone", "unverified_resource_yield"])
+                         ["continuous_pickup_approximation"])
 
     def test_game_construction_points_are_not_exact_bounce_counts(self):
         b = dict(id=1, type="kIdleFarm", state="kScaffold", upg_tgt=10, upg_pts=3)

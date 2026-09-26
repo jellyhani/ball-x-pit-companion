@@ -220,7 +220,7 @@ class FinalStateJobTest(unittest.TestCase):
                 mock.patch.object(sim_jobs.hs, "best_angles", side_effect=best):
             plan, sweeps = sim_jobs.job_layout(base, [{"type": "kTest"}], 10, [], {9: 10}, aim_limits=(36.2, 36.8))
         self.assertIsNone(optimize.call_args.args[1])         # 미검증 채집량을 재배치 점수로 쓰지 않는다.
-        self.assertIn("unverified_resource_yield", plan.model_limitations)
+        self.assertIn("continuous_pickup_approximation", plan.model_limitations)
         self.assertEqual(plan.harvest_before, [0, 3, 0, 0])   # 표시용 참고 계산은 현재 가득 찬 타일에서 별도 수행.
         self.assertEqual(plan.evaluated_base, final)
         self.assertEqual(plan.final[1], final_center)

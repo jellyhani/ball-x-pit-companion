@@ -30,14 +30,14 @@ def lib():
         return None
     try:
         dll = ctypes.CDLL(_DLL)
-        if dll.bxp_version() != 2:
+        if dll.bxp_version() != 3:
             return None
         P = ctypes.POINTER
         d, i = ctypes.c_double, ctypes.c_int
         dll.bxp_simulate_team.restype = i
         dll.bxp_simulate_team.argtypes = [P(d), i, P(i), P(i), P(i), P(i), P(i), P(d), P(d), P(d), P(i), P(i), P(i),
                                           i, P(d), P(i), d, i, P(i), P(i), P(i), P(d), i, P(d), P(i),
-                                          P(i), P(i)]
+                                          P(i), P(i), P(i), P(i), P(d), P(i)]
         _lib = dll
         log.info("네이티브 계산 모듈 사용 (%s)", _DLL)
     except (OSError, AttributeError) as e:
@@ -110,6 +110,12 @@ def simulate_team(world, buildings: Dict[int, dict], workers: list, duration: fl
     points = (ctypes.c_int * max(1, ns))()
     from .harvest_sim import _game_bonus
     build_bonus = _arr(ctypes.c_int, [(_game_bonus(w.harvest_bonus, "kMoreBuildPts") or 0) for w in workers])
+    from .harvest_sim import harvest_effects
+    effects = [harvest_effects(w.upgrades, w.harvest_bonus) for w in workers]
+    amounts = _arr(ctypes.c_int, [v for amount, _, _ in effects for v in amount])
+    clocks = _arr(ctypes.c_int, [v for _, clock, _ in effects for v in clock])
+    radii = _arr(ctypes.c_double, [radius for _, _, radius in effects])
+    clock_counts = (ctypes.c_int * max(1, 4 * nw))()
     cap = max_events + nw + 8
     path = (ctypes.c_double * (4 * cap))()
     # 다음 사건의 시각·거리·법선과 충돌 대상을 작업자별로 저장한다.
@@ -117,7 +123,8 @@ def simulate_team(world, buildings: Dict[int, dict], workers: list, duration: fl
     event_kinds = (ctypes.c_int * max(1, 2 * nw))()
     n = dll.bxp_simulate_team(pw.world, pw.n, pw.kind, pw.slot, pw.bid, pw.pt_off, pw.pt_cnt, pw.pts, pw.circ, pw.bb,
                               flags, rtype, res, nw, wk, ups, float(duration), int(max_events),
-                              total, gain, cnt, path, cap, event_values, event_kinds, build_bonus, points)
+                              total, gain, cnt, path, cap, event_values, event_kinds, build_bonus, points,
+                              amounts, clocks, radii, clock_counts)
     if n < 0:
         return None
     for i, w in enumerate(workers):

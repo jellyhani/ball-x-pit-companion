@@ -910,6 +910,10 @@ class ControlWindow(QWidget):
         path_length.changed.connect(lambda i: self._set("aim_path_length", lengths[i]))
         g.add(row(tr("조준 경로 길이"), path_length,
                   tr("현재 조준 1 / 3 / 7회 반사 · 추천은 1회 · Shift를 누르는 동안 둘 다 7회")))
+        discovery = Toggle(s.encyclopedia_mode)
+        discovery.toggled.connect(lambda on: self._set("encyclopedia_mode", on))
+        g.add(row(tr("백과사전 해금 모드"), discovery,
+                  tr("보유 볼에서 이어지는 미발견 상위 볼·융합 조합을 우선 추천")))
         self.auto_cb = Toggle(s.hud_auto_show)
         self.auto_cb.toggled.connect(lambda on: self._set("hud_auto_show", on))
         g.add(row(tr("선택창에서 HUD 자동 표시"), self.auto_cb))
