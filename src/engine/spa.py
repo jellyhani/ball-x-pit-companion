@@ -38,7 +38,8 @@ def spa_advice(spa: Optional[dict], rows: Sequence[dict], layout: str = "",
     net = avg[0] - cost
     res = " · ".join(f"{RESOURCES[i]} +{avg[i]:.0f}" for i in (1, 2, 3) if avg[i] >= 0.5)
     basis = tr("최근 채집 {v0}번 평균{v1}", v0=len(use), v1=tr(" (같은 배치)") if same else '')
-    need = [k for k, v in (shortfalls or {}).items() if v > 0 and k in RESOURCES[1:]]
+    need = [k for k, v in (shortfalls or {}).items() if v > 0 and k in RESOURCES[1:]
+            and avg[RESOURCES.index(k)] > 0]
     if net > 0:
         return SpaAdvice(cost, avg, len(use), "profit",
                          tr("스파 재채집 이득: 비용 {cost:,}골드 < 골드 +{v0:,.0f} ({basis}) · 순이익 {net:,.0f}", cost=cost, v0=avg[0], basis=basis, net=net)

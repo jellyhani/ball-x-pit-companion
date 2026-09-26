@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 _DLL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bxp_native.dll")
 _lib = None
 
-F_WHEAT, F_TILE = 1, 2
+F_WHEAT, F_TILE, F_BUILD = 1, 2, 4
 U_PIERCE_BUILDINGS, U_PIERCE_STONE, U_PIERCE_WOOD = 1, 2, 4
 KIND = {"circle": 0, "box": 1, "poly": 2}
 
@@ -30,13 +30,14 @@ def lib():
         return None
     try:
         dll = ctypes.CDLL(_DLL)
-        if dll.bxp_version() != 1:
+        if dll.bxp_version() != 2:
             return None
         P = ctypes.POINTER
         d, i = ctypes.c_double, ctypes.c_int
         dll.bxp_simulate_team.restype = i
         dll.bxp_simulate_team.argtypes = [P(d), i, P(i), P(i), P(i), P(i), P(i), P(d), P(d), P(d), P(i), P(i), P(i),
-                                          i, P(d), P(i), d, i, P(i), P(i), P(i), P(d), i, P(d), P(i)]
+                                          i, P(d), P(i), d, i, P(i), P(i), P(i), P(d), i, P(d), P(i),
+                                          P(i), P(i)]
         _lib = dll
         log.info("네이티브 계산 모듈 사용 (%s)", _DLL)
     except (OSError, AttributeError) as e:
@@ -77,12 +78,11 @@ class PackedWorld:
                 idx[b] = len(self.slot_ids)
                 self.slot_ids.append(b)
         self.slot = _arr(ctypes.c_int, [idx[b] for b in self.bids])
-        self.tmp_t = (ctypes.c_double * max(1, self.n))()
-        self.tmp_i = (ctypes.c_int * max(1, 2 * self.n))()
 
 
 def simulate_team(world, buildings: Dict[int, dict], workers: list, duration: float, max_events: int,
-                  counts: Optional[Dict[int, int]], flags_of) -> Optional[List[int]]:
+                  counts: Optional[Dict[int, int]], flags_of,
+                  build_points: Optional[Dict[int, int]] = None) -> Optional[List[int]]:
     """harvest_sim.simulate_team 과 같은 계산. 작업자(Worker)의 위치·경로·획득을 채우고 합계를 돌려준다.
     flags_of(bid) → (flags, rtype, res). 쓸 수 없으면 None (파이썬으로 계산)."""
     dll = lib()
@@ -107,11 +107,17 @@ def simulate_team(world, buildings: Dict[int, dict], workers: list, duration: fl
     total = (ctypes.c_int * 4)()
     gain = (ctypes.c_int * max(1, 4 * nw))()
     cnt = (ctypes.c_int * max(1, ns))()
+    points = (ctypes.c_int * max(1, ns))()
+    from .harvest_sim import _game_bonus
+    build_bonus = _arr(ctypes.c_int, [(_game_bonus(w.harvest_bonus, "kMoreBuildPts") or 0) for w in workers])
     cap = max_events + nw + 8
     path = (ctypes.c_double * (4 * cap))()
+    # 다음 사건의 시각·거리·법선과 충돌 대상을 작업자별로 저장한다.
+    event_values = (ctypes.c_double * max(1, 4 * nw))()
+    event_kinds = (ctypes.c_int * max(1, 2 * nw))()
     n = dll.bxp_simulate_team(pw.world, pw.n, pw.kind, pw.slot, pw.bid, pw.pt_off, pw.pt_cnt, pw.pts, pw.circ, pw.bb,
                               flags, rtype, res, nw, wk, ups, float(duration), int(max_events),
-                              total, gain, cnt, path, cap, pw.tmp_t, pw.tmp_i)
+                              total, gain, cnt, path, cap, event_values, event_kinds, build_bonus, points)
     if n < 0:
         return None
     for i, w in enumerate(workers):
@@ -125,4 +131,8 @@ def simulate_team(world, buildings: Dict[int, dict], workers: list, duration: fl
         for s, b in enumerate(pw.slot_ids):
             if cnt[s]:
                 counts[b] = counts.get(b, 0) + cnt[s]
+    if build_points is not None:
+        for s, b in enumerate(pw.slot_ids):
+            if points[s]:
+                build_points[b] = build_points.get(b, 0) + points[s]
     return list(total)

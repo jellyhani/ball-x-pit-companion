@@ -58,7 +58,7 @@ def _merge(old: Tuple[Card, ...], new: Tuple[Card, ...]) -> Tuple[Card, ...]:
 
 
 SESSION_FIELDS = ("inventory", "character_id", "gold", "reroll_cost", "free_rerolls", "banish_left", "points_left",
-                  "reroll_rect", "banish_rect", "skip_rect", "panel_rect", "progress", "pool")
+                  "reroll_rect", "banish_rect", "skip_rect", "panel_rect", "progress", "pool", "extra_characters")
 # 열린 뒤 갱신하는 필드. 보유 목록은 선택창이 열릴 때 값으로 고정한다 — 게임은 선택을 반영한 뒤에
 # 창을 닫으므로, 갱신하면 선택 전후 비교(무엇을 골랐는지)가 불가능해진다.
 UPDATE_FIELDS = tuple(f for f in SESSION_FIELDS if f != "inventory")

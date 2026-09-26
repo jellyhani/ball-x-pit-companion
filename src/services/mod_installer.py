@@ -38,7 +38,7 @@ BEPINEX_CACHE = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("
                              BEPINEX_NAME)
 BEPINEX_SHA256 = "F4CC496BD098A0DF4164B81E3737297707F13A47C2478DBA2F60EEFAB784817A"
 PLUGIN_DLL = os.path.join(VENDOR, "BallxPitBridge.dll")
-PLUGIN_VERSION = "1.14.0"          # Plugin.cs 의 Plugin.Version 과 같아야 한다
+PLUGIN_VERSION = "1.15.0"          # Plugin.cs 의 Plugin.Version 과 같아야 한다
 # 추가한 파일 목록 (지우기용). exe 는 설치 폴더가 읽기 전용일 수 있고 tools 폴더도 없어 사용자 자료 폴더에 둔다.
 MANIFEST = (os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion", "installed_files.txt")
             if getattr(sys, "frozen", False) else os.path.join(ROOT, "tools", "bepinex", "installed_files.txt"))
@@ -188,9 +188,9 @@ def require_game_closed():
     """확실하게 종료됐을 때만 설치·제거한다. 조회 실패 때는 파일을 그대로 둔다."""
     running = game_running()
     if running is None:
-        raise InstallError("게임 실행 여부를 확인하지 못했습니다. 파일을 변경하지 않았습니다.")
+        raise InstallError(tr("게임 실행 여부를 확인하지 못했습니다. 파일을 변경하지 않았습니다."))
     if running:
-        raise InstallError("게임이 실행 중입니다 — 게임을 끈 뒤 설치·제거합니다")
+        raise InstallError(tr("게임이 실행 중입니다 — 게임을 끈 뒤 설치·제거합니다"))
 
 
 def uninstall_bridge(game_dir: str) -> bool:
@@ -199,16 +199,16 @@ def uninstall_bridge(game_dir: str) -> bool:
     require_game_closed()
     root = Path(game_dir).resolve(strict=True)
     if not (root / GAME_EXE).is_file():
-        raise InstallError("BALL x PIT 게임 폴더가 아닙니다.")
+        raise InstallError(tr("BALL x PIT 게임 폴더가 아닙니다."))
     target = root / "BepInEx" / "plugins" / "BallxPitBridge.dll"
     resolved = target.resolve()
     # 재분석 지점·심볼릭 링크로 게임 폴더 밖을 가리키는 파일도 지우지 않는다.
     if not resolved.is_relative_to(root):
-        raise InstallError("플러그인 경로가 게임 폴더 밖을 가리킵니다.")
+        raise InstallError(tr("플러그인 경로가 게임 폴더 밖을 가리킵니다."))
     if not target.exists():
         return False
     if not target.is_file() or target.is_symlink():
-        raise InstallError("플러그인 경로가 일반 파일이 아닙니다.")
+        raise InstallError(tr("플러그인 경로가 일반 파일이 아닙니다."))
     target.unlink()
     return True
 

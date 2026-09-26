@@ -41,8 +41,8 @@ def load(path: str) -> List[dict]:
 def replay(msgs: List[dict]) -> List[dict]:
     """메시지 묶음(catalog 가 앞에 올 수 있음)을 돌려 스냅샷마다 요약을 만든다."""
     from src.engine.recommender import Recommender, card_verdict
-    from src.gamedata import load_game_data
-    from src.tracking.bridge_adapter import catalog_recipes, convert
+    from src.gamedata import load_game_data, apply_catalog
+    from src.tracking.bridge_adapter import convert
     from src.tracking.choice_tracker import ChoiceTracker
     from src.tracking.run_state import RunState
 
@@ -52,15 +52,7 @@ def replay(msgs: List[dict]) -> List[dict]:
     out = []
     for m in msgs:
         if isinstance(m.get("catalog"), dict):
-            data.apply_game_recipes(catalog_recipes(m["catalog"], data))
-            props = {}
-            for kind in ("balls", "passives"):     # 앱과 같이 레벨별 수치도 넣는다
-                for e in m["catalog"].get(kind) or []:
-                    iid = data.item_by_log_id(e.get("type") or "")
-                    if iid and isinstance(e.get("lvl_props"), list):
-                        props[iid] = e["lvl_props"]
-            if props:
-                data.apply_level_props(props)
+            apply_catalog(data, m["catalog"])
             continue
         if not isinstance(m.get("levelup"), dict):
             continue

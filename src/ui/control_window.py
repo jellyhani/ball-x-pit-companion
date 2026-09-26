@@ -644,7 +644,10 @@ class ControlWindow(QWidget):
             self.base_layout.add(row(tr("배치 계산 실패 또는 기지 정보 없음")))
             return
         pct = (plan.score_after / plan.score_before - 1) * 100 if plan.score_before else 0.0
-        if plan.swaps:
+        if not getattr(plan, "movement_complete", True):
+            self.base_layout.add(row(tr("안전한 이동 순서를 만들지 못했습니다. 배치도를 다시 계산해 주세요."),
+                                     chip(tr("보류"), "warn")))
+        elif plan.swaps:
             self.base_layout.add(row(tr("가이드 배치까지 옮기기 {v0}번", v0=len(plan.swaps)), chip(tr("범위 효과 {pct:+.0f}%", pct=pct), "accent"),
                                      tr("재배치 모드에 들어가면 다음 옮기기가 게임 화면에 번호로 나옵니다")))
         else:
@@ -693,7 +696,7 @@ class ControlWindow(QWidget):
             sub = " · ".join(x for x in (f"{what} {sg.cost_text}", need, cat, sg.reason, sg.source, sg.desc) if x)
             self.base_todo.add(row(sg.name, chip(f"{sg.policy_label} · {sg.status}", tone), sub))
         if not todo:
-            self.base_todo.add(row(tr("지을 수 있는 설계도·올릴 수 있는 건물 없음")))
+            self.base_todo.add(row(tr("추천할 새 건물·강화 없음")))
         self.base_workers.clear()
         from ..engine.harvest import need_resource
         need, _ = need_resource(meta, {})

@@ -10,6 +10,7 @@ Steam 공략 3개(Zarcos·Drake·apo — README '자료 출처')의 허브 규�
 """
 from __future__ import annotations
 
+import time
 from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 from .layout import Grid
@@ -81,7 +82,7 @@ class _State:
     """고치는 중인 배치: 건물 자리·회전·점유 표. clone() 으로 두 방법(하나씩 넣기 / 덩어리 다시 짜기)을 비교한다."""
 
     def __init__(self, grid: Grid, pieces: dict, origin0: Dict[int, Cell], pad: float, lane: Dict[Cell, float],
-                 entrance: Set[Cell]):
+                 entrance: Set[Cell], deadline: Optional[float] = None):
         self.grid, self.pieces, self.origin0, self.pad, self.lane = grid, pieces, origin0, pad, lane
         self.entrance = entrance
         self.org: Dict[int, Optional[Cell]] = dict(origin0)
@@ -92,6 +93,10 @@ class _State:
                 self.occ[c] = i
         self.locked: Set[int] = {i for i, p in pieces.items() if not p.movable}
         self.evicted: List[int] = []
+        self.deadline = deadline
+
+    def expired(self) -> bool:
+        return self.deadline is not None and time.perf_counter() >= self.deadline
 
     def clone(self) -> "_State":
         c = object.__new__(_State)
@@ -99,6 +104,7 @@ class _State:
         c.entrance = self.entrance
         c.org, c.turn, c.occ = dict(self.org), dict(self.turn), dict(self.occ)
         c.locked, c.evicted = set(self.locked), list(self.evicted)
+        c.deadline = self.deadline
         return c
 
     def shape(self, i: int, k: Optional[int] = None):
@@ -180,6 +186,8 @@ def _dist(a: Optional[Cell], b: Cell) -> float:
 def _one_by_one(st: _State, hid: int, members: List[int], spots, brick: bool):
     """범위 밖 건물만 하나씩: 범위 안에서 비켜 둘 건물이 가장 적은 자리 (회전 포함, 안 돌리는 쪽 먼저)."""
     for m in sorted(members, key=lambda i: (-len(st.pieces[i].rel), i)):
+        if st.expired():
+            return
         if m in st.locked:
             continue
         if st.org.get(m) is not None and st.ok(hid, m, st.org[m], brick=brick):
@@ -187,7 +195,9 @@ def _one_by_one(st: _State, hid: int, members: List[int], spots, brick: bool):
             continue
         best = None
         for k in st.shapes_of(m):
-            for o in spots:
+            for n, o in enumerate(spots):
+                if n % 64 == 0 and st.expired():
+                    return
                 if not st.ok(hid, m, o, k, brick):
                     continue
                 bl = st.blockers(m, o, k)
@@ -214,11 +224,15 @@ def _repack(st: _State, hid: int, members: List[int], spots, brick: bool):
         if i not in members:
             st.evicted.append(i)
     for m in sorted(members, key=lambda i: (-len(st.pieces[i].rel), i)):
+        if st.expired():
+            return
         if m in st.locked:
             continue
         best = None
         for k in st.shapes_of(m):
-            for o in spots:
+            for n, o in enumerate(spots):
+                if n % 64 == 0 and st.expired():
+                    return
                 if not st.ok(hid, m, o, k, brick):
                     continue
                 cells = st.cells(m, o, k)
@@ -239,11 +253,14 @@ def _repack(st: _State, hid: int, members: List[int], spots, brick: bool):
 
 
 def repair(grid: Grid, pieces: dict, origin0: Dict[int, Cell], groups, pad: float,
-           lane: Optional[Dict[Cell, float]] = None, entrance: Optional[Set[Cell]] = None
+           lane: Optional[Dict[Cell, float]] = None, entrance: Optional[Set[Cell]] = None,
+           *, deadline: Optional[float] = None
            ) -> Optional[Tuple[Dict[int, Cell], Dict[int, int]]]:
     """허브 규칙을 맞춘 배치와 회전 (못 맞추면 가능한 만큼). 비켜 둔 건물을 다시 놓을 곳이 없으면 None."""
     from .layout_opt import in_range
-    st = _State(grid, pieces, origin0, pad, lane or {}, entrance or set())
+    st = _State(grid, pieces, origin0, pad, lane or {}, entrance or set(), deadline)
+    if st.expired():
+        return None
     # 게임이 지정한 입구를 차지한 건물은 가장 가까운 빈 자리로 옮긴다.
     for i in sorted({st.occ[c] for c in st.entrance if c in st.occ}):
         if i in st.locked:
@@ -254,6 +271,8 @@ def repair(grid: Grid, pieces: dict, origin0: Dict[int, Cell], groups, pad: floa
     rows = [r for _, r in grid.tiles]
     spots = [(c, r) for r in range(min(rows), max(rows) + 1) for c in range(min(cols), max(cols) + 1)]
     for h, members in groups:
+        if st.expired():
+            return None
         hid = h.id
         brick = h.type == "kBrickHouse"
         # 허브 자리 후보: 지금 범위 밖인 건물 수 + 비켜 둘 건물 수 + (옮기면 1) 가 적은 곳 몇 개 (강철 요새는 발사대 쪽 우선)
@@ -261,7 +280,9 @@ def repair(grid: Grid, pieces: dict, origin0: Dict[int, Cell], groups, pad: floa
         cands = [st.org[hid]]
         if hid not in st.locked:
             scored = []
-            for o in spots:
+            for n, o in enumerate(spots):
+                if n % 64 == 0 and st.expired():
+                    return None
                 bl = st.blockers(hid, o)
                 if bl is None:
                     continue
@@ -283,6 +304,8 @@ def repair(grid: Grid, pieces: dict, origin0: Dict[int, Cell], groups, pad: floa
             return sum(1 for m in members if s.org.get(m) is not None and s.ok(hid, m, s.org[m], brick=brick))
         best = None
         for o in cands:
+            if st.expired():
+                return None
             base_st = st.clone()
             if o is not None and o != base_st.org[hid]:
                 base_st.put(hid, o)
@@ -291,10 +314,14 @@ def repair(grid: Grid, pieces: dict, origin0: Dict[int, Cell], groups, pad: floa
                 continue
             a = base_st.clone()
             _one_by_one(a, hid, members, spots, brick)
+            if st.expired():
+                return None
             tries = [a]
             if got(a) < len(members):
                 b = base_st.clone()
                 _repack(b, hid, members, spots, brick)
+                if st.expired():
+                    return None
                 tries.append(b)
             for t in tries:
                 key = (got(t), -t.moved())
@@ -309,6 +336,8 @@ def repair(grid: Grid, pieces: dict, origin0: Dict[int, Cell], groups, pad: floa
     if st.lane:
         for i in sorted((i for i, p in pieces.items() if p.unfinished and p.movable),
                         key=lambda i: (-len(pieces[i].rel), i)):
+            if st.expired():
+                return None
             if st.org.get(i) is not None and st.front(i, st.org[i]) > 0:
                 st.locked.add(i)
                 continue
@@ -329,6 +358,8 @@ def repair(grid: Grid, pieces: dict, origin0: Dict[int, Cell], groups, pad: floa
                 st.locked.add(i)
     # 비켜 둔 건물: 원래 자리에서 가장 가까운 빈 곳 (큰 것부터, 원래 방향)
     for e in sorted(set(i for i in st.evicted if st.org.get(i) is None), key=lambda i: (-len(pieces[i].rel), i)):
+        if st.expired():
+            return None
         best = None
         for o in spots:
             if all(c in grid.tiles and c not in st.entrance and c not in st.occ for c in st.cells(e, o, 0)):

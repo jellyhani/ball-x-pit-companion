@@ -212,7 +212,9 @@ def convert(snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_
         if fz:
             opts = FuserOptions(
                 options=tuple(fz.get("options") or ()),
-                evos=tuple(FuserEvo(item(e.get("type")), int(e.get("equip_idx", -1))) for e in fz.get("evos") or []),
+                evos=tuple(FuserEvo(item(e.get("type")), int(e.get("equip_idx", -1)),
+                                   e.get("evo_idx") if isinstance(e.get("evo_idx"), int) else None)
+                           for e in fz.get("evos") or []),
                 combos=tuple(FuserCombo(item(c.get("h1")), item(c.get("h2")), int(c.get("idx1", -1)),
                                         int(c.get("idx2", -1)), c.get("ai_score"), c.get("bad"))
                              for c in fz.get("combos") or []),

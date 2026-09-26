@@ -217,10 +217,20 @@ class GameData:
     def apply_level_props(self, props: Dict[str, List[Dict[str, int]]]):
         """게임 연동으로 받은 레벨별 수치 (항목 ID → 레벨 순서의 {속성 이름: 값})."""
         self.level_props = dict(props)
+        # 캐시와 실시간 적용 모두 같은 순서: 위키 태그 → 설명 태그 → 수치 이름 보조 판정.
+        # 이전 카탈로그에서 추론한 태그를 새 카탈로그보다 우선하지 않도록 매번 원자료에서 만든다.
+        self.derived_tags = {}
+        for it in self.items.values():
+            if it.kind != "ball" or it.wiki_status or it.wiki_damage or not it.desc_ko:
+                continue
+            tags = tuple(dict.fromkeys(t for k, t in DESC_STATUS if k in it.desc_ko))
+            aoe = ("AOE",) if any(k in it.desc_ko for k in DESC_AOE) else ()
+            if tags or aoe:
+                self.derived_tags[it.id] = (tags, aoe)
         # 위키 태그가 없는 볼은 수치 이름으로 상태 이상을 판정 (kMinBurnDamage → 화상, kFreezePct → 빙결 …)
         for iid, rows in props.items():
             it = self.items.get(iid)
-            if it is None or it.kind != "ball" or it.wiki_status or not rows:
+            if it is None or it.kind != "ball" or it.wiki_status or it.wiki_damage or not rows or iid in self.derived_tags:
                 continue
             keys = " ".join(k for r in rows for k in r)
             tags = tuple(dict.fromkeys(tag for word, tag in STATUS_FROM_PROP if word in keys))
@@ -364,13 +374,7 @@ def load_game_data(data_dir: Optional[str] = None) -> GameData:
 
 def _finish(data: "GameData"):
     """위키 자료가 없는 항목은 게임 설명으로 태그, 저장된 게임 catalog(레시피·수치)가 있으면 적용."""
-    for it in data.items.values():
-        if it.kind != "ball" or it.wiki_status or it.wiki_damage or not it.desc_ko:
-            continue
-        tags = tuple(dict.fromkeys(t for k, t in DESC_STATUS if k in it.desc_ko))
-        aoe = ("AOE",) if any(k in it.desc_ko for k in DESC_AOE) else ()
-        if tags or aoe:
-            data.derived_tags[it.id] = (tags, aoe)
+    data.apply_level_props({})
     # 테스트는 BXP_CATALOG_FILE 로 고정 자료(tests/fixtures/game_recipes.json)를 쓴다 — PC 마다 결과가 같게
     path = os.environ.get("BXP_CATALOG_FILE") or os.path.join(resolve_data_dir(), CATALOG_FILE)
     if os.path.exists(path):
@@ -383,7 +387,7 @@ def _finish(data: "GameData"):
 
 def apply_catalog(data: "GameData", catalog: dict) -> int:
     """게임 연동 catalog 적용: 게임 안 레시피(위키 대신), 레벨별 수치, 단독 최대 레벨. 적용한 레시피 수."""
-    from .tracking.bridge_adapter import catalog_recipes
+    from .tracking.bridge_adapter import catalog_recipes, catalog_schedules
     props = {}
     for kind in ("balls", "passives"):
         for e in catalog.get(kind) or []:
@@ -391,10 +395,9 @@ def apply_catalog(data: "GameData", catalog: dict) -> int:
             if iid and isinstance(e.get("lvl_props"), list):
                 props[iid] = e["lvl_props"]
     if props:
-        keep = dict(data.derived_tags)
         data.apply_level_props(props)
-        for k, v in keep.items():                  # 설명 기반 태그가 있으면 그대로 (수치 이름 판정은 보조)
-            data.derived_tags[k] = v
+    if "levels" in catalog:
+        data.level_schedules = catalog_schedules(catalog)
     n = data.apply_game_recipes(catalog_recipes(catalog, data))
     k = catalog.get("max_solo_lvl")
     if isinstance(k, int) and k >= 0:

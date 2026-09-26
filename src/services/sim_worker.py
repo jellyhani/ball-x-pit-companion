@@ -52,6 +52,8 @@ class SimWorker(QObject):
         if self._closed:
             return
         with self._lock:
+            if self._closed:
+                return
             if self._busy.get(channel):
                 self._pending[channel] = (key, fn, args)
                 return
@@ -59,18 +61,21 @@ class SimWorker(QObject):
         self._start(channel, key, fn, args)
 
     def _start(self, channel: str, key: Any, fn: Callable, args: tuple):
+        if self._closed:
+            return
         try:
             fut = self._executor(channel).submit(fn, *args)
         except Exception:
             log.exception("계산 요청 실패 (%s)", channel)
-            with self._lock:
-                self._busy[channel] = False
-                self._pending.pop(channel, None)
+            self._complete(channel, key, None)
             return
         fut.add_done_callback(lambda f, c=channel, k=key: self._finished(c, k, f, fn, args))
 
     def _finished(self, channel: str, key: Any, fut: Future, fn: Optional[Callable] = None, args: tuple = ()):
-        if fut.cancelled() or self._closed:
+        if self._closed:
+            return
+        if fut.cancelled():
+            self._complete(channel, key, None)
             return
         try:
             result = fut.result()
@@ -78,6 +83,9 @@ class SimWorker(QObject):
             # 계산 프로세스가 죽었거나 시작하지 못함 → 이 줄은 스레드로 바꿔 같은 요청을 다시 한다
             lane = LANES.get(channel, "heavy")
             log.warning("계산 프로세스를 쓸 수 없어 스레드로 바꿉니다 (%s)", lane)
+            old = self._ex.get(lane)
+            if old is not None:
+                old.shutdown(wait=False, cancel_futures=True)
             self._ex[lane] = ThreadPoolExecutor(max_workers=1, thread_name_prefix=f"Sim-{lane}")
             if fn is not None:
                 self._start(channel, key, fn, args)
@@ -86,6 +94,12 @@ class SimWorker(QObject):
         except Exception:
             log.exception("계산 실패 (%s)", channel)
             result = None
+        self._complete(channel, key, result)
+
+    def _complete(self, channel: str, key: Any, result):
+        """제출 실패도 완료로 알린다. 화면의 '계산 중' 상태와 다음 요청을 함께 해제한다."""
+        if self._closed:
+            return
         self.done.emit(channel, key, result)     # 다른 스레드에서 보내도 Qt 가 화면 스레드로 넘긴다
         with self._lock:
             nxt = self._pending.pop(channel, None)

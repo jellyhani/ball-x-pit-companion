@@ -24,7 +24,7 @@ namespace BallxPitBridge
     [BepInPlugin("dev.ballxpit.bridge", "BALL x PIT Bridge", Plugin.Version)]
     public class Plugin : BasePlugin
     {
-        public const string Version = "1.14.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
+        public const string Version = "1.15.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
         internal static ManualLogSource L;
 
         public override void Load()
@@ -1498,6 +1498,15 @@ namespace BallxPitBridge
                             }
                         }
                         catch { }
+                        // 강화 레벨과 실제 효과 값을 구분한다. 없는 강화의 기본 반환값도 게임에서 직접 읽는다.
+                        w.WriteStartObject("harvest_bonus");
+                        foreach (HarvestUpgradeType type in Enum.GetValues(typeof(HarvestUpgradeType)))
+                        {
+                            if (type.ToString() == "kNum") continue;
+                            try { w.WriteNumber(type.ToString(), c.GetHarvestUpgradeBonusAmt(type)); }
+                            catch { } // 읽을 수 없는 항목은 0을 만들어 보내지 않는다.
+                        }
+                        w.WriteEndObject();
                         try
                         {
                             if (c.BonusStats != null)

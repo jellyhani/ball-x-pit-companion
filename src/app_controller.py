@@ -122,6 +122,7 @@ class AppController(QObject):
         self.sim.done.connect(self._on_sim_done)
         self._sim_req: Dict[str, object] = {}        # 채널 → 마지막으로 보낸 요청 키
         self._sim_res: Dict[str, tuple] = {}         # 채널 → (요청 키, 결과)
+        self._sim_retry_at: Dict[str, float] = {}    # 실패 뒤 같은 입력을 다시 계산할 시각
         self._hcache: tuple = ((), None)             # 화면 대응점 → 월드→화면 변환 (SVD 3ms 라 한 번만)
         self.hud.moved.connect(self._on_hud_moved)
         self.control = ControlWindow(self.data, self.run, self.settings)
@@ -157,7 +158,7 @@ class AppController(QObject):
         self.control.set_history(self.recorder.load())
         self.recommender.history = self.recorder.load()      # 캐릭터별 항목 성적 (내 기록)
         self.control.set_draw_summary(self.draws.summary())
-        self.mod_guard = ModGuard(self.settings, self.data.game_build_id, lambda: self.bridge.connected)
+        self.mod_guard = ModGuard(self.settings, self.data.game_build_id, lambda: self.bridge.live)
         self.mod_guard.status.connect(self.control.set_mod_status)
         self.mod_guard.notice.connect(lambda text: self.tray.showMessage(tr("BALL x PIT 도우미"), text))
         self.control.mod_install_requested.connect(self.mod_guard.install_now)
@@ -201,7 +202,7 @@ class AppController(QObject):
             autostart.set_enabled(self.settings.start_with_windows)
         if not self.ocr_status.ok:
             log.warning(self.ocr_status.message)
-            self.control.select_page(tr("진단"))
+            self.control.select_page("진단")
         from .engine import native
         log.info("시작: 데이터 빌드 %s, OCR %s, 네이티브 계산 %s", self.data.game_build_id, self.ocr_status.ok,
                  "사용" if native.lib() is not None else "없음 (파이썬 계산)")
@@ -269,12 +270,14 @@ class AppController(QObject):
     def _on_scan(self, res: ScanResult):
         self._log_scan_change(res)
         self.last_result = res
+        if res.image is not None and self.pending_save:
+            self._write_frame(res)
+        if self.bridge.live:
+            return                      # 진단 캡처가 현재 게임 연동의 선택 상태를 덮어쓰지 않는다.
         if res.window is not None or res.observation.kind == ScreenKind.GAME_NOT_FOUND:
             self.window = res.window
         if res.ocr_ran:
             self.timings.append(dict(res.timings_ms))
-        if res.image is not None and self.pending_save:
-            self._write_frame(res)
         if res.generation != self.tracker.generation:
             self.stale_results += 1   # 새로고침·런 전환 전에 찍은 화면 → 버린다
             self._update_hud()
@@ -310,28 +313,13 @@ class AppController(QObject):
             return
         if isinstance(snap.get("catalog"), dict):
             self.snapshots.set_catalog(snap)
-            from .gamedata import save_catalog
+            from .gamedata import save_catalog, apply_catalog
             save_catalog(snap["catalog"])
-            props = {}
-            for kind in ("balls", "passives"):
-                for e in snap["catalog"].get(kind) or []:
-                    iid = self.data.item_by_log_id(e.get("type") or "")
-                    if iid and isinstance(e.get("lvl_props"), list):
-                        props[iid] = e["lvl_props"]
-            if props:
-                self.data.apply_level_props(props)
-            sched = catalog_schedules(snap["catalog"])
-            if sched:
-                self.data.level_schedules = sched
-            n = self.data.apply_game_recipes(catalog_recipes(snap["catalog"], self.data))
+            n = apply_catalog(self.data, snap["catalog"])
             k = snap["catalog"].get("max_solo_lvl")
-            if isinstance(k, int) and k >= 0:
-                # 게임 lvl 은 0부터 → 화면 레벨 k+1 이 단독 최대(진화 조건)
-                self.data.set_observed_max_level("ball", k + 1)
-                self.data.set_observed_max_level("passive", k + 1)
             log.info("게임 연동: 게임 안 레시피 %d개로 교체 (위키 레시피 대신), 단독 최대 레벨 %s, 플러그인 %s, "
                      "레벨별 수치 %d개", n, (k + 1) if isinstance(k, int) else "?", snap.get("plugin") or "1.1 이하",
-                     len(props))
+                     len(self.data.level_props))
             self.control.refresh_run()
             return
         now = time.monotonic()
@@ -442,8 +430,8 @@ class AppController(QObject):
         sig = getattr(self, "_picked_sig", None)
         if sig is None or not self.bridge.live:
             return False
-        items, at = sig
-        return tuple(c.item_id for c in s.cards) == items and time.monotonic() - at < 8.0
+        signature, at = sig
+        return s.signature == signature and time.monotonic() - at < 8.0
 
     def _on_bridge_status(self, _text: str):
         if not self.bridge.connected and self.recorder.current is not None:
@@ -675,7 +663,7 @@ class AppController(QObject):
         if card is None and not expired:
             return
         self._pending_pick = None
-        self._picked_sig = (tuple(c.item_id for c in session.cards), time.monotonic())
+        self._picked_sig = (session.signature, time.monotonic())
         if card is not None:
             out = PickOutcome(out.session_id, "picked", card, tr("게임 상태로 확인"), out.options)
         self.run.apply_outcome(out, self.data)
@@ -705,7 +693,7 @@ class AppController(QObject):
                         self._session_counters[s.session_id] = dict(self._counters)
                         for old in [k for k in self._session_counters if k < s.session_id - 20]:
                             del self._session_counters[old]
-                    self.run.note_offered(tuple(c.item_id for c in s.cards))
+                    self.run.note_offered(tuple(c.item_id for c in s.cards), session_id=s.session_id)
                     if s.pool is not None:
                         self.draws.record(s)
                         self.recommender.draw_weights = self.draws.weights()
@@ -713,7 +701,8 @@ class AppController(QObject):
                     if self._last_levelup_snap is not None:
                         self.snapshots.add(self._last_levelup_snap)   # 업데이트 뒤 회귀 검사용 원본
                         self._last_levelup_snap = None
-                self.run.apply_character(s.character_id)
+                self.run.apply_character(s.character_id, s.extra_characters,
+                                         source="game" if self.bridge.live else "portrait")
                 if s.inventory is not None:
                     self.run.apply_inventory(s.inventory, self.data)
                 else:
@@ -805,7 +794,7 @@ class AppController(QObject):
         """화면 인식을 쓸 때만 HUD를 캡처에서 뺀다(자기 글자를 게임 글자로 읽지 않도록).
         게임 연동 중에는 스크린샷·녹화에 HUD가 그대로 보인다."""
         want = self.settings.hide_from_capture == "always" or (
-            self.settings.hide_from_capture == "auto" and not self.bridge.connected)
+            self.settings.hide_from_capture == "auto" and not self.bridge.live)
         if want != getattr(self, "_capture_hidden", None):
             self._capture_hidden = want
             self.hud.set_capture_excluded(want)
@@ -858,21 +847,10 @@ class AppController(QObject):
         self._update_base_advice(base, state)
         if base is not None:
             self._update_spa(base)
-        if base and (base.get("geo") or {}).get("colliders") and self.meta is not None and not self._layout_busy                 and state != "kRearrangeBuildings":        # 옮기는 도중에는 다시 계산하지 않는다 (목표가 흔들리지 않게)
-            # 배치가 바뀌거나 미완성 건물이 생기고·끝나면 다시 계산
-            options = self.meta.build_options if self.meta.build_options is not None else self.meta.blueprints
-            construction_key = tuple((b.type, b.size, b.cost, b.can_build_more,
-                                      min([8] + [self.meta.resources[i] // v if i < len(self.meta.resources) else 0
-                                                 for i, v in enumerate(b.cost) if v > 0])) for b in options)
-            production_key = tuple(sorted((b.get("id", -1), b.get("lvl"), b.get("worker"), b.get("range"), b.get("cap"),
-                                            tuple(sorted((b.get("in_range") or {}).items())))
-                                           for b in base.get("buildings") or []))
-            levels_key = tuple(sorted((c.get("type", ""), c.get("lvl", 0)) for c in self.meta.chars_raw))
-            lk = (layout_key(base), tuple(sorted(u.id for u in unfinished_buildings(base, self.meta))),
-                  construction_key, production_key, levels_key)
+        if base and (base.get("geo") or {}).get("colliders") and self.meta is not None and not self._layout_busy \
+                and state != "kRearrangeBuildings":
+            lk = self._layout_fingerprint(base)
             if lk != getattr(self, "_layout_for", None):
-                # 기지에 들어왔거나 배치가 바뀌면 배치 추천을 다시 계산 (백그라운드)
-                self._layout_for = lk
                 self.compute_layout()
         if base and state in ("kAimWorkers", "kBounceWorkers"):
             pl = base.get("player") or []
@@ -906,6 +884,9 @@ class AppController(QObject):
         """재배치 도중: 지금 배치에서 최적 배치까지 남은 옮기기 (배치가 바뀔 때만 다시 계산)."""
         plan = self.layout_plan
         final = getattr(plan, "final", None) if plan else None
+        if plan and not getattr(plan, "movement_complete", True):
+            from .engine.layout import MoveSequence
+            return MoveSequence(complete=False, unresolved=getattr(plan, "unresolved_moves", ()))
         if not final:
             return list(plan.swaps) if plan else []
         key = (layout_key(base), id(plan))
@@ -985,7 +966,9 @@ class AppController(QObject):
                            shape_outline_world(b0, mask, g.size, remain[0].to, getattr(remain[0], "rot", -1))]
             self.base_overlay.set_target_box(box)
             types = {b.get("id"): b.get("type", "") for b in base.get("buildings") or []}
-            if remain:
+            if not getattr(remain, "complete", True):
+                lines = [(tr("안전한 이동 순서를 만들지 못했습니다. 배치도를 다시 계산해 주세요."), (255, 159, 10, 255))]
+            elif remain:
                 first = remain[0]
                 lines = [(tr("가이드 배치까지 옮기기 {v0}개 남음 — 번호 순서대로", v0=len(remain)), (245, 245, 247, 255)),
                          (tr("1번: {v0} → 번호 1 자리 ({reason})", v0=self.data.building_name(types.get(first.a, '')), reason=first.reason),
@@ -1007,7 +990,11 @@ class AppController(QObject):
         texts = []
         sim = self._harvest_sim(base, adv.need, unf)
         if unf:
-            names = " · ".join(tr("{v0}({label} {pct:.0%}, {v1}{hits_left}번 더)", v0=self.data.building_name(u.type), label=u.label, pct=u.pct, v1='' if u.exact else tr("약 "), hits_left=u.hits_left) for u in unf[:3])
+            names = " · ".join(
+                tr("{name}({label} {pct:.0%}, 남은 공사 점수 {points})", name=self.data.building_name(u.type),
+                   label=u.label, pct=u.pct, points=u.remaining_points) if u.remaining_points is not None else
+                tr("{name}({label} {pct:.0%})", name=self.data.building_name(u.type), label=u.label, pct=u.pct)
+                for u in unf[:3])
             texts.append((tr("미완성 먼저: {names}", names=names), (255, 159, 10, 255)))
             tip = gold_bounce_tip(base, unf)
             if tip:
@@ -1042,6 +1029,8 @@ class AppController(QObject):
             if not base:
                 self.layout_win.set_result({}, None, {})
             return
+        if not force and time.monotonic() < getattr(self, "_layout_retry_at", 0):
+            return
         team = hs.team_from_chars(self.meta.chars_raw, getattr(self, "_team_order", None))
         snap = json.loads(json.dumps(base))
         options = self.meta.build_options if self.meta.build_options is not None else self.meta.blueprints
@@ -1056,8 +1045,21 @@ class AppController(QObject):
         # 일반 기지에서 처음 계산할 때도 현재 게임의 전체 채집 시간을 사용한다.
         # 마지막 조준 시 남은 시간이나 앱 초기 기본값으로 새 배치를 평가하지 않는다.
         duration = float((snap.get("geo") or {}).get("harvest_len") or self._harvest_dur)
-        self.sim.submit("layout", snap, sim_jobs.job_layout, snap, team, duration, bps, targets, need, 8.0,
-                        dict(prev) if prev else None, char_levels, tuple(self.meta.resources))
+        limits = self.aim_range.limits
+        key = self._layout_fingerprint(snap)
+        self._layout_for = key
+        self._layout_request = (key, snap)
+        self._sim_req["layout"] = key
+        self.sim.submit("layout", key, sim_jobs.job_layout, snap, team, duration, bps, targets, need, 8.0,
+                        dict(prev) if prev else None, char_levels, tuple(self.meta.resources), limits)
+
+    def _layout_fingerprint(self, base):
+        from .engine.sim_signature import layout_signature
+        options = self.meta.build_options if self.meta.build_options is not None else self.meta.blueprints
+        need, _ = need_resource(self.meta, self._shortfalls())
+        duration = float((base.get("geo") or {}).get("harvest_len") or self._harvest_dur)
+        return layout_signature(base, self.meta.chars_raw, [b.construction_data() for b in options],
+                                tuple(self.meta.resources), duration, need, self.aim_range.limits)
 
     def _update_spa(self, base: dict):
         """스파 재채집 손익: 게임이 알려 준 비용과 내 채집 기록 평균을 비교 (비용·기록이 바뀔 때만)."""
@@ -1076,17 +1078,38 @@ class AppController(QObject):
             log.info("스파: %s", adv.text)
 
     def _on_sim_done(self, channel: str, key, result):
-        self._sim_res[channel] = (key, result)
+        if key != self._sim_req.get(channel):
+            return
+        if channel != "layout" and not result:
+            self._sim_req.pop(channel, None)
+            self._sim_res.pop(channel, None)
+            self._sim_retry_at[channel] = time.monotonic() + 0.5
+            return                         # 동기 제출 실패가 즉시 재제출로 재귀하지 않도록 다음 프레임에서 재시도
         if channel == "layout":
-            self._on_layout_done(key, result)
+            self._layout_busy = False
+            request = getattr(self, "_layout_request", None)
+            if (not request or not self._base_snap or self.meta is None
+                    or self._base_state == "kRearrangeBuildings"
+                    or key != self._layout_fingerprint(self._base_snap)):
+                self._layout_for = None
+                return
+            self._sim_res[channel] = (key, result)
+            if not result:
+                self._layout_for = None
+                self._layout_retry_at = time.monotonic() + 2.0
+            self._on_layout_done(request[1], result)
             if self._base_snap and self._base_state == "kAimWorkers":
                 self._render_base(self._base_snap, self._base_state)
-        elif self._base_snap and self._base_state == "kAimWorkers":
-            self._render_base(self._base_snap, self._base_state)     # 새 결과로 다시 그림 (계산은 안 함)
+        else:
+            self._sim_res[channel] = (key, result)
+            if self._base_snap and self._base_state == "kAimWorkers":
+                self._render_base(self._base_snap, self._base_state)
 
     def _on_layout_done(self, snap: dict, result):
         self._layout_busy = False
         plan, sweeps = result if result else (None, {})
+        if plan and self.meta:
+            self._validate_purchase_budget(plan)
         self.layout_plan = plan
         self.layout_win.set_result(snap, plan, sweeps)
         # 일꾼이 없으면 생산이 0인 건물 (금광·농장·야적장·채석장·채집가의 오두막 — 위키: 광마다 일꾼 1명)
@@ -1100,6 +1123,24 @@ class AppController(QObject):
         if plan:
             log.info("배치 추천: 범위 효과 %.1f → %.1f, 바꾸기 %d번, 채집 예상 %s → %s", plan.score_before,
                      plan.score_after, len(plan.swaps), plan.harvest_before, plan.harvest_after)
+
+    def _validate_purchase_budget(self, plan):
+        """계산 중 자원이 줄었으면 지금 감당할 수 없는 구매 안내를 제거한다."""
+        from .engine.layout import build_purchase_cost, TILE_TYPES
+        resources = tuple(self.meta.resources)
+        tile_budget = list(resources)
+        kept = []
+        for row in plan.builds:
+            cost = build_purchase_cost(row, plan.build_costs)
+            budget = tile_budget if row[0] in TILE_TYPES else resources
+            if cost is None or len(budget) < len(cost) or any(amount > budget[i] for i, amount in enumerate(cost)):
+                continue
+            kept.append(row)
+            if row[0] in TILE_TYPES:
+                tile_budget = [tile_budget[i] - cost[i] for i in range(len(cost))]
+        plan.builds = kept
+        allowed = {(row[0], tuple(row[1])) for row in kept}
+        plan.new_spots = [spot for spot in plan.new_spots if (spot.type, tuple(spot.center)) in allowed]
 
     def _access_move_names(self, stuck) -> str:
         """배치도 계산이 찾은 길 열기 옮기기 (예: '재배치에서 수레바퀴 공방을 빈 자리로 옮기기')."""
@@ -1115,13 +1156,14 @@ class AppController(QObject):
             return tr("재배치 모드에서 빈 자리로 옮기기: {v0} (배치도 번호 순서)", v0=', '.join(names))
         reach = getattr(plan, "reach_after", {}) or {}
         if ids and all(reach.get(i, 0) > 0 for i in ids):
-            return tr("배치도의 가이드 배치대로 옮기면 닿음 (재배치 모드에서 번호 순서대로)")
+            return tr("배치도 이동안에서 도달을 예상함 (게임에서 확인 필요)")
         return ""
 
     @staticmethod
     def _yield_text(r: dict) -> str:
         from .tracking.meta_state import RESOURCES
-        parts = [tr("미완성 {v0}번 맞힘", v0=r['build_hits'])] if r.get("build_hits") else []
+        parts = ([tr("공사 점수 +{points} (계산)", points=r["build_points"])] if r.get("build_points") else
+                 [tr("공사장 접촉 {v0}회 (계산)", v0=r['build_hits'])] if r.get("build_hits") else [])
         parts += [f"{RESOURCES[i]} +{v}" for i, v in enumerate(r.get("total") or []) if v]
         return " · ".join(parts) or tr("채집 없음")
 
@@ -1143,20 +1185,11 @@ class AppController(QObject):
         dur = self._harvest_dur
         # 배치·남은 자원·필요 자원·미완성 건물이 바뀔 때만 각도 탐색을 다시 한다
         lo, hi = self.aim_range.limits
-        base_key = (layout_key(base), tuple(sorted((b, blds[b].get("res")) for b in blds)), need, len(team),
-                    tuple(sorted(targets.items())), dur, round(lo), round(hi))
-        # 발사 시작점 = 캐릭터 위치 (조준 중에 옆으로 움직인다) — 0.1 단위로 키에 넣어 움직이면 다시 계산
-        lxy = geo_.get("launcher") or [0.0, 0.0]
-        launch = (round(float(lxy[0]), 1), round(float(lxy[1]), 1))
-        key = base_key + (launch,)
-
-        def follow(res_key, path):
-            """새 계산이 오기 전: 이전 결과의 경로를 캐릭터가 움직인 만큼 옮겨 그린다 (배치가 같을 때만)."""
-            if not res_key or res_key[:-1] != base_key:
-                return None
-            dx, dy = launch[0] - res_key[-1][0], launch[1] - res_key[-1][1]
-            return [hs.to_screen(h, x + dx, y + dy) for x, y in path or []]
-        if self._sim_req.get("sweep") != key:
+        from .engine.sim_signature import aim_signature
+        key = aim_signature(base, team, dur, need, targets, (lo, hi))
+        retry = getattr(self, "_sim_retry_at", {})
+        now = time.monotonic()
+        if self._sim_req.get("sweep") != key and now >= retry.get("sweep", 0):
             self._sim_req["sweep"] = key
             self.sim.submit("sweep", key, sim_jobs.job_sweep, geo_, blds, team, dur, need, targets, lo, hi)
         lines = []
@@ -1164,27 +1197,25 @@ class AppController(QObject):
         now_path: list = []
         pl = base.get("player") or []
         if len(pl) >= 4:
-            ang = round(math.degrees(math.atan2(pl[3], pl[2])))
-            if self._sim_req.get("now") != (ang, key):
+            ang = math.degrees(math.atan2(pl[3], pl[2]))
+            if self._sim_req.get("now") != (ang, key) and now >= retry.get("now", 0):
                 self._sim_req["now"] = (ang, key)
                 self.sim.submit("now", (ang, key), sim_jobs.job_now, geo_, blds, team, ang, dur, targets)
             got = self._sim_res.get("now")
-            moved = follow(got[0][1], got[1].get("path")) if got and got[1] else None
-            if moved is not None:                         # 각도·위치가 한두 번 늦어도 같은 배치면 따라 그린다
+            if got and got[1] and got[0] == (ang, key):
                 r = got[1]
-                now_path = moved
+                now_path = [hs.to_screen(h, x, y) for x, y in r.get("path") or []]
                 lines.append((tr("지금 조준 {v0:.0f}°: {v1}", v0=r['angle'], v1=self._yield_text(r)), (255, 255, 255, 230)))
         best_path: list = []
         got = self._sim_res.get("sweep")
-        if got and got[1] and got[0][:-1] == base_key and got[1].get("top"):
-            sweep_key = got[0]
+        if got and got[1] and got[0] == key and got[1].get("top"):
             top, reach = got[1]["top"], got[1].get("reach") or {}
             # 어떤 각도로도 닿지 않는 미완성 건물: 배치도의 '길 열기'로 안내
             stuck = [u for u in unf if u.id in reach and not reach[u.id]]
             if stuck:
                 opener = self._access_move_names(stuck)
                 self._stuck_text = (" · ".join(self.data.building_name(u.type) for u in stuck)
-                                    + tr(": 지금 배치로는 어떤 각도로도 닿지 않음 → ")
+                                    + tr(": 검사한 각도에서 도달을 확인하지 못함 → ")
                                     + (opener or tr("배치도에서 옆 건물을 옮겨 길을 여세요")))
             best = top[0]
             # 1위와 거의 같은 각도가 여럿이면(작업자가 오래 튕겨 어디로 쏴도 비슷하게 다 캐는 경우) 순위가 의미 없다 —
@@ -1193,10 +1224,10 @@ class AppController(QObject):
             cur = math.degrees(math.atan2(pl[3], pl[2])) if len(pl) >= 4 else 90.0
             if len(similar) > 1:
                 show = min(similar, key=lambda r: abs(r["angle"] - cur))
-                best_path = follow(sweep_key, show.get("path")) or []
+                best_path = [hs.to_screen(h, x, y) for x, y in show.get("path") or []]
                 lines.append((tr("각도 차이 거의 없음 ({v0}곳 비슷) — 지금 조준에 가까운 {v1:.0f}° (파란 선): {v2}", v0=len(similar), v1=show['angle'], v2=self._yield_text(show)), (120, 180, 255, 255)))
             else:
-                best_path = follow(sweep_key, best.get("path")) or []
+                best_path = [hs.to_screen(h, x, y) for x, y in best.get("path") or []]
                 lines.append((tr("1위 {v0:.0f}° (파란 선): {v1}", v0=best['angle'], v1=self._yield_text(best)), (120, 180, 255, 255)))
                 alts = " / ".join(tr("{i}위 {v0:.0f}° {v1}", i=i, v0=r['angle'], v1=self._yield_text(r)) for i, r in enumerate(top[1:3], 2))
                 if alts:
@@ -1207,6 +1238,10 @@ class AppController(QObject):
         if not (l_ok and h_ok):
             lines.append((tr("추천 각도 범위 {lo:.0f}°~{hi:.0f}° (추정) — 마우스를 좌우 끝까지 밀면 게임 한계를 배웁니다", lo=lo, hi=hi),
                           (140, 140, 150, 255)))
+        from .engine.harvest_sim import model_limitations
+        if model_limitations(team, blds):
+            lines.append((tr("채집 예상은 일부 강화 효과와 기본 채집량을 검증 중인 참고 계산입니다."),
+                          (255, 190, 110, 255)))
         lines.append((tr("흰·파란 선은 첫 작업자의 초기 예상 경로만 표시합니다. 이후 튕김은 실제와 달라질 수 있습니다."), (140, 140, 150, 255)))
         self.base_overlay.set_paths(now_path, best_path)
         return lines
@@ -1300,14 +1335,16 @@ class AppController(QObject):
         avoid = [geo.phys_to_logical_rect(r) for r in getattr(self, "_ui_avoid", [])] + [c for c in cards if c.width() > 0]
         if getattr(self, "_ui_avoid", None):
             spot = geo.place_avoiding(game, avoid, hud.width(), hud.height(), preferred=[spot])
+        self._hud_auto_spot = QPoint(spot)
         p = QPoint(spot.x() + self.settings.hud_offset_x, spot.y() + self.settings.hud_offset_y)
         hud.move(geo.clamp_to_screen(p, hud.width(), hud.height()))
 
     def _on_hud_moved(self, pos: QPoint):
         # 자동 배치 위치 대비 얼마나 옮겼는지 저장한다
-        w = self.window
-        game = geo.phys_to_logical_rect(w.rect) if w else QApplication.primaryScreen().availableGeometry()
-        auto = geo.place_hud(game, [], self.hud.width(), self.hud.height())
+        auto = getattr(self, "_hud_auto_spot", None)
+        if auto is None:
+            self._position_hud()
+            auto = self._hud_auto_spot
         self.settings.hud_offset_x = pos.x() - auto.x()
         self.settings.hud_offset_y = pos.y() - auto.y()
         self.settings.save()

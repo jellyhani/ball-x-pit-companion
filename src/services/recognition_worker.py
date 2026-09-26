@@ -208,9 +208,10 @@ class RecognitionService(QObject):
         return self._job_seq
 
     def _on_finished(self, res: ScanResult):
-        if res.job_id == self.inflight_job:
-            self.inflight_job = None
-            self.busy_since = None
+        if res.job_id != self.inflight_job:
+            return                     # 스레드 교체 전에 큐에 들어온 이전 결과도 버린다.
+        self.inflight_job = None
+        self.busy_since = None
         self.result.emit(res)
 
     def busy_for(self) -> float:

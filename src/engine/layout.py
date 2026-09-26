@@ -72,6 +72,15 @@ class Move:
     rot: int = -1            # 옮기면서 회전할 때 목표 회전 값 (게임 rot, +1 = 시계 방향 90°). -1 = 회전 없음
 
 
+class MoveSequence(list):
+    """기존 목록 소비와 호환되는 이동 결과. complete=False이면 실행할 부분 이동을 내보내지 않는다."""
+
+    def __init__(self, steps=(), *, complete: bool = True, unresolved=()):
+        super().__init__(steps if complete else ())
+        self.complete = bool(complete)
+        self.unresolved = tuple(unresolved)
+
+
 @dataclass
 class NewSpot:
     type: str
@@ -103,6 +112,24 @@ class LayoutPlan:
     calibration: Tuple[float, int, int] = (0.0, 0, 0)            # 범위 판정 게임 값 비교 (여유, 맞음, 비교 수)
     preset: str = "effect"                                       # effect(효과 최대) | gold_u(금광 U자) | plan(계획도시)
     preset_spots: List[Tuple[float, float]] = field(default_factory=list) # 프리셋 자리 중심 (금광 U자)
+    movement_complete: bool = True                            # 끝까지 옮길 수 있는 순서를 확인했는지
+    unresolved_moves: Tuple[int, ...] = ()                    # 목표를 보류한 건물 id
+    evaluated_base: dict = field(default_factory=dict)        # 이동·길 열기를 모두 반영한 단일 계산 기준
+    model_limitations: List[str] = field(default_factory=list) # 물리 계산이 아직 재현하지 못하는 게임 효과
+
+
+def build_purchase_cost(row: tuple, costs: Dict[str, Tuple[int, ...]]) -> Optional[Tuple[int, ...]]:
+    """추천 한 행의 구매 비용. 자원 타일은 수량, 일반 건물은 범위 대상 수와 무관하게 1개다."""
+    if len(row) < 5:
+        return None
+    cost = costs.get(row[0])
+    if (not isinstance(cost, (tuple, list)) or len(cost) != 4
+            or not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in cost)):
+        return None
+    count = row[4] if row[0] in TILE_TYPES else 1
+    if not isinstance(count, int) or isinstance(count, bool) or count < 1:
+        return None
+    return tuple(v * count for v in cost)
 
 
 # ---- 기지 타일 격자 ----
@@ -425,6 +452,7 @@ def plan_access(base: dict, targets: Sequence[int], reach_fn, max_moves: int = 2
     if not blds or grid is None or not targets:
         return [], base, set()
     reach = reach_fn(geo)
+    initially_reachable = {t for t in targets if reach.get(t, 0) > 0}
     moves: List[Move] = []
     reserved: set = set()
     cur_base = base
@@ -455,18 +483,31 @@ def plan_access(base: dict, targets: Sequence[int], reach_fn, max_moves: int = 2
                 moved = dict(cur)
                 moved[i] = Bld(b.id, b.type, sp[0], sp[1], b.tw, b.th, b.rot, b.range)
                 return effect_score(moved)[0]
-            to = max(spots, key=score)
-            nb = moved_base(cur_base, cur, i, to)
-            if accept_fn is not None and not accept_fn(nb):
-                continue
-            r2 = reach_fn(nb["geo"])
-            if r2.get(t):
-                found = (Move(i, to, float(r2[t]), tr("미완성 건물로 가는 길 열기"), target=t), nb, r2, here)
+            reachable_before = {other for other in targets if reach.get(other, 0) > 0}
+            checked = 0
+            for to in sorted(spots, key=score, reverse=True):
+                nb = moved_base(cur_base, cur, i, to)
+                if accept_fn is not None and not accept_fn(nb):
+                    continue
+                checked += 1
+                r2 = reach_fn(nb["geo"])
+                if r2.get(t, 0) > 0 and all(r2.get(other, 0) > 0 for other in reachable_before):
+                    found = (Move(i, to, float(r2[t]), tr("미완성 건물로 가는 길 열기"), target=t), nb, r2, here)
+                    break
+                if checked >= max_tries:
+                    break
+            if found:
                 break
         if found:
             moves.append(found[0])
             cur_base, reach = found[1], found[2]
             reserved |= found[3]
+    if moves:
+        final_reach = reach_fn(cur_base.get("geo") or {})
+        required = initially_reachable | {m.target for m in moves}
+        if (not all(final_reach.get(t, 0) > 0 for t in required)
+                or (accept_fn is not None and not accept_fn(cur_base))):
+            return [], base, set()
     return moves, cur_base, reserved
 
 

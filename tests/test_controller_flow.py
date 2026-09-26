@@ -56,6 +56,22 @@ class ControllerFlowTest(unittest.TestCase):
         self.assertIn("새로고침", self.c.run.history)
         self.assertFalse(any("확인 못 함" in h for h in self.c.run.history))
 
+    def test_companion_character_survives_real_controller_recommendation_flow(self):
+        snapshot = copy.deepcopy(LEVELUP)
+        snapshot["battle"]["char"] = "kDefault"
+        snapshot["battle"]["chars_combined"] = ["kEmptyNester"]
+        snapshot["levelup"]["choices"] = [
+            {"idx": 0, "kind": "kPassive", "is_new": True, "equip_idx": -1,
+             "type": "kBabyRattle", "tgt_lvl": 1, "rect": [35, 575, 260, 260]}]
+        self.feed(snapshot)
+        self.assertEqual(self.c.run.character_ids, ["char:default", "char:emptynester"])
+        self.assertEqual(self.c.tracker.session.extra_characters, ("char:emptynester",))
+        self.assertTrue(all(source == "game" for _, source in self.c.run.characters))
+        self.assertIn("char_reduces", [w.rule_id for w in self.c.recommendation.evals[0].warnings])
+        snapshot["seq"] += 1
+        self.feed(snapshot)
+        self.assertEqual(self.c.run.character_ids, ["char:default", "char:emptynester"])
+
     def test_banish_detected(self):
         s1 = copy.deepcopy(LEVELUP)
         self.feed(s1)
@@ -162,7 +178,7 @@ class BaseAimFlowTest(unittest.TestCase):
                 time.sleep(0.02)
             lines = [t for t, _ in c.base_overlay._lines]
             self.assertTrue(lines[0].startswith("미완성 먼저:"), lines)
-            self.assertTrue(any("어떤 각도로도 닿지 않음" in t and ("빈 자리로 옮기기" in t or "가이드 배치대로 옮기면 닿음" in t)
+            self.assertTrue(any("검사한 각도에서 도달을 확인하지 못함" in t and ("빈 자리로 옮기기" in t or "이동안에서 도달을 예상함" in t)
                                 for t in lines), lines)
             self.assertTrue(any(t.startswith("1위 ") or t.startswith("각도 차이 거의 없음") for t in lines), lines)
             self.assertTrue(c.base_overlay._path_now and c.base_overlay._path_best)

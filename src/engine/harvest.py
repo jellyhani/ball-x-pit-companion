@@ -179,7 +179,7 @@ class AimRange:
 
 # 미완성 건물: 새로 지은 건물은 공사장(kScaffold), 강화한 건물은 강화 공사(kUpgrading) 상태로 시작한다.
 # 채집 때 작업자가 부딪힐 때마다 공사 점수가 쌓인다 (게임 BuildingInst.UpgradePts / GetUpgradeTgt,
-# 채집 강화 kMoreBuildPts). 남은 타격 수는 플러그인 1.7 부터 정확히 오고, 그 전에는 진행률로 어림한다.
+# 채집 강화 kMoreBuildPts). 게임이 보내는 값은 공사 점수이며, 작업자별 추가 점수 때문에 타격 수와 같지 않다.
 UNFINISHED = {"kScaffold": tr("공사 중"), "kUpgrading": tr("강화 공사 중")}
 FALLBACK_HITS = 10       # 목표 점수를 모를 때 완성까지 필요한 타격 수 어림값 (진행률로 나눠 씀)
 
@@ -190,10 +190,12 @@ class Unfinished:
     type: str
     state: str
     pct: float                      # 0~1
-    hits_left: int
-    exact: bool                     # 남은 타격 수가 게임 값인지 (아니면 어림)
+    hits_left: int                  # 기존 추천 API의 비교 상한. 공사 점수를 타격 횟수라고 표시하지 않는다.
+    exact: bool                     # 타격 횟수의 정확성 (게임은 남은 점수만 알려 주므로 False)
     sx: Optional[int] = None
     sy: Optional[int] = None
+    remaining_points: Optional[int] = None
+    points_exact: bool = False
 
     @property
     def label(self) -> str:
@@ -217,16 +219,20 @@ def unfinished_buildings(base: Optional[dict], meta: Optional[MetaState]) -> Lis
             continue
         pct = float(b.get("upgrade_pct") or 0)
         tgt, pts = b.get("upg_tgt"), b.get("upg_pts")
-        exact = isinstance(tgt, (int, float)) and tgt > 0
-        left = max(1, int(tgt - (pts or 0))) if exact else max(1, math.ceil((1 - pct) * FALLBACK_HITS))
-        out.append(Unfinished(b["id"], b.get("type", ""), st, pct, left, exact, b.get("sx"), b.get("sy")))
+        points_exact = isinstance(tgt, (int, float)) and not isinstance(tgt, bool) and tgt > 0 and \
+            isinstance(pts, (int, float)) and not isinstance(pts, bool) and math.isfinite(tgt) and math.isfinite(pts)
+        remaining = max(0, math.ceil(tgt - pts)) if points_exact else None
+        left = max(1, remaining) if remaining is not None else max(1, math.ceil((1 - pct) * FALLBACK_HITS))
+        out.append(Unfinished(b["id"], b.get("type", ""), st, pct, left, False, b.get("sx"), b.get("sy"),
+                              remaining, points_exact))
     out.sort(key=lambda u: (u.hits_left, -u.pct))
     return out
 
 
 def layout_key(base: dict) -> str:
-    """건물 배치 지문: 종류와 위치. 재배치·건설하면 바뀐다."""
-    parts = sorted(f"{b.get('type')}@{b.get('x')},{b.get('y')}" for b in base.get("buildings") or [])
+    """건물 배치 지문: 종류·위치·회전. 같은 중심에서 ㄱ자 건물을 돌려도 바뀐다."""
+    parts = sorted(f"{b.get('type')}@{b.get('x')},{b.get('y')}/{int(b.get('rot') or 0) % 4}"
+                   for b in base.get("buildings") or [])
     return hashlib.md5("|".join(parts).encode("utf-8")).hexdigest()[:12]   # 실행마다 같은 값
 
 

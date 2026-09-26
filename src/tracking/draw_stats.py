@@ -58,7 +58,7 @@ class DrawStats:
     def __init__(self, path: str):
         self.path = path
         self.rows: List[dict] = []
-        self._last_key: Optional[tuple] = None
+        self._seen_sessions = set()
         self.load()
 
     def load(self):
@@ -72,10 +72,9 @@ class DrawStats:
         row = observe(s)
         if row is None:
             return
-        key = tuple(sorted(c.item_id or "" for c in s.cards))
-        if key == self._last_key:
+        if s.session_id in self._seen_sessions:
             return      # 같은 선택창을 다시 잡은 경우
-        self._last_key = key
+        self._seen_sessions.add(s.session_id)
         self.rows.append(row)
         try:
             os.makedirs(os.path.dirname(self.path), exist_ok=True)

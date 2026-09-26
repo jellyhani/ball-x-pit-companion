@@ -61,7 +61,8 @@ class UnfinishedPolicyTest(unittest.TestCase):
         before = copy.deepcopy(base)
         out = unfinished_buildings(base, None)
         self.assertEqual([(u.id, u.type, u.hits_left, u.exact) for u in out],
-                         [(3, "kIdleFarm", 5, True)])
+                         [(3, "kIdleFarm", 5, False)])
+        self.assertEqual([(u.remaining_points, u.points_exact) for u in out], [(5, True)])
         self.assertEqual(base, before)
 
 

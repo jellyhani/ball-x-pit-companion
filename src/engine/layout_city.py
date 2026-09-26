@@ -219,10 +219,11 @@ def _best_cover(p, free: Set[Cell], targets: List[Tuple[float, float, float]], r
 
 
 def _in_box(src, so: Cell, p, o: Cell, rng: float) -> bool:
-    """p 의 중심이 src 의 범위(사각형, 타일 단위 rng) 안인지."""
+    """p 의 중심이 게임 값으로 보정한 범위(타일 단위 rng) 안인지."""
+    from .layout_opt import in_range
     sx, sy = _center(src, so)
     cx, cy = _center(p, o)
-    return abs(cx - sx) <= rng + 1e-6 and abs(cy - sy) <= rng + 1e-6
+    return in_range(cx - sx, cy - sy, rng)
 
 
 def _hub_spot(p, free: Set[Cell], hub: Tuple[float, float], rng: float, depth, near_side: bool):

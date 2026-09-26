@@ -181,6 +181,7 @@ class FuserEvo:
     """진화 후보: 결과 항목과 진화할 보유 볼 위치."""
     item_id: Optional[str]
     equip_idx: int
+    evo_idx: Optional[int] = None   # 게임 후보의 식별 정보. 레시피 배열 번호라는 보장이 없어 임의로 해석하지 않는다.
 
 
 @dataclass(frozen=True)
@@ -262,6 +263,7 @@ class ChoiceSession:
     pool: Optional["ChoicePool"] = None
     last_seen_at: float = 0.0
     closed: bool = False
+    extra_characters: Tuple[str, ...] = ()
 
     @property
     def signature(self) -> tuple:

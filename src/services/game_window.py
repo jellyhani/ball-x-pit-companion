@@ -179,7 +179,8 @@ def capture_game(win: GameWindow) -> Tuple[Optional[Image.Image], str]:
     """
     if win.minimized:
         return None, tr("게임 창이 최소화됨")
-    order = ("screen", "print") if win.foreground else ("print", "screen")
+    # 뒤에 있는 게임의 화면 좌표에는 다른 앱이 있다. 창 캡처 실패를 일반 화면 캡처로 대신하지 않는다.
+    order = ("screen", "print") if win.foreground else ("print",)
     reasons = []
     for method in order:
         try:

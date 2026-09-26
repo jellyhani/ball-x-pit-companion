@@ -115,6 +115,8 @@ def passive_effect(level_props: Optional[List[dict]], before: Optional[int], aft
         changes.append((g, f"{PROPS[k][0]} {_fmt(k, a, prev)} → {_fmt(k, b, row)}"))
     if not changes:
         k = keys[0]
+        if prev != row:
+            return PassiveEffect(role, tr("확인 가능한 주 효과는 같지만 다른 수치가 바뀜"), None)
         return PassiveEffect(role, tr("{v0} {v1} 그대로", v0=PROPS[k][0], v1=_fmt(k, row[k], row)), 0.0)
     changes.sort(key=lambda t: -t[0])
     return PassiveEffect(role, " · ".join(t for _, t in changes[:2]), changes[0][0])
@@ -150,4 +152,8 @@ def ball_effect(level_props: Optional[List[dict]], before: Optional[int], after:
         return tr("피해 {v0}", v0=now['피해']) if "피해" in now else ""
     prev = _ball_parts(level_props[before - 1])
     changed = [f"{tr(k)} {prev[k]} → {v}" for k, v in now.items() if k in prev and prev[k] != v]
-    return " · ".join(changed[:2]) if changed else (tr("수치 변화 없음") if now else "")
+    if changed:
+        return " · ".join(changed[:2])
+    if level_props[before - 1] != level_props[after - 1]:
+        return tr("수치가 바뀌지만 효과 설명을 확인하지 못함")
+    return tr("수치 변화 없음") if now else ""

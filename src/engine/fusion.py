@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from collections import Counter
 from typing import List, Optional
 
 from ..domain import FuserCombo, FuserEvo, FuserOptions, InventorySlot
@@ -34,6 +35,7 @@ class FusionPick:
     score: float = 0.0
     reasons: List[Reason] = field(default_factory=list)
     warnings: List[Reason] = field(default_factory=list)
+    selectable: bool = True           # 항목을 식별하지 못했으면 점수와 무관하게 추천에서 제외
 
 
 @dataclass
@@ -76,7 +78,7 @@ class FusionAdvisor:
         # 게임이 남은 볼만으로 준 후보라 따로 걸러낼 게 없다. 합친 볼을 다시 재료로 쓸 수 있는지는 모름(추정 아님,
         # 미확인) — 게임이 그런 후보를 준 적이 없어 지금은 판단할 자료가 없다.
         balls = [s for s in (inventory or ()) if s.item_id and s.item_id.startswith("ball:")]
-        evos = [self._evo(e, balls, run) for e in fz.evos]
+        evos = [self._evo(e, list(inventory or ()), run) for e in fz.evos]
         combos = [self._combo(c, run) for c in fz.combos]
         evos.sort(key=lambda p: -p.score)
         combos.sort(key=lambda p: -p.score)
@@ -88,7 +90,7 @@ class FusionAdvisor:
         # 진화 기본 가산 + 수치·실측·기록. 분열(무료 강화)도 같은 점수 척도로 한 번에 비교한다
         best: Optional[FusionPick] = None
         all_picks = evos + combos + ([free_pick] if free_pick else [])
-        ranked = sorted([p for p in all_picks if not any(w.rule_id == "combo_bad" for w in p.warnings)],
+        ranked = sorted([p for p in all_picks if p.selectable and not any(w.rule_id == "combo_bad" for w in p.warnings)],
                         key=lambda p: -p.score)
         if ranked:
             best = ranked[0]
@@ -99,7 +101,7 @@ class FusionAdvisor:
         if best is None:
             return FusionRecommendation("hold", tr("권할 조합이 없음"), None, evos, combos, notes, free_pick)
 
-        close = [p for p in all_picks if p is not best and best.score - p.score < 4
+        close = [p for p in all_picks if p is not best and p.selectable and best.score - p.score < 4
                  and not any(w.rule_id == "combo_bad" for w in p.warnings)]
         status = "close" if close else "recommend"
         verb = {"evo": tr("진화"), "combo": tr("융합"), "free": ""}[best.kind]
@@ -129,26 +131,37 @@ class FusionAdvisor:
         return pick
 
     # ---- 진화 한 개 평가 ----
-    def _evo(self, e: FuserEvo, balls: List[InventorySlot], run: RunState) -> FusionPick:
+    def _evo(self, e: FuserEvo, inventory: List[InventorySlot], run: RunState) -> FusionPick:
         d = self.data
         result = e.item_id
-        recipe = next(iter(d.recipes_for(result)), None) if result else None
-        parts = recipe.ingredients if recipe else ()
+        # 결과 ID만으로 첫 레시피를 고르지 않는다. 실제 별도 칸에 있는 재료로 충족되는 경로만 비교한다.
+        # evo_idx와 equip_idx는 보존하지만 게임의 배열 의미를 검증하기 전에는 레시피 번호로 추정하지 않는다.
+        slots = [s for s in inventory if s.occupied and d.item(s.item_id) is not None]
+        available = Counter(s.item_id for s in slots)
+        matches = {r.ingredients for r in d.recipes_for(result) if not (Counter(r.ingredients) - available)} if result else set()
+        parts = next(iter(matches)) if len(matches) == 1 else ()
         title = d.name(result)
         detail = (" + ".join(d.name(p) for p in parts) + tr(" → 진화")) if parts else tr("진화")
         pick = FusionPick("evo", title, detail, result, parts, score=20)
-        if result is None:
+        if d.item(result) is None:
+            pick.selectable = False
             pick.warnings.append(Reason("evo_unknown", tr("결과 항목을 알 수 없음"), -20, tr("미확인")))
             pick.score -= 20
             return pick
-        pick.reasons.append(Reason("evo_base", tr("두 볼이 더 강한 한 볼이 되고 칸이 하나 빔"), 20, tr("진화")))
+        if parts:
+            base_text = tr("재료 {count}개로 진화 — {slots}칸 확보", count=len(parts), slots=max(0, len(parts) - 1))
+        else:
+            base_text = tr("게임이 제시한 진화 후보 — 사용할 재료 조합은 미확인")
+            pick.warnings.append(Reason("evo_parts_unknown", tr("재료 조합을 확정할 수 없어 재료의 피해·회복 손실은 비교하지 않음"), 0,
+                                        tr("미확인")))
+        pick.reasons.append(Reason("evo_base", base_text, 20, tr("진화")))
         # 결과가 다음 진화 재료가 되는가
-        owned = {s.item_id for s in balls}
+        remaining = available - Counter(parts)
         for r in d.recipes_using(result):
-            if not d.recipe_reachable(r):
+            if not parts or not d.recipe_reachable(r):
                 continue
             others = [x for x in r.ingredients if x != result]
-            if others and all(o in owned for o in others):
+            if others and not (Counter(others) - remaining):
                 pick.reasons.append(Reason("evo_chain", tr("다음 진화 {v0}의 재료를 이미 보유", v0=d.name(r.result)), 8,
                                            tr("{v0} 경로", v0=d.name(r.result))))
                 pick.score += 8
@@ -156,7 +169,11 @@ class FusionAdvisor:
         self._character_fit(pick, result, run)
         self._community(pick, result, run)
         # 게임 수치: 결과 볼의 1레벨 기본 피해와 재료들의 지금 피해 비교
-        levels = {s.item_id: s.level for s in balls}
+        # 같은 종류의 다른 레벨 복사본 중 어느 것을 쓰는지 모르면 피해 비교를 보류한다.
+        levels = {}
+        for iid in parts:
+            observed = {s.level for s in slots if s.item_id == iid}
+            levels[iid] = next(iter(observed)) if len(observed) == 1 else None
         res = d.damage_range(result, 1)
         mats = [d.damage_range(p_, levels.get(p_)) for p_ in parts]
         if res and mats and all(mats):
@@ -173,9 +190,12 @@ class FusionAdvisor:
             pick.score += 3
         self._record(pick, result)
         # 회복 수단 손실
-        heal_owned = [s.item_id for s in balls if d.has_tag(s.item_id, "heal_source")]
-        lost = [p for p in parts if d.has_tag(p, "heal_source")]
-        if lost and len(heal_owned) <= len(lost) and not d.has_tag(result, "heal_source"):
+        # 별도 칸의 흡혈과 다른 볼에 합쳐진 흡혈이 동시에 있으면 서로 다른 회복 수단이다.
+        # 진화할 때 combined 효과까지 사라지는지는 확인되지 않아 그 손실을 임의로 단정하지 않는다.
+        heal_owned = Counter(i for s in slots for i in (s.item_id, *s.combined)
+                             if i and d.has_tag(i, "heal_source"))
+        lost = [p for p in parts if d.has_tag(p, "heal_source") and not remaining[p]]
+        if lost and not (heal_owned - Counter(lost)) and not d.has_tag(result, "heal_source"):
             pick.warnings.append(Reason("evo_lose_heal", tr("유일한 회복 수단({v0})이 사라짐", v0=d.name(lost[0])), -8, tr("회복 잃음")))
             pick.score -= 8
         return pick
@@ -185,6 +205,10 @@ class FusionAdvisor:
         d = self.data
         title = f"{d.name(c.item1)} + {d.name(c.item2)}"
         pick = FusionPick("combo", title, tr("두 볼의 효과를 한 볼에"), None, (c.item1, c.item2), score=10)
+        if d.item(c.item1) is None or d.item(c.item2) is None:
+            pick.selectable = False
+            pick.warnings.append(Reason("combo_unknown", tr("융합 재료를 읽지 못해 추천을 보류함"), 0, tr("미확인")))
+            return pick
         pick.reasons.append(Reason("combo_base", tr("최대 레벨 볼 두 개를 합쳐 칸이 하나 빔"), 10, tr("융합")))
         if c.ai_score is not None:
             # 게임 AI 점수는 크기 단위를 모르므로 순위 비교에만 쓴다 (0.1배 가중)

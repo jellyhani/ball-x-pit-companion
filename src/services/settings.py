@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import os
 from dataclasses import asdict, dataclass, fields
 
 log = logging.getLogger(__name__)
 
-APP_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion")
+APP_DIR = os.environ.get("BXP_APP_DIR") or os.path.join(
+    os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion")
 
 
 @dataclass
@@ -42,10 +44,25 @@ class Settings:
         except (OSError, ValueError):
             log.warning("설정 파일을 읽지 못해 기본값을 씁니다", exc_info=True)
             return cls()
-        known = {f.name for f in fields(cls)}
-        s = cls(**{k: v for k, v in raw.items() if k in known})
+        s = cls()
+        if not isinstance(raw, dict):
+            log.warning("설정 형식이 객체가 아니어서 기본값을 씁니다")
+            return s
+        for f in fields(cls):
+            value = raw.get(f.name)
+            default = getattr(s, f.name)
+            valid = type(value) is type(default)
+            if isinstance(default, float):
+                valid = type(value) in (int, float) and math.isfinite(value)
+            if valid:
+                setattr(s, f.name, value)
         s.font_scale = 1.2 if s.font_scale > 1.05 else 1.0
-        s.scan_interval_ms = max(300, min(3000, int(s.scan_interval_ms)))
+        s.scan_interval_ms = max(300, min(3000, s.scan_interval_ms))
+        s.dps_window_s = max(1, min(60, s.dps_window_s))
+        if s.hide_from_capture not in ("auto", "always", "never"):
+            s.hide_from_capture = "auto"
+        if s.dps_corner not in ("left", "right"):
+            s.dps_corner = "right"
         return s
 
     def save(self):

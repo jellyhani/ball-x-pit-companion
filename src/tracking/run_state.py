@@ -34,6 +34,11 @@ class Owned:
     at_max: Optional[bool] = None   # 게임이 알려 준 최대 레벨 여부 (게임 연동)
     combined: Tuple[str, ...] = ()  # 이 볼에 합쳐 넣은 볼들 — 그 볼들은 더 이상 따로 보유하지 않는다 (게임 연동)
 
+    @property
+    def effect_ids(self) -> Set[str]:
+        """현재 작동하는 효과. 진화 재료로 쓸 수 있는 별도 보유 칸과 구분한다."""
+        return {self.item_id, *self.combined}
+
 
 @dataclass
 class RunState:
@@ -52,6 +57,7 @@ class RunState:
     locked_target: Optional[str] = None   # 사용자가 직접 고른 목표 진화 결과 (없으면 자동 감지, deck_plan.py)
     _applied: Set[int] = field(default_factory=set)
     _last_offer: tuple = ()
+    _offered_sessions: Set[int] = field(default_factory=set)
 
     # ---- 런 수명 ----
     def start_run(self):
@@ -82,6 +88,7 @@ class RunState:
         self.pending_unknown_pick = False
         self.offered.clear()
         self._last_offer = ()
+        self._offered_sessions.clear()
         self.damage.clear()
         self.picks.clear()
         self.locked_target = None
@@ -153,10 +160,16 @@ class RunState:
         if self.character_ids != ids:
             self.characters = [(c, source) for c in ids]
 
-    def note_offered(self, item_ids: Tuple[Optional[str], ...]):
-        """선택창에 나온 카드 기록. 같은 선택창이 다시 잡힌 경우(같은 카드 묶음 연속)는 한 번만 센다."""
+    def note_offered(self, item_ids: Tuple[Optional[str], ...], session_id: Optional[int] = None):
+        """새 선택 세션마다 센다. 식별자가 없는 옛 호출만 카드 묶음으로 중복을 막는다."""
         key = tuple(sorted(i for i in item_ids if i))
-        if not key or key == self._last_offer:
+        if not key:
+            return
+        if session_id is not None:
+            if session_id in self._offered_sessions:
+                return
+            self._offered_sessions.add(session_id)
+        elif key == self._last_offer:
             return
         self._last_offer = key
         for i in key:
@@ -234,6 +247,10 @@ class RunState:
     @property
     def character_ids(self) -> List[str]:
         return [c for c, _ in self.characters if c]
+
+    @property
+    def effect_ids(self) -> Set[str]:
+        return {i for o in self.owned.values() for i in o.effect_ids}
 
     def damage_share(self, item_id: str) -> Optional[float]:
         """이번 런 볼 피해 중 이 볼의 비율. 피해 기록이 충분하지 않으면 None."""

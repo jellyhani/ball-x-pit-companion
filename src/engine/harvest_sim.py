@@ -142,6 +142,20 @@ def _hit_shape(s: Shape, ox, oy, dx, dy, r) -> Optional[Tuple[float, float, floa
     return best
 
 
+def _inside_shape(s: Shape, x: float, y: float, radius: float) -> bool:
+    """통과 타일의 출구를 새 채집으로 세지 않기 위한 내부 판정."""
+    if s.kind == "circle":
+        return (x - s.c[0]) ** 2 + (y - s.c[1]) ** 2 < (s.r + radius) ** 2
+    if s.kind == "box":
+        x0, y0, x1, y1 = s.bb
+        return x0 - radius < x < x1 + radius and y0 - radius < y < y1 + radius
+    inside = False
+    for (ax, ay), (bx, by) in zip(s.pts, s.pts[1:] + s.pts[:1]):
+        if (ay > y) != (by > y) and x < (bx - ax) * (y - ay) / (by - ay) + ax:
+            inside = not inside
+    return inside
+
+
 @dataclass
 class PathResult:
     points: List[Tuple[float, float]]           # 꺾이는 지점들 (월드 좌표)
@@ -149,6 +163,9 @@ class PathResult:
 
 
 WHEAT_TYPES = {"kWheatField", "kDenseWheat"}
+# 자원 종류 안내 표에는 거처도 있으므로 충돌 성질은 실제 자원 타일만 따로 센다.
+RESOURCE_TILE_TYPES = WHEAT_TYPES | {"kForest", "kGrandTree", "kBoulder", "kGraniteSlab", "kStonePile"}
+CONSTRUCTION_STATES = {"kScaffold", "kUpgrading"}
 
 
 def passable_ids(buildings: Dict[int, dict], upgrades: Optional[dict] = None) -> set:
@@ -159,11 +176,15 @@ def passable_ids(buildings: Dict[int, dict], upgrades: Optional[dict] = None) ->
     for bid, b in buildings.items():
         t = b.get("type", "")
         res = RES_BY_TYPE.get(t)       # 관통은 건물 종류로 정해진다 (방금 채집해 비었어도 통과 — 실제 궤적 확인)
-        if t in WHEAT_TYPES or ups.get("kPierceBuildings"):
+        if ups.get("kPierceBuildings"):
             out.add(bid)
-        elif res == 3 and ups.get("kPierceStone") and t not in ("kIdleStoneMine", "kStoneMine"):
+        elif b.get("state") in CONSTRUCTION_STATES:
+            continue
+        elif t in WHEAT_TYPES:
             out.add(bid)
-        elif res == 2 and ups.get("kPierceWood") and t not in ("kIdleLumberyard", "kLumberyard"):
+        elif res == 3 and ups.get("kPierceStone") and t in RESOURCE_TILE_TYPES:
+            out.add(bid)
+        elif res == 2 and ups.get("kPierceWood") and t in RESOURCE_TILE_TYPES:
             out.add(bid)
     return out
 
@@ -267,21 +288,49 @@ class Worker:
     upgrades: dict = field(default_factory=dict)
     path: List[Tuple[float, float, float]] = field(default_factory=list)   # (x, y, t)
     gain: List[int] = field(default_factory=lambda: [0, 0, 0, 0])
+    harvest_bonus: dict = field(default_factory=dict)    # 게임 GetHarvestUpgradeBonusAmt/GetBonusAmt 원값
+
+
+def _game_bonus(bonuses: dict, key: str) -> Optional[int]:
+    value = bonuses.get(key)
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+
+
+def model_limitations(team: Sequence[dict], buildings: Dict[int, dict]) -> List[str]:
+    """입력에서 검증하지 못한 게임 효과. 화면 문구는 호출자가 번역한다."""
+    missing = set()
+    kinds = {b.get("type") for b in buildings.values() if b.get("type") in RESOURCE_TILE_TYPES}
+    if kinds:
+        # GetBonusAmt 원값이 최종 채집량인지 기본량에 더할 값인지 게임 메서드 본문을 확인하지 못했다.
+        missing.add("unverified_resource_yield")
+    supported = {"kHarvestSpeed", "kPierceWood", "kPierceStone", "kPierceBuildings", "kMoreBuildPts",
+                 "kFarmSpeed", "kLumberyardSpeed", "kStoneMineSpeed"}
+    for member in team:
+        bonuses = member.get("harvest_bonus") or {}
+        upgrades = member.get("upgrades") or {}
+        if upgrades.get("kHarvestSpeed") and _game_bonus(bonuses, "kHarvestSpeed") is None:
+            missing.add("missing_harvest_speed_bonus")
+        if upgrades.get("kMoreBuildPts") and _game_bonus(bonuses, "kMoreBuildPts") is None:
+            missing.add("missing_build_point_bonus")
+        missing.update("unsupported_harvest_upgrade:" + key for key, value in upgrades.items()
+                       if value and key not in supported)
+    return sorted(missing)
 
 
 def _team_tables(buildings: Dict[int, dict]):
     from .harvest import RES_BY_TYPE, building_resource
-    res_left = {bid: int(b.get("res") or 0) if b.get("can_harvest") else 0 for bid, b in buildings.items()}
+    res_left = {bid: int(b.get("res") or 0) if b.get("can_harvest") and
+                b.get("state") not in CONSTRUCTION_STATES else 0 for bid, b in buildings.items()}
     rtype = {bid: (building_resource(b) if building_resource(b) is not None else RES_BY_TYPE.get(b.get("type", "")))
              for bid, b in buildings.items()}
-    is_tile = {bid: b.get("type", "") in RES_BY_TYPE and b.get("type", "") not in
-               ("kIdleFarm", "kIdleLumberyard", "kIdleStoneMine", "kStoneMine", "kLumberyard", "kFarm", "kGoldMine")
+    is_tile = {bid: b.get("type", "") in RESOURCE_TILE_TYPES and b.get("state") not in CONSTRUCTION_STATES
                for bid, b in buildings.items()}
     return res_left, rtype, is_tile
 
 
 def simulate_team(world: World, buildings: Dict[int, dict], workers: List[Worker], duration: float,
-                  max_events: int = 4000, counts: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
+                  max_events: int = 4000, counts: Optional[Dict[int, int]] = None,
+                  build_points: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
     """여러 작업자를 시간 순서로 함께 돌린다 (한 명이 비운 채집지를 다른 작업자는 통과).
 
     채집: 자원이 남은 채집지에 처음 닿으면 쌓인 자원을 모두 가져간다(가정, 실제 채집량과 맞춰 보는 중).
@@ -292,18 +341,21 @@ def simulate_team(world: World, buildings: Dict[int, dict], workers: List[Worker
 
     def flags_of(bid: int):
         b = buildings.get(bid) or {}
-        f = (native.F_WHEAT if b.get("type", "") in WHEAT_TYPES else 0) | (native.F_TILE if is_tile.get(bid) else 0)
+        f = (native.F_WHEAT if b.get("type", "") in WHEAT_TYPES and is_tile.get(bid) else 0) | (native.F_TILE if is_tile.get(bid) else 0)
+        if b.get("state") in CONSTRUCTION_STATES:
+            f |= native.F_BUILD
         k = rtype.get(bid)
         return f, (-1 if k is None else int(k)), int(res_left.get(bid, 0))
 
-    total = native.simulate_team(world, buildings, workers, duration, max_events, counts, flags_of)
+    total = native.simulate_team(world, buildings, workers, duration, max_events, counts, flags_of, build_points)
     if total is not None:
         return total, workers
-    return simulate_team_py(world, buildings, workers, duration, max_events, counts)
+    return simulate_team_py(world, buildings, workers, duration, max_events, counts, build_points)
 
 
 def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Worker], duration: float,
-                     max_events: int = 4000, counts: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
+                     max_events: int = 4000, counts: Optional[Dict[int, int]] = None,
+                     build_points: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
     """simulate_team 의 파이썬 구현 (네이티브 모듈이 없을 때, 그리고 결과 비교 기준)."""
     res_left, rtype, is_tile = _team_tables(buildings)
     total = [0, 0, 0, 0]
@@ -316,9 +368,11 @@ def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Wor
     def blocks(bid: int, w: Worker) -> bool:
         b = buildings.get(bid) or {}
         t = b.get("type", "")
-        if t in WHEAT_TYPES or w.upgrades.get("kPierceBuildings"):
+        if w.upgrades.get("kPierceBuildings"):
             return False
         if is_tile.get(bid):
+            if t in WHEAT_TYPES:
+                return False
             if res_left.get(bid, 0) <= 0:
                 return False
             kind = rtype.get(bid)
@@ -330,15 +384,14 @@ def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Wor
         n = res_left.get(bid, 0)
         kind = rtype.get(bid)
         if n > 0 and kind is not None:
-            res_left[bid] = 0
+            # 원값→최종 채집량의 의미가 미확인이다. 저장량 전부라는 기존 모형 가정을 명시적으로 보고한다.
+            res_left[bid] -= n
             w.gain[kind] += n
             total[kind] += n
 
-    for _ in range(max_events):
-        live = [w for w in workers if w.t < duration]
-        if not live:
-            break
-        w = min(live, key=lambda q: q.t)
+    def next_event(w: Worker):
+        if w.t >= duration or w.speed <= 0:
+            return None
         best = None
         for i, ((ax, ay), (bx, by)) in enumerate(walls):
             inside = (w.x >= ax - 1e-6, w.x <= ax + 1e-6, w.y <= ay + 1e-6, w.y >= ay - 1e-6)[i]
@@ -346,46 +399,71 @@ def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Wor
             if inside and toward:
                 h = _ray_segment(w.x, w.y, w.dx, w.dy, ax, ay, bx, by)
                 if h and (best is None or h[0] < best[0]):
-                    best = (h[0], h[1], h[2], None)
-        passed = []
+                    best = (h[0], h[1], h[2], None, True)
         for sh in world.shapes:
+            solid = blocks(sh.bid, w)
+            # 빈 타일은 사건을 만들지 않는다. 통과 채집도 실제 접촉 시각의 사건으로 처리한다.
+            if not solid and res_left.get(sh.bid, 0) <= 0:
+                continue
+            if not solid and _inside_shape(sh, w.x, w.y, r):
+                continue
             h = _hit_shape(sh, w.x, w.y, w.dx, w.dy, r)
             if not h:
                 continue
-            if blocks(sh.bid, w):
-                if best is None or h[0] < best[0]:
-                    best = (h[0], h[1], h[2], sh)
-            else:
-                passed.append((h[0], sh.bid))
-        if best is None:
-            w.t = duration
+            if best is None or h[0] < best[0]:
+                best = (h[0], h[1], h[2], sh, solid)
+        if best is None or w.t + best[0] / w.speed >= duration:
+            return None
+        return (w.t + best[0] / w.speed, *best)
+
+    events = [next_event(w) for w in workers]
+    for _ in range(max_events):
+        ready = [i for i, event in enumerate(events) if event is not None]
+        if not ready:
+            for w in workers:
+                if w.t < duration:
+                    rest = (duration - w.t) * w.speed
+                    w.x, w.y, w.t = w.x + w.dx * rest, w.y + w.dy * rest, duration
+                    w.path.append((w.x, w.y, w.t))
             break
-        dist, nx, ny, sh = best
-        # 한 번에 너무 멀리 가지 않게: 다른 작업자와 시간 순서를 맞추려고 최대 0.5초씩 나아간다
-        step = min(dist, w.speed * 0.5)
-        for tp, bid in sorted(passed):
-            if tp <= step:
-                harvest(bid, w)
-        end_t = w.t + step / w.speed
-        if end_t >= duration:
-            rest = (duration - w.t) * w.speed
-            w.x, w.y, w.t = w.x + w.dx * rest, w.y + w.dy * rest, duration
-            w.path.append((w.x, w.y, w.t))
-            continue
-        w.x, w.y, w.t = w.x + w.dx * step, w.y + w.dy * step, end_t
-        if step < dist:
-            continue
-        w.path.append((w.x, w.y, w.t))
+        wi = min(ready, key=lambda i: (events[i][0], i))
+        when, dist, nx, ny, sh, solid = events[wi]
+        w = workers[wi]
+        w.x, w.y, w.t = w.x + w.dx * dist, w.y + w.dy * dist, when
+        changed = sh is not None and res_left.get(sh.bid, 0) > 0
         if sh is not None:
             harvest(sh.bid, w)
-            if counts is not None:
+            if solid and counts is not None:
                 counts[sh.bid] = counts.get(sh.bid, 0) + 1     # 건물에 부딪힌 횟수 (미완성 건물 건설용)
-        if abs(nx) >= abs(ny):
-            w.dx = -w.dx
-        else:
-            w.dy = -w.dy
+            if solid and build_points is not None and buildings.get(sh.bid, {}).get("state") in CONSTRUCTION_STATES:
+                bonus = _game_bonus(w.harvest_bonus, "kMoreBuildPts")
+                build_points[sh.bid] = build_points.get(sh.bid, 0) + 1 + (bonus or 0)
+        if solid:
+            w.path.append((w.x, w.y, w.t))
+            if abs(nx) >= abs(ny):
+                w.dx = -w.dx
+            else:
+                w.dy = -w.dy
+            w.speed += SPEED_UP
         w.x, w.y = w.x + w.dx * 1e-4, w.y + w.dy * 1e-4
-        w.speed += SPEED_UP
+        if changed:
+            # 타일을 비운 바로 그 시각까지만 다른 작업자를 진행시킨다. 그 이후의 반사 후보는 다시 계산한다.
+            simultaneous = {}
+            for j, other in enumerate(workers):
+                old = events[j]
+                if j != wi and old is not None and old[0] == when:
+                    _, _, onx, ony, target, _ = old
+                    blocking = target is None or blocks(target.bid, other)
+                    if blocking or res_left.get(target.bid, 0) > 0:
+                        simultaneous[j] = (when, 0.0, onx, ony, target, blocking)
+                if j != wi and other.t < when:
+                    distance = (when - other.t) * other.speed
+                    other.x, other.y, other.t = other.x + other.dx * distance, other.y + other.dy * distance, when
+            events = [next_event(other) for other in workers]
+            for j, event in simultaneous.items():
+                events[j] = event
+        else:
+            events[wi] = next_event(w)
     return total, workers
 
 
@@ -424,18 +502,24 @@ def team_from_chars(chars_raw: Sequence[dict], order: Optional[Sequence[str]] = 
     out = []
     for c in chars:
         ups = c.get("harvest") or {}
-        out.append({"type": c["type"], "upgrades": ups, "speed": 5.0 + (1.0 if ups.get("kHarvestSpeed") else 0.0)})
+        out.append({"type": c["type"], "upgrades": ups, "speed": 5.0 + (1.0 if ups.get("kHarvestSpeed") else 0.0),
+                    "harvest_bonus": dict(c.get("harvest_bonus") or {})})
     return out
 
 
 def run_angle(world: World, buildings: Dict[int, dict], team: Sequence[dict], angle: float,
-              duration: float, counts: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
+              duration: float, counts: Optional[Dict[int, int]] = None,
+              build_points: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
     lx, ly = world.launcher
     dx, dy = math.cos(math.radians(angle)), math.sin(math.radians(angle))
-    ws = [Worker(lx, ly, dx, dy, world.worker_speed + (m["speed"] - 5.0) * world.worker_speed_mult,
-                 i * LAUNCH_GAP, dict(m["upgrades"]))
-          for i, m in enumerate(team)]
-    return simulate_team(world, buildings, ws, duration, counts=counts)
+    ws = []
+    for i, m in enumerate(team):
+        bonuses = dict(m.get("harvest_bonus") or {})
+        speed_pct = _game_bonus(bonuses, "kHarvestSpeed")
+        speed = (world.worker_speed * (1.0 + speed_pct / 100.0) if speed_pct is not None else
+                 world.worker_speed + (m["speed"] - 5.0) * world.worker_speed_mult)
+        ws.append(Worker(lx, ly, dx, dy, speed, i * LAUNCH_GAP, dict(m["upgrades"]), harvest_bonus=bonuses))
+    return simulate_team(world, buildings, ws, duration, counts=counts, build_points=build_points)
 
 
 @dataclass
@@ -444,21 +528,39 @@ class AngleResult:
     total: List[int]                         # [골드, 밀, 나무, 돌]
     build_hits: int = 0                      # 미완성 건물에 맞은 횟수 (건물마다 더 필요한 만큼까지만 셈)
     per_building: Dict[int, int] = field(default_factory=dict)
+    build_points: Optional[int] = None       # 목표별 남은 공사 점수로 제한한 진행 점수. None은 구형 결과.
+    per_building_points: Dict[int, int] = field(default_factory=dict)
+
+
+def angle_score(result: AngleResult, need: int) -> float:
+    """공사 진행 점수 우선, 필요한 자원과 나머지 자원 순. 구형 결과만 충돌당 1점으로 비교한다."""
+    points = getattr(result, "build_points", None)
+    progress = points if points is not None else result.build_hits
+    return 100 * progress + result.total[need] + 0.25 * (sum(result.total) - result.total[need])
 
 
 def rank_angles(world: World, buildings: Dict[int, dict], team: Sequence[dict], duration: float, need: int,
                 targets: Optional[Dict[int, int]] = None,
                 angles: Sequence[float] = tuple(range(12, 169, 3))) -> List[AngleResult]:
-    """각도별 예상 결과. 미완성 건물 건설(targets: 건물 id → 더 필요한 타격 수)이 먼저, 그다음 필요한 자원,
+    """각도별 예상 결과. 미완성 건물 건설(targets: 건물 id → 더 필요한 공사 점수)이 먼저, 그다음 필요한 자원,
     다른 자원은 4분의 1 가중."""
     targets = targets or {}
     out = []
     for a in angles:
         counts: Dict[int, int] = {}
-        total, _ = run_angle(world, buildings, team, a, duration, counts)
+        points: Dict[int, int] = {}
+        total, _ = run_angle(world, buildings, team, a, duration, counts, points)
         per = {bid: min(counts.get(bid, 0), cap) for bid, cap in targets.items() if counts.get(bid)}
-        out.append(AngleResult(a, total, sum(per.values()), per))
-    out.sort(key=lambda r: -(100 * r.build_hits + r.total[need] + 0.25 * (sum(r.total) - r.total[need])))
+        per_points = {}
+        for bid, cap in targets.items():
+            progress = points.get(bid, 0)
+            if not buildings.get(bid, {}).get("state"):
+                # 예전 플러그인·자료는 공사 상태가 없다. 호환용 1점/접촉이며 게임의 정확한 점수가 아니다.
+                progress = counts.get(bid, 0)
+            if progress > 0:
+                per_points[bid] = min(progress, cap)
+        out.append(AngleResult(a, total, sum(per.values()), per, sum(per_points.values()), per_points))
+    out.sort(key=lambda r: -angle_score(r, need))
     return out
 
 

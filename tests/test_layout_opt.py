@@ -3,6 +3,7 @@ import json
 import os
 import random
 import unittest
+from unittest.mock import patch
 
 from src.engine import layout_opt as lo
 from tests import HAS_GAME_DATA
@@ -107,14 +108,63 @@ class LayoutOptTest(unittest.TestCase):
         moved_base = lo.final_base(base, plan0)          # 건물 위치 + 충돌 모양을 함께 옮긴 기지
         worse = sc.score(lay)[1]["kIdleStoneMine"]
         self.assertLess(worse, before)
+        self.assertEqual((before, worse), (12, 8))
+        # 1.6 원본에는 직접 계수가 없다. 돌 4개를 옮긴 이 합성 입력의 현재 계수(12-4)를 명시한다.
+        moved_base = dict(moved_base, buildings=[dict(b, in_range={"kBoulder": 8}) if b["id"] == mine else b
+                                                for b in moved_base["buildings"]])
         # 채석장 둘레 채우기만 본다 — 발사대 앞 구역 점수는 채석장을 통째로 뒤로 빼는 배치를 고를 수 있어 끈다
         keep = (lo.LANE_W, lo.LANE_TILE_W)
         lo.LANE_W = lo.LANE_TILE_W = 0.0
         try:
-            plan = lo.optimize(moved_base, None, None, seconds=6, restarts=2, seed=1)   # 시간 제한 탐색 — 전체 테스트 부하에서도 찾게
+            # 담금질이 한 번도 개선하지 못해도 미사용 돌을 빈칸에 돌려놓는 기초 후보가 완성돼야 한다.
+            with patch.object(lo, "anneal", side_effect=lambda lay, *args, **kwargs: (dict(lay.origin), 0)), \
+                    patch.object(lo, "polish", return_value=0):
+                plan = lo.optimize(moved_base, None, None, seconds=6, restarts=2, seed=1)
         finally:
             lo.LANE_W, lo.LANE_TILE_W = keep
         self.assertGreaterEqual(plan.detail_after["kIdleStoneMine"], before)
+        self.assertEqual(plan.moved, len(near[:4]))
+        self.assertEqual(plan.origin_after[mine], plan.origin_before[mine])
+
+    def test_producer_tile_repair_uses_only_unclaimed_movable_tiles(self):
+        """합성 기지: 다른 채석장 자원·고정 타일은 보존하고 정말 미사용인 돌만 빈칸으로 옮긴다."""
+        geo = dict(space_w=1.0, chunk_w=8, chunk_h=8, chunks=[[0, 0]], left=0.0, bottom=0.0,
+                   entrance_chunk=[0, 0], colliders=[])
+        common = dict(tw=1, th=1, rot=0, lvl=0, state="kNormal", stat="kNum")
+        base = {"geo": geo, "buildings": [
+            dict(common, id=1, type="kIdleStoneMine", x=1.5, y=1.5, range=1.1, worker=0,
+                 in_range={"kBoulder": 0}),
+            dict(common, id=2, type="kIdleStoneMine", x=6.5, y=6.5, range=1.1, worker=1,
+                 in_range={"kBoulder": 1}),
+            dict(common, id=3, type="kBoulder", x=5.5, y=6.5, range=0, cap=3),
+            dict(common, id=4, type="kBoulder", x=3.5, y=6.5, range=0, cap=3)]}
+        grid = grid_from_geo(geo)
+        for fixed in ([4], []):
+            with self.subTest(fixed=fixed):
+                pieces, origin = lo.pieces_from_base(base, grid, lo.housing_types(), fixed=fixed)
+                scorer = lo.Scorer(pieces, lo._stat_types(base), lo.housing_types())
+                candidate = lo._repair_unused_producer_tiles(base, grid, pieces, origin, scorer)
+                self.assertEqual({i: candidate[i] for i in (1, 2, 3)}, {i: origin[i] for i in (1, 2, 3)})
+                if fixed:
+                    self.assertEqual(candidate, origin)
+                else:
+                    self.assertNotEqual(candidate[4], origin[4])
+                    self.assertEqual(scorer.score(lo.Layout(grid, pieces, candidate))[1]["kIdleStoneMine"], 2)
+                    self.assertFalse(set(lo.Layout(grid, pieces, candidate).cells(4)) & lo.entrance_cells(geo, grid))
+
+    def test_producer_tile_repair_requires_current_game_range_evidence(self):
+        """합성 기지: 직접 계수가 없거나 현재 계산과 다르면 자원 복구 후보를 만들어내지 않는다."""
+        geo = dict(space_w=1.0, chunk_w=8, chunk_h=8, chunks=[[0, 0]], left=0.0, bottom=0.0, colliders=[])
+        common = dict(tw=1, th=1, rot=0, lvl=0, state="kNormal", stat="kNum")
+        for count in (None, {"kBoulder": 1}):
+            with self.subTest(count=count):
+                base = {"geo": geo, "buildings": [
+                    dict(common, id=1, type="kIdleStoneMine", x=1.5, y=1.5, range=1.1, worker=0, in_range=count),
+                    dict(common, id=2, type="kBoulder", x=6.5, y=6.5, range=0, cap=3)]}
+                grid = grid_from_geo(geo)
+                pieces, origin = lo.pieces_from_base(base, grid, lo.housing_types())
+                scorer = lo.Scorer(pieces, lo._stat_types(base), lo.housing_types())
+                self.assertEqual(lo._repair_unused_producer_tiles(base, grid, pieces, origin, scorer), origin)
 
     def test_suggest_buying_stones_for_empty_quarry_slots(self):
         """채석장 둘레에서 돌을 빼 빈칸을 만들면 '바위 더 사기'를 권하고, 놓는 자리는 채석장 네모 안이다."""
@@ -201,7 +251,8 @@ class LayoutOptTest(unittest.TestCase):
         fx, base, grid, pieces, o0 = setup()
         new_id = max(b["id"] for b in base["buildings"]) + 1000
         far = grid.center(1000, 1000, 2, 2)
-        far_bld = dict(id=new_id, type="kIdleStoneMine", x=far[0], y=far[1], tw=2, th=2, rot=0, range=2.25)
+        far_bld = dict(id=new_id, type="kIdleStoneMine", x=far[0], y=far[1], tw=2, th=2, rot=0, range=2.25,
+                       in_range={"kBoulder": 0, "kGraniteSlab": 0, "kStonePile": 0})
         base2 = dict(base, buildings=base["buildings"] + [far_bld])
         out = lo.suggest_demolish(base2)
         self.assertIn(new_id, [i for i, *_ in out])

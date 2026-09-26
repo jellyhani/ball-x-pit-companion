@@ -79,7 +79,8 @@ class GuideContractTest(unittest.TestCase):
         # 임의 담금질 성공 여부가 아닌, 현재 게임 계수로 만든 단독 이동 경로를 확인한다.
         with patch.object(lo, "anneal", side_effect=lambda lay, *a, **k: (dict(lay.origin), 0)), \
                 patch.object(lo, "polish", return_value=0):
-            plan = lo.optimize(base, preset="guide", seconds=0, restarts=1)
+            # 후보 준비도 시간 예산에 포함되므로 양수 예산을 준다. 담금질은 계속 무효화해 단독 이동만 검증한다.
+            plan = lo.optimize(base, preset="guide", seconds=.25, restarts=1)
         after = lo.final_base(base, plan)
         self.assertEqual(plan.moved, 1)
         self.assertNotEqual(plan.origin_after[2], plan.origin_before[2])
@@ -109,6 +110,7 @@ class GuideContractTest(unittest.TestCase):
         state = SimpleNamespace(_base_snap={"buildings": [], "geo": {"colliders": [{"id": 1}], "harvest_len": 9}},
                                 meta=MetaState(resources=(100, 20, 10, 5)), _layout_busy=False,
                                 _harvest_dur=16, layout_plan=None, sim=SimpleNamespace(submit=submit),
-                                _shortfalls=lambda: {})
+                                _shortfalls=lambda: {}, aim_range=SimpleNamespace(limits=(25, 155)),
+                                _layout_fingerprint=lambda _b: "test-key", _sim_req={})
         AppController.compute_layout(state)
         self.assertEqual(submit.call_args.args[5], 9)

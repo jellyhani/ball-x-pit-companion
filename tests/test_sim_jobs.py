@@ -34,10 +34,12 @@ class UnfinishedTest(unittest.TestCase):
         self.assertEqual(u[0].hits_left, 1)
         self.assertFalse(u[0].exact)
 
-    def test_exact_hits_from_plugin(self):
+    def test_exact_points_are_not_claimed_as_exact_hits(self):
         base = {"buildings": [{"id": 5, "type": "kClinic", "state": "kUpgrading", "upg_pts": 3, "upg_tgt": 8}]}
         u = unfinished_buildings(base, None)
-        self.assertEqual((u[0].hits_left, u[0].exact), (5, True))
+        self.assertEqual((u[0].remaining_points, u[0].points_exact), (5, True))
+        self.assertEqual(u[0].hits_left, 5)
+        self.assertFalse(u[0].exact)  # 작업자 강화에 따라 1회 충돌로 얻는 공사 점수가 달라진다.
 
     def test_meta_misaligned_is_ignored(self):
         base = {"buildings": [{"id": 1, "type": "kForest"}]}
@@ -104,9 +106,9 @@ class RankTest(unittest.TestCase):
 
 class SimWorkerTest(unittest.TestCase):
     def test_process_worker_returns_latest_only(self):
-        from PySide6.QtCore import QCoreApplication
+        from PySide6.QtWidgets import QApplication
         from src.services.sim_worker import SimWorker
-        app = QCoreApplication.instance() or QCoreApplication([])
+        app = QApplication.instance() or QApplication([])  # 뒤에 UI 검사도 같은 Qt 인스턴스를 쓴다.
         fx = load()
         blds = {b["id"]: b for b in fx["buildings_before"]}
         team = team_of(fx)

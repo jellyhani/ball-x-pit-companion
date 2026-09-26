@@ -52,7 +52,7 @@ def advise(run: RunState, data: GameData, p: Optional[RunProgress], best_depth: 
         else:
             reasons.append(tr("체력 {pct}%", pct=pct))
     owned = run.owned
-    heal = any(data.has_tag(i, "heal_source") for i in owned)
+    heal = any(data.has_tag(i, "heal_source") for i in run.effect_ids)
     if heal:
         score += 1
         reasons.append(tr("회복 수단 보유"))

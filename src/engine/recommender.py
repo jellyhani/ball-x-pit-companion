@@ -50,6 +50,7 @@ class ActionEval:
     reasons: List[Reason] = field(default_factory=list)
     warnings: List[Reason] = field(default_factory=list)
     effect: str = ""                  # 이 선택의 실제 수치 변화 (게임 레벨별 수치, 예: '받는 피해 감소 10% → 20%')
+    target_step: bool = False          # 사용자 고정 목표의 다음 재료 획득/강화. 게임 성능 점수와 구분한다.
 
     @property
     def evaluated(self) -> bool:
@@ -74,7 +75,7 @@ class ActionEval:
     @property
     def linked(self) -> bool:
         """진화 레시피로 현재 덱과 이어지는지."""
-        return any(r.rule_id.startswith(("evo_", "passive_recipe")) for r in self.reasons)
+        return self.target_step or any(r.rule_id.startswith(("evo_", "passive_recipe")) for r in self.reasons)
 
     @property
     def plan_blocked(self) -> bool:
@@ -208,9 +209,22 @@ class Recommender:
                                   None, evals, reroll_status="unknown", reroll_text=tr("새로고침 판단 보류"),
                                   situation=situation, plan_text=plan.text, limitations=limitations)
 
-        ranked = sorted(known, key=lambda e: (-e.score, e.card.index))
+        # 고정 목표는 임의 점수를 더하지 않고 명시적인 선택 방침으로 적용한다.
+        # 기존 생존 규칙의 위험 기준(체력 35% 미만)에서는 회복/방어 선택을 먼저 둔다.
+        target_active = any(e.target_step for e in known)
+        low_hp = progress is not None and progress.health_ratio is not None and progress.health_ratio < 0.35
+        def priority(e):
+            if not target_active:
+                return 0
+            survival = low_hp and any(r.rule_id in ("heal_low_hp", "passive_defense_low_hp") for r in e.reasons)
+            if survival and not any(w.rule_id in ("slot_full", "char_reduces") for w in e.warnings):
+                return 2
+            return 1 if e.target_step else 0
+        ranked = sorted(known, key=lambda e: (-priority(e), -e.score, e.card.index))
         best = ranked[0]
-        close = [e for e in ranked[1:] if best.score - e.score < CLOSE_MARGIN]
+        if target_active and priority(best) == 2 and not best.target_step:
+            best.reasons.append(Reason("target_survival", tr("체력이 낮아 고정 목표보다 생존을 우선"), 0, tr("생존")))
+        close = [e for e in ranked[1:] if priority(e) == priority(best) and best.score - e.score < CLOSE_MARGIN]
         if not any(e.strong and not e.plan_blocked for e in known):
             status, headline = "hold", tr("뚜렷한 차이 없음")
             limitations.append(tr("현재 조합과 연결되는 선택지를 찾지 못함"))
@@ -230,6 +244,8 @@ class Recommender:
             confidence = tr("근소")
         else:
             confidence = tr("확실") if margin >= 15 or decisive else tr("추천")
+            if target_active:
+                confidence = tr("추천")   # 목표를 따른다는 사실은 성능 차이의 확신도가 아니다.
         odds = self.reroll_odds(session, plan, run)
         rs, rt = self._reroll(session, known, unknown, status, odds)
         banish_card, banish_text = self._banish(session, known, best if status != "hold" else None, run, plan)
@@ -555,7 +571,7 @@ class Recommender:
 
     def _support(self, ev: ActionEval, item_id: str, run: RunState, progress: Optional[RunProgress]):
         d = self.data
-        owned_ids = [i for i in run.owned if i != item_id]
+        owned_ids = run.effect_ids
         has_heal = any(d.has_tag(i, "heal_source") for i in owned_ids)
         hr = progress.health_ratio if progress else None
         if d.has_tag(item_id, "heal_source"):
@@ -700,7 +716,7 @@ class Recommender:
     def _plan_line(self, plan: DeckPlan, best: Optional[ActionEval]) -> str:
         """추천 카드가 이미 같은 진화를 말하고 있으면 목표 줄은 겹치므로 뺀다."""
         target = plan.target_text
-        if target and best is not None and plan.targets:
+        if target and best is not None and plan.targets and not plan.locked:
             name = self.data.name(plan.targets[0].recipe.result)
             if any(name in r.text for r in best.reasons):
                 target = ""
@@ -711,6 +727,15 @@ class Recommender:
     def _plan(self, ev: ActionEval, kind: str, upgrade: bool, plan: DeckPlan):
         """덱 방향에 따른 규칙: 최대 레벨 도달(융합 재료), 무한의 심연, 마지막 빈 칸."""
         d = self.data
+        iid = ev.card.item_id
+        wanted = iid in (plan.locked_core if upgrade else plan.locked_wanted)
+        free = plan.free_slots(kind)
+        incompatible = any(w.rule_id in ("slot_full", "char_reduces", "char_sisyphus_direct") for w in ev.warnings)
+        if plan.locked and wanted and not incompatible and (upgrade or free is None or free > 0):
+            ev.target_step = True
+            ev.reasons.append(Reason("locked_target_step",
+                                     tr("고정 목표 {name}에 필요한 재료 획득·강화", name=d.name(plan.targets[0].recipe.result)),
+                                     0, tr("고정 목표")))
         if upgrade and kind == "ball" and d.max_level_known("ball") and ev.level_after == d.max_level("ball") \
                 and not any(r.rule_id == "evo_ready" for r in ev.reasons):
             ev.reasons.append(Reason("reach_max_fusion", tr("이번 강화로 최대 레벨 — 융합 화면에서 다른 최대 레벨 볼과 합칠 수 있음"),
@@ -743,7 +768,7 @@ class Recommender:
             return "none", tr("새로고침 불가 — {price}", price=price)
         if unknown:
             return "unknown", tr("새로고침 판단 보류 — 읽지 못한 카드가 있음")
-        weak = status == "hold" or all(e.score < 8 for e in known)
+        weak = status == "hold" or all(e.score < 8 and not e.target_step for e in known)
         if not weak:
             return "keep", tr("새로고침 불필요 — 조합에 이어지는 선택지가 있음")
         chance = ""

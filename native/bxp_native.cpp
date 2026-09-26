@@ -29,7 +29,7 @@ const double EPS = 1e-6;
 const double SPEED_UP = 0.2;
 
 enum { K_CIRCLE = 0, K_BOX = 1, K_POLY = 2 };      // 모양 종류 (파이썬 Shape.kind)
-enum { F_WHEAT = 1, F_TILE = 2 };                   // 건물 성질
+enum { F_WHEAT = 1, F_TILE = 2, F_BUILD = 4 };       // 건물 성질
 enum { U_PIERCE_BUILDINGS = 1, U_PIERCE_STONE = 2, U_PIERCE_WOOD = 4 };   // 작업자 채집 강화
 
 inline double fabs_(double x) { return x < 0 ? -x : x; }
@@ -116,16 +116,35 @@ bool hit_shape(const Geo& g, int i, double ox, double oy, double dx, double dy, 
     return have;
 }
 
+bool inside_shape(const Geo& g, int i, double x, double y, double r) {
+    if (g.kind[i] == K_CIRCLE) {
+        double dx = x - g.circ[3 * i], dy = y - g.circ[3 * i + 1], rr = g.circ[3 * i + 2] + r;
+        return dx * dx + dy * dy < rr * rr;
+    }
+    if (g.kind[i] == K_BOX) {
+        const double* bb = g.bb + 4 * i;
+        return bb[0] - r < x && x < bb[2] + r && bb[1] - r < y && y < bb[3] + r;
+    }
+    const double* p = g.pts + 2 * g.pt_off[i];
+    bool inside = false;
+    for (int k = 0; k < g.pt_cnt[i]; k++) {
+        int j = (k + 1) % g.pt_cnt[i];
+        double ax = p[2 * k], ay = p[2 * k + 1], bx = p[2 * j], by = p[2 * j + 1];
+        if ((ay > y) != (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax) inside = !inside;
+    }
+    return inside;
+}
+
 }  // namespace
 
-BXP_API int bxp_version() { return 1; }
+BXP_API int bxp_version() { return 2; }
 
 // 여러 작업자를 시간 순서로 함께 돌린다 (harvest_sim.simulate_team 과 같음).
 //   world: left, right, bottom, top, radius
 //   모양 n_shapes 개: kind, slot(건물 슬롯), bid, pt_off/pt_cnt (pts 의 x,y 쌍), circ (cx, cy, r), bb (x0, y0, x1, y1)
 //   건물 슬롯: flags (F_WHEAT/F_TILE), rtype (없으면 -1), res (남은 자원 — 계산하며 바뀜, 호출한 쪽 사본)
 //   작업자 n_workers 개: wk (x, y, dx, dy, speed, t — 계산하며 바뀜, 마지막 상태가 남음), ups (U_* 비트)
-//   작업 공간: tmp_t (n_shapes), tmp_i (2 * n_shapes)
+//   작업 공간: event_values (4 * n_workers), event_kinds (2 * n_workers)
 // 결과: out_total[4], out_gain[4*n_workers], out_counts[슬롯] (부딪힌 횟수),
 //       out_path: (작업자, x, y, t) 4개씩 path_cap 개까지. 돌려주는 값 = 경로 점 수 (넘치면 -1).
 BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind, const int* slot, const int* bid,
@@ -134,96 +153,119 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
                               int n_workers, double* wk, const int* ups,
                               double duration, int max_events,
                               int* out_total, int* out_gain, int* out_counts,
-                              double* out_path, int path_cap, double* tmp_t, int* tmp_i) {
+                              double* out_path, int path_cap, double* event_values, int* event_kinds,
+                              const int* build_bonus, int* out_build_points) {
     const double left = world[0], right = world[1], bottom = world[2], top = world[3], r = world[4];
     Geo g{kind, pt_off, pt_cnt, pts, circ, bb};
     int npath = 0;
     bool overflow = false;
-    for (int i = 0; i < n_workers; i++) {
-        if (npath >= path_cap) { overflow = true; break; }
+    auto path_point = [&](int i) {
+        if (npath >= path_cap) { overflow = true; return; }
         double* q = out_path + 4 * npath++;
         q[0] = i; q[1] = wk[6 * i]; q[2] = wk[6 * i + 1]; q[3] = wk[6 * i + 5];
-    }
-    // 벽: 왼·오른·위·아래 (파이썬과 같은 끝점)
+    };
+    for (int i = 0; i < n_workers; i++) path_point(i);
     const double walls[4][4] = {{left + r, -1e3, left + r, 1e3}, {right - r, -1e3, right - r, 1e3},
                                 {-1e3, top - r, 1e3, top - r}, {-1e3, bottom + r, 1e3, bottom + r}};
-    int* p_bid = tmp_i;
-    int* p_slot = tmp_i + n_shapes;
-
-    for (int ev = 0; ev < max_events; ev++) {
-        int wi = -1;
-        for (int i = 0; i < n_workers; i++)
-            if (wk[6 * i + 5] < duration && (wi < 0 || wk[6 * i + 5] < wk[6 * wi + 5])) wi = i;
-        if (wi < 0) break;
-        double* w = wk + 6 * wi;          // x, y, dx, dy, speed, t
-        const int wu = ups[wi];
+    auto blocks = [&](int sl, int wi) {
+        const int f = flags[sl], wu = ups[wi];
+        if ((f & F_WHEAT) || (wu & U_PIERCE_BUILDINGS)) return false;
+        if (f & F_TILE) {
+            if (res[sl] <= 0) return false;
+            int k = rtype[sl];
+            if ((k == 3 && (wu & U_PIERCE_STONE)) || (k == 2 && (wu & U_PIERCE_WOOD))) return false;
+        }
+        return true;
+    };
+    // 사건 값: 시각, 거리, 법선 x/y. 종류: 충돌 모양(-2 없음/-1 벽), 반사 여부.
+    auto next_event = [&](int wi) {
+        double* w = wk + 6 * wi;
+        double* e = event_values + 4 * wi;
+        int* ek = event_kinds + 2 * wi;
+        ek[0] = -2;
+        if (w[5] >= duration || w[4] <= 0) return;
         bool have = false;
         double bt = 0, bnx = 0, bny = 0;
-        int bshape = -1;
+        int bshape = -1, solid = 1;
         for (int i = 0; i < 4; i++) {
             const double* a = walls[i];
             bool inside = (i == 0) ? w[0] >= a[0] - 1e-6 : (i == 1) ? w[0] <= a[0] + 1e-6
                         : (i == 2) ? w[1] <= a[1] + 1e-6 : w[1] >= a[1] - 1e-6;
             bool toward = (i == 0) ? w[2] < 0 : (i == 1) ? w[2] > 0 : (i == 2) ? w[3] > 0 : w[3] < 0;
-            if (inside && toward) {
-                double t, nx, ny;
-                if (ray_segment(w[0], w[1], w[2], w[3], a[0], a[1], a[2], a[3], t, nx, ny) && (!have || t < bt)) {
-                    have = true; bt = t; bnx = nx; bny = ny; bshape = -1;
-                }
-            }
-        }
-        int np = 0;
-        for (int i = 0; i < n_shapes; i++) {
             double t, nx, ny;
-            if (!hit_shape(g, i, w[0], w[1], w[2], w[3], r, t, nx, ny)) continue;
-            int sl = slot[i], f = flags[sl];
-            bool blocks = true;
-            if ((f & F_WHEAT) || (wu & U_PIERCE_BUILDINGS)) blocks = false;
-            else if (f & F_TILE) {
-                int k = rtype[sl];
-                if (res[sl] <= 0) blocks = false;
-                else if ((k == 3 && (wu & U_PIERCE_STONE)) || (k == 2 && (wu & U_PIERCE_WOOD))) blocks = false;
-            }
-            if (blocks) {
-                if (!have || t < bt) { have = true; bt = t; bnx = nx; bny = ny; bshape = i; }
-            } else {
-                // 통과한 건물: (거리, id) 순서로 넣어 둔다 (삽입 정렬 — 파이썬 sorted 와 같은 순서)
-                int k = np++;
-                while (k > 0 && (tmp_t[k - 1] > t || (tmp_t[k - 1] == t && p_bid[k - 1] > bid[i]))) {
-                    tmp_t[k] = tmp_t[k - 1]; p_bid[k] = p_bid[k - 1]; p_slot[k] = p_slot[k - 1]; k--;
-                }
-                tmp_t[k] = t; p_bid[k] = bid[i]; p_slot[k] = sl;
+            if (inside && toward &&
+                ray_segment(w[0], w[1], w[2], w[3], a[0], a[1], a[2], a[3], t, nx, ny) &&
+                (!have || t < bt)) {
+                have = true; bt = t; bnx = nx; bny = ny; bshape = -1; solid = 1;
             }
         }
-        if (!have) {
-            w[5] = duration;
-            break;                        // 파이썬과 같음: 아무것에도 닿지 않으면 계산을 끝낸다
+        for (int i = 0; i < n_shapes; i++) {
+            bool blocking = blocks(slot[i], wi);
+            if (!blocking && res[slot[i]] <= 0) continue;
+            if (!blocking && inside_shape(g, i, w[0], w[1], r)) continue;
+            double t, nx, ny;
+            if (hit_shape(g, i, w[0], w[1], w[2], w[3], r, t, nx, ny) && (!have || t < bt)) {
+                have = true; bt = t; bnx = nx; bny = ny; bshape = i; solid = blocking ? 1 : 0;
+            }
         }
-        double step = min_(bt, w[4] * 0.5);
-        for (int k = 0; k < np; k++) {
-            if (tmp_t[k] > step) continue;
-            int sl = p_slot[k], n = res[sl], kd = rtype[sl];
-            if (n > 0 && kd >= 0) { res[sl] = 0; out_gain[4 * wi + kd] += n; out_total[kd] += n; }
+        if (!have || w[5] + bt / w[4] >= duration) return;
+        e[0] = w[5] + bt / w[4]; e[1] = bt; e[2] = bnx; e[3] = bny;
+        ek[0] = bshape; ek[1] = solid;
+    };
+    for (int i = 0; i < n_workers; i++) next_event(i);
+    for (int ev = 0; ev < max_events; ev++) {
+        int wi = -1;
+        for (int i = 0; i < n_workers; i++)
+            if (event_kinds[2 * i] != -2 && (wi < 0 || event_values[4 * i] < event_values[4 * wi])) wi = i;
+        if (wi < 0) {
+            for (int i = 0; i < n_workers; i++) {
+                double* q = wk + 6 * i;
+                if (q[5] >= duration) continue;
+                double distance = (duration - q[5]) * q[4];
+                q[0] = q[0] + q[2] * distance; q[1] = q[1] + q[3] * distance; q[5] = duration;
+                path_point(i);
+            }
+            break;
         }
-        double end_t = w[5] + step / w[4];
-        if (end_t >= duration) {
-            double rest = (duration - w[5]) * w[4];
-            w[0] = w[0] + w[2] * rest; w[1] = w[1] + w[3] * rest; w[5] = duration;
-        } else {
-            w[0] = w[0] + w[2] * step; w[1] = w[1] + w[3] * step; w[5] = end_t;
-            if (step < bt) continue;
+        double* w = wk + 6 * wi;
+        const double* e = event_values + 4 * wi;
+        double when = e[0], distance = e[1], nx = e[2], ny = e[3];
+        int shape = event_kinds[2 * wi], solid = event_kinds[2 * wi + 1];
+        w[0] = w[0] + w[2] * distance; w[1] = w[1] + w[3] * distance; w[5] = when;
+        bool changed = false;
+        if (shape >= 0) {
+            int sl = slot[shape], n = res[sl], kd = rtype[sl];
+            changed = n > 0;
+            if (n > 0 && kd >= 0) {
+                res[sl] -= n; out_gain[4 * wi + kd] += n; out_total[kd] += n;
+            }
+            if (solid) out_counts[sl] += 1;
+            if (solid && (flags[sl] & F_BUILD)) out_build_points[sl] += 1 + build_bonus[wi];
         }
-        if (npath >= path_cap) overflow = true;
-        else { double* q = out_path + 4 * npath++; q[0] = wi; q[1] = w[0]; q[2] = w[1]; q[3] = w[5]; }
-        if (end_t >= duration) continue;
-        if (bshape >= 0) {
-            int sl = slot[bshape], n = res[sl], kd = rtype[sl];
-            if (n > 0 && kd >= 0) { res[sl] = 0; out_gain[4 * wi + kd] += n; out_total[kd] += n; }
-            out_counts[sl] += 1;
+        if (solid) {
+            path_point(wi);
+            if (fabs_(nx) >= fabs_(ny)) w[2] = -w[2]; else w[3] = -w[3];
+            w[4] += SPEED_UP;
         }
-        if (fabs_(bnx) >= fabs_(bny)) w[2] = -w[2]; else w[3] = -w[3];
         w[0] = w[0] + w[2] * 1e-4; w[1] = w[1] + w[3] * 1e-4;
-        w[4] += SPEED_UP;
+        if (changed) {
+            // 자원이 바뀐 시각까지 동료를 진행한 뒤 그 이후 사건을 새로 계산한다.
+            for (int j = 0; j < n_workers; j++) {
+                double* q = wk + 6 * j;
+                double* old = event_values + 4 * j;
+                int* old_kind = event_kinds + 2 * j;
+                int target = old_kind[0];
+                bool simultaneous = j != wi && target != -2 && old[0] == when;
+                bool blocking = simultaneous && (target < 0 || blocks(slot[target], j));
+                bool keep = simultaneous && (blocking || res[slot[target]] > 0);
+                if (j != wi && q[5] < when) {
+                    double d = (when - q[5]) * q[4];
+                    q[0] = q[0] + q[2] * d; q[1] = q[1] + q[3] * d; q[5] = when;
+                }
+                if (keep) { old[1] = 0; old_kind[1] = blocking ? 1 : 0; }
+                else next_event(j);
+            }
+        } else next_event(wi);
     }
     return overflow ? -1 : npath;
 }

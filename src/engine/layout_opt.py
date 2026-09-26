@@ -27,7 +27,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Sequence, Set, Tuple
 
-from .layout import Bld, Grid, Move, buildings_from_base, grid_from_geo, shape_masks
+from .layout import Bld, Grid, Move, MoveSequence, buildings_from_base, grid_from_geo, shape_masks
 from ..i18n import tr
 
 WHEAT_T = {"kWheatField", "kDenseWheat"}
@@ -392,6 +392,78 @@ def preserves_production(base: dict, candidate: dict, pad: float = 0.0) -> bool:
     return True
 
 
+def _repair_unused_producer_tiles(base: dict, grid: Grid, pieces: Dict[int, Piece], origin0: Dict[int, Tuple[int, int]],
+                                  scorer: "Scorer", pad: float = 0.0,
+                                  deadline: Optional[float] = None) -> Dict[int, Tuple[int, int]]:
+    """직접 계수를 확인한 생산 건물의 빈칸에, 어느 자원 효과도 받지 않는 타일만 옮긴 결정적 후보."""
+    from .layout_city import PRODUCERS
+    from .layout_guide import preserves_guide
+
+    raw = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
+    lay = Layout(grid, pieces, origin0)
+    entrance = entrance_cells(base.get("geo") or {}, grid)
+    effects = [p for p in pieces.values() if p.range > 0 and p.factor > 0
+               and isinstance(EFFECTS.get(p.type, (None,))[0], int)]
+    receivers = []
+    for i, p in sorted(pieces.items()):
+        counted = raw.get(i, {}).get("in_range")
+        if (p.type not in PRODUCERS or p.factor < 1.0 or p.unfinished or p.range <= 0
+                or not isinstance(counted, dict) or not counted
+                or not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in counted.values())):
+            continue
+        x, y = lay.center(i)
+        actual = sum(in_range(lay.center(j)[0] - x, lay.center(j)[1] - y, p.range + pad)
+                     for j, q in pieces.items() if TILE_RES.get(q.type) == PRODUCERS[p.type])
+        if actual == sum(counted.values()):
+            receivers.append(i)
+    score = scorer.score(lay)[0]
+    for i in receivers:
+        p = pieces[i]
+        kind = PRODUCERS[p.type]
+        x, y = lay.center(i)
+        def unused(j):
+            tx, ty = lay.center(j)
+            return not any(EFFECTS[e.type][0] == kind and
+                           in_range(tx - lay.center(e.id)[0], ty - lay.center(e.id)[1], e.range + pad)
+                           for e in effects)
+
+        donors = [j for j, q in pieces.items() if TILE_RES.get(q.type) == kind
+                  and q.movable and not q.unfinished and unused(j)]
+        donors.sort(key=lambda j: (-pieces[j].cap, abs(lay.center(j)[0] - x) + abs(lay.center(j)[1] - y), j))
+        for j in donors:
+            if deadline is not None and time.perf_counter() >= deadline:
+                break
+            q = pieces[j]
+            old = lay.origin[j]
+            spots = []
+            for at in grid.tiles:
+                tx, ty = grid.center(*at, q.w, q.h)
+                if not in_range(tx - x, ty - y, p.range + pad):
+                    continue
+                cells = {(at[0] + dx, at[1] + dy) for dx, dy in q.rel}
+                if cells <= grid.tiles and not cells & entrance and not cells & lay.occ.keys():
+                    spots.append(at)
+            spots.sort(key=lambda at: (abs(at[0] - old[0]) + abs(at[1] - old[1]), at))
+            for at in spots:
+                if deadline is not None and time.perf_counter() >= deadline:
+                    break
+                undo = lay.apply([(j, at)])
+                gain = scorer.score(lay)[0]
+                if gain > score + 1e-6:
+                    score = gain
+                    break
+                lay.apply(undo)
+    if lay.origin == origin0:
+        return dict(origin0)
+    proposal = final_base(base, FullPlan(dict(origin0), dict(lay.origin),
+                                        {i: lay.center(i) for i in lay.origin}, 0, 0, {}, {}))
+    # 타일을 공급하는 과정에서도 기존 생산·허브·입구와 실행 가능한 이동 순서를 보존한다.
+    if (not preserves_production(base, proposal, pad) or not preserves_guide(base, proposal, pad)
+            or not move_sequence(grid, pieces, origin0, lay.origin, avoid=entrance).complete):
+        return dict(origin0)
+    return dict(lay.origin)
+
+
 PRESETS = {"effect": tr("효과 최대"), "gold_u": tr("금광 U자"), "plan": tr("계획도시")}
 PRESET_W = 20.0          # 프리셋 자리에 놓인 금광 하나의 가산 (범위 효과보다 크게 — 사용자가 고른 공략 틀을 따름)
 PRESET_CLEAR = 4.0       # 아직 금광이 없는 프리셋 자리를 다른 건물이 막는 칸마다 감점 — 0.5 는 약해서 채석장이 자리를 차지한 채 남음
@@ -567,6 +639,8 @@ def _near_spots(lay: Layout, scorer: Scorer, i: int, cand: List[Tuple[int, int]]
 def polish(lay: Layout, scorer: Scorer, origin0: Dict[int, Tuple[int, int]], seconds: float = 3.0) -> float:
     """마무리: 건물마다 같은 크기의 모든 자리와 맞바꿔 보고 가장 좋은 것을 받아들인다 (더 나아지지 않을 때까지).
     네이티브 모듈(같은 규칙)이 있으면 그것으로."""
+    if seconds <= 0:
+        return _objective(lay, scorer, origin0)
     from . import native_layout
     got = native_layout.polish(lay, scorer, origin0, seconds, MOVE_COST)
     if got is not None:
@@ -589,6 +663,8 @@ def polish(lay: Layout, scorer: Scorer, origin0: Dict[int, Tuple[int, int]], sec
                             if all((c + dx, r + dy) in grid.tiles for dx in range(p.w) for dy in range(p.h))]
             best = (cur, None)
             for b in spots[k]:
+                if time.perf_counter() - start >= seconds:
+                    return cur
                 undo = lay.swap_regions(lay.origin[i], b, p.w, p.h)
                 if undo is None:
                     continue
@@ -611,6 +687,8 @@ def anneal(lay: Layout, scorer: Scorer, seconds: float, rng: random.Random,
     from . import native_layout
     grid = lay.grid
     origin0 = origin0 if origin0 is not None else dict(lay.origin)
+    if seconds <= 0:
+        return dict(lay.origin), scorer.score(lay)[0]
     got = native_layout.anneal(lay, scorer, seconds, rng.getrandbits(64), t0, t1, origin0, EXPLORE_COST)
     if got is not None:
         return got[0], got[1]
@@ -676,7 +754,7 @@ def canonicalize(pieces: Dict[int, Piece], origin0: Dict[int, Tuple[int, int]],
     groups: Dict[tuple, List[int]] = {}
     for i, p in pieces.items():
         if i in final:
-            groups.setdefault((p.type, p.w, p.h, p.rel, p.factor, p.movable), []).append(i)
+            groups.setdefault((p.type, p.w, p.h, p.rel, p.factor, p.movable, p.range, p.cap, p.unfinished), []).append(i)
     out = dict(final)
     for ids in groups.values():
         if len(ids) < 2:
@@ -700,7 +778,7 @@ def canonicalize(pieces: Dict[int, Piece], origin0: Dict[int, Tuple[int, int]],
 def move_sequence(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int, int]],
                   target: Dict[int, Tuple[int, int]], turn: Optional[Dict[int, int]] = None,
                   avoid: Set[Tuple[int, int]] = frozenset()
-                  ) -> List[Tuple[int, Tuple[int, int], bool]]:
+                  ) -> MoveSequence:
     """지금 배치 → 목표 배치로 가는 옮기기 순서 (한 번에 한 건물, 항상 빈 자리로만).
 
     1) 목표 자리가 비어 있는 건물을 모두 옮긴다.
@@ -708,11 +786,21 @@ def move_sequence(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int
        그 건물은 다음 차례에 제자리로 간다 — 매 단계 최소 한 건물이 목표 자리에 확정되므로 반드시 끝난다.
     목표 자리끼리는 겹치지 않으므로 목표 자리를 막는 건물은 항상 아직 안 옮긴 건물이다.
     turn: 목표 자리에 회전해서 놓을 건물 → 시계 방향 90° 횟수. 목표 자리로 가는 한 번에 회전도 한다 (비켜 두기는 그대로).
-    돌려주는 값: [(건물, 옮길 자리(왼쪽 아래 타일), 잠시 비켜 두기인지)]."""
+    돌려주는 값: 목록 호환 MoveSequence. 실패하면 complete=False, unresolved에 남은 건물을 넣고
+    부분 이동은 반환하지 않는다 (도중에 멈추는 순서를 완성 가능한 안내로 내보내지 않도록)."""
+    if not set(target) <= set(pieces) or not set(target) <= set(cur):
+        return MoveSequence(complete=False, unresolved=sorted(set(target) - (set(pieces) & set(cur))))
+    target = {**cur, **target}
     lay = Layout(grid, dict(pieces), cur)
     turn = turn or {}
     goal_piece = {i: rotated(pieces[i], turn.get(i, 0)) for i in target}
     pending = [i for i in target if lay.origin.get(i) != target[i] or i in turn]
+    requested = tuple(pending)
+    goal_cells_all = [(target[i][0] + dx, target[i][1] + dy)
+                      for i, p in goal_piece.items() for dx, dy in p.rel]
+    if (len(goal_cells_all) != len(set(goal_cells_all)) or not set(goal_cells_all) <= grid.tiles
+            or any(not pieces[i].movable for i in pending)):
+        return MoveSequence(complete=False, unresolved=pending)
     steps: List[Tuple[int, Tuple[int, int], bool]] = []
 
     def goal_cells(i: int) -> List[Tuple[int, int]]:
@@ -761,10 +849,10 @@ def move_sequence(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int
                     if clash == 0:
                         break
             if best is None:
-                return steps                               # 비켜 둘 곳이 없음 (땅이 꽉 참) — 여기까지만
+                return MoveSequence(complete=False, unresolved=requested)
             lay.apply([(j, best[1])])
             steps.append((j, best[1], True))
-    return steps
+    return MoveSequence(steps, complete=not pending, unresolved=requested if pending else ())
 
 
 def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = None,
@@ -773,6 +861,8 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
              fixed: Sequence[int] = (), pad: float = 0.0,
              prefer: Optional[Dict[int, Tuple[float, float]]] = None, preset: str = "effect") -> Optional[FullPlan]:
     """전체 재배치 최적화. harvest_eval(geo) → [골드, 밀, 나무, 돌] (채집 발사 예상), reach_ok(base) → 미완성 건물에 닿는지."""
+    # 후보 준비도 탐색 예산에 포함한다. 선택된 후보의 물리 검증 시간은 별도이며 생략하지 않는다.
+    search_deadline = time.perf_counter() + max(0.0, seconds)
     from .layout import move_geo
     geo = base.get("geo") or {}
     grid = grid_from_geo(geo)
@@ -824,6 +914,14 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         cands.append((o, scorer.score(Layout(grid, sp, o))[0]))
         if turn:
             turn_of[id(o)] = dict(turn)
+    # 단순히 생산 범위 안의 빈칸을 복구하는 일은 시간 제한 무작위 탐색의 성공 여부에 맡기지 않는다.
+    restored_origin = None
+    if preset in ("effect", "guide"):
+        restored = _repair_unused_producer_tiles(base, grid, pieces, origin0, scorer, pad, search_deadline)
+        if restored != origin0:
+            add_cand(restored, {})
+            restored_origin = cands[-1][0]
+            starts.append((restored, {}, set()))
     producer_ids = []
     producer_targets = {}
     if guide:
@@ -875,10 +973,14 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         # 이미 배정된 생산 건물이 자기 자원 타일을 거의 못 쓰면, 건물 하나만 빈 자리로 옮기는 후보를 먼저 넣는다.
         # 실제 기지: 채석장 범위 바위 1/12, 빈 자리 한 곳으로 옮기면 4/12인데 전체 점수 2% 문턱에 묻혔다.
         for i in producer_ids:
+            if time.perf_counter() >= search_deadline:
+                break
             p = pieces[i]
             kind = PRODUCERS[p.type]
             best_spot = None
             for at in sorted(grid.tiles):
+                if time.perf_counter() >= search_deadline:
+                    break
                 cells = {(at[0] + dx, at[1] + dy) for dx, dy in p.rel}
                 if not cells <= grid.tiles or cells & entrance or any(lay0.occ.get(c) not in (None, i) for c in cells):
                     continue
@@ -902,6 +1004,8 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         # 범위 수치는 게임 현재 계수와 맞을 때만 사용하며, 다른 허브 효과를 잃는 후보는 아래에서 거른다.
         house_candidates = []
         for i, p in pieces.items():
+            if time.perf_counter() >= search_deadline:
+                break
             eff = EFFECTS.get(p.type)
             count = raw.get(i, {}).get("in_range")
             if (not eff or not isinstance(eff[0], int) or eff[3] != "upgraded" or p.factor < 1.0
@@ -918,6 +1022,8 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             house_counts[i] = (eff[0], n0)
             house_spots = []
             for at in sorted(grid.tiles):
+                if time.perf_counter() >= search_deadline:
+                    break
                 cells = {(at[0] + dx, at[1] + dy) for dx, dy in p.rel}
                 if not cells <= grid.tiles or cells & entrance or any(lay0.occ.get(c) not in (None, i) for c in cells):
                     continue
@@ -936,14 +1042,18 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             for _, o in house_spots[:6]:
                 house_candidates.append(o)
                 add_cand(o, {})
-        variants = [(pieces, groups, lane)]
+        variants = []
         if production_pin:
             protected = pinned_of({}, production_pin)
             variants.append((protected, groups, lane))
             # 건설 앞구역을 강제하는 단계가 안전한 거처 개선까지 취소하지 않도록 허브별 후보도 비교한다.
             variants.extend((protected, [group], {}) for group in groups)
+        variants.append((pieces, groups, lane))
         for repair_pieces, repair_groups, repair_lane in variants:
-            rep = repair(grid, repair_pieces, origin0, repair_groups, pad, repair_lane, entrance)
+            if time.perf_counter() >= search_deadline:
+                break
+            rep = repair(grid, repair_pieces, origin0, repair_groups, pad, repair_lane, entrance,
+                         deadline=search_deadline)
             if rep is None or (rep[0] == origin0 and not rep[1]):
                 continue
             # 고친 배치에서 시작하는 담금질은 규칙을 지킨 허브·거처를 묶고 나머지(자원 타일 등)만 옮긴다
@@ -959,7 +1069,9 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             starts.append((rep[0], rep[1], pin))
             add_cand(rep[0], rep[1])
             lay = Layout(grid, pinned_of(rep[1], pin), rep[0])       # 담금질 없이 다듬기만 (채집 발사를 덜 흔든다)
-            polish(lay, scorer, origin0, RESTART_SECONDS)
+            remaining = search_deadline - time.perf_counter()
+            if remaining > 0:
+                polish(lay, scorer, origin0, min(RESTART_SECONDS, remaining))
             add_cand(lay.origin, rep[1])
     search_note = ""
     from . import native_layout
@@ -967,32 +1079,42 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         # 네이티브 담금질은 초당 약 180만 번 (파이썬 약 2천 번) — 0.5초 한 번이면 파이썬 3초보다 좋은 배치로
         # 수렴한다 (실제 기지 4곳). 고정 시간 대신: 시작점을 바꿔 가며 돌리고, 연속 CONVERGED 번 더 좋은 배치가
         # 안 나오면 멈춘다 (seconds 는 안전 상한). 경우의 수가 너무 많아 '전부 보고 최적 증명'은 불가능.
-        deadline = time.perf_counter() + seconds
         best, stale, k = -1e18, 0, 0
-        while k < max(restarts, MIN_RESTARTS) or (stale < CONVERGED and time.perf_counter() < deadline):
+        while time.perf_counter() < search_deadline and (k < max(restarts, MIN_RESTARTS) or stale < CONVERGED):
             k += 1
             so, st, pin = starts[k % len(starts)]
             lay = Layout(grid, pinned_of(st, pin), so)
-            o, _ = anneal(lay, scorer, RESTART_SECONDS * 0.8, rng, origin0=origin0)
+            o, _ = anneal(lay, scorer, min(RESTART_SECONDS * 0.8, search_deadline - time.perf_counter()), rng,
+                          origin0=origin0)
             lay = Layout(grid, pinned_of(st, pin), o)
-            v = polish(lay, scorer, origin0, RESTART_SECONDS * 0.2)
+            remaining = search_deadline - time.perf_counter()
+            v = (polish(lay, scorer, origin0, min(RESTART_SECONDS * 0.2, remaining))
+                 if remaining > 0 else _objective(lay, scorer, origin0))
             add_cand(lay.origin, st)
             if v > best + max(1e-6, abs(best) * 0.001):
                 best, stale = v, 0
             else:
                 stale += 1
-            if time.perf_counter() >= deadline:
+            if time.perf_counter() >= search_deadline:
                 break
         search_note = (tr("탐색 {k}번 (연속 {stale}번 더 좋은 배치 없음 — 수렴)", k=k, stale=stale) if stale >= CONVERGED
                        else tr("탐색 {k}번 (시간 상한)", k=k))
+        if k == 0:
+            search_note = ""   # 준비 단계에서도 후보를 비교한다. 담금질 0회를 전체 탐색 0회로 표시하지 않는다.
         restarts = 0
     for k in range(restarts):
+        remaining = search_deadline - time.perf_counter()
+        if remaining <= 0:
+            break
         sc = scorer
         so, st, pin = starts[(k + 1) % len(starts)]
         lay = Layout(grid, pinned_of(st, pin), so)
-        o, _ = anneal(lay, sc, seconds * 0.7 / max(1, restarts), rng, origin0=origin0)
+        allotment = remaining / max(1, restarts - k)
+        o, _ = anneal(lay, sc, allotment * 0.7, rng, origin0=origin0)
         lay = Layout(grid, pinned_of(st, pin), o)
-        polish(lay, sc, origin0, seconds * 0.3 / max(1, restarts))
+        remaining = search_deadline - time.perf_counter()
+        if remaining > 0:
+            polish(lay, sc, origin0, min(allotment * 0.3, remaining))
         add_cand(lay.origin, st)
     blds = buildings_from_base(base)
 
@@ -1083,7 +1205,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     def meaningful_guide(orig, hv):
         """이전 목표의 남은 이동이 실제 범위·채집·생산 규칙 중 하나라도 개선하는지."""
         turn = turn_of.get(id(orig), {})
-        if cov_of(orig) > cov0 or producer_gain(orig, turn) >= 2 or house_gain(orig) > 0:
+        if orig == restored_origin or cov_of(orig) > cov0 or producer_gain(orig, turn) >= 2 or house_gain(orig) > 0:
             return True
         if plain.score(Layout(grid, shaped_of(turn), orig))[0] > plain0 + 1e-6:
             return True
@@ -1096,6 +1218,8 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             from .layout_guide import preserves_guide
             if not preserves_production(base, nb, pad) or not preserves_guide(base, nb, pad):
                 continue
+            if not move_sequence(grid, pieces, origin0, orig, turn_of.get(id(orig)), entrance).complete:
+                continue                                    # 실행 불가능한 최상위 안 때문에 가능한 차선책까지 버리지 않는다
         hv = harvest_eval(nb["geo"]) if harvest_eval and not current else h0
         if reach_ok is not None and not current and not reach_ok(nb):
             continue                                    # 미완성 건물로 가는 길을 막는 배치는 뺀다
@@ -1131,7 +1255,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         _, orig, s, hv = best
     if best[1] is prefer_orig and prefer_orig is not None:
         pass
-    elif best[0] < 2.0 * 1.02 and not (guide and (cov_of(orig) > cov0 or house_gain(orig) > 0 or
+    elif best[0] < 2.0 * 1.02 and orig != restored_origin and not (guide and (cov_of(orig) > cov0 or house_gain(orig) > 0 or
                                                  producer_gain(orig, turn_of.get(id(orig), {})) >= 2)):
         notes.append(tr("이번 탐색에서 범위 효과와 채집 예상량을 합쳐 2% 넘는 개선을 찾지 못했습니다."))
         if alt is not None and alt[0] > 1.02:
@@ -1455,11 +1579,25 @@ def suggest_demolish(base: dict, res_weight: Optional[Dict[int, float]] = None, 
     housing = housing_types()
     stats = _stat_types(base)
     pieces, origin = pieces_from_base(base, grid, housing)
+    raw = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
     s0 = Scorer(pieces, stats, housing, res_weight, pad).score(Layout(grid, pieces, origin))[0]
     out = [(i, p.type, 0.0, GUIDE_DEMOLISH[p.type]) for i, p in sorted(pieces.items())
            if p.type in GUIDE_DEMOLISH and not p.unfinished]
     for i, p in pieces.items():
         if p.type not in DEMOLISH_CANDIDATE_TYPES or p.unfinished:
+            continue
+        counted = raw.get(i, {}).get("in_range")
+        if (not isinstance(counted, dict) or not counted
+                or not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in counted.values())
+                or sum(counted.values()) != 0):
+            continue
+        # 가상 재배치에 남은 예전 직접 계수도 철거 근거로 쓰지 않는다.
+        x, y = grid.center(*origin[i], p.w, p.h)
+        resource = EFFECTS[p.type][0]
+        if any(TILE_RES.get(q.type) == resource and
+               in_range(grid.center(*origin[j], q.w, q.h)[0] - x,
+                        grid.center(*origin[j], q.w, q.h)[1] - y, p.range + pad)
+               for j, q in pieces.items()):
             continue
         pcs = {k: v for k, v in pieces.items() if k != i}
         org = {k: v for k, v in origin.items() if k != i}
@@ -1504,7 +1642,7 @@ def remaining_moves(base: dict, final: Dict[int, Tuple[float, float]],
     final_rot: 건물별 목표 회전(게임 rot 값, +1 = 시계 방향 90°)."""
     grid = grid_from_geo(base.get("geo") or {})
     if grid is None or not final:
-        return []
+        return MoveSequence(complete=not final, unresolved=sorted(final or {}))
     pieces, cur = pieces_from_base(base, grid, housing_types())
     rots = {b["id"]: int(b.get("rot") or 0) for b in base.get("buildings") or [] if "id" in b}
     turn = {i: (r - rots.get(i, 0)) % 4 for i, r in (final_rot or {}).items()
@@ -1517,20 +1655,23 @@ def remaining_moves(base: dict, final: Dict[int, Tuple[float, float]],
                          round((y - p.h * grid.size / 2 - grid.oy) / grid.size))
     for i in cur:                     # 계획 뒤에 새로 지은 건물(계획에 없음)은 그 자리에 둔다 — 없으면 KeyError 로 기지 화면이 멈춤
         target.setdefault(i, cur[i])
-    return _moves(grid, pieces, cur, target, turn, rots)
+    return _moves(grid, pieces, cur, target, turn, rots, entrance_cells(base.get("geo") or {}, grid))
 
 
 def _moves(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int, int]], target: Dict[int, Tuple[int, int]],
-           turn: Dict[int, int], rots: Dict[int, int]) -> List[Move]:
+           turn: Dict[int, int], rots: Dict[int, int], avoid: Set[Tuple[int, int]] = frozenset()) -> MoveSequence:
     out = []
-    for i, o, park in move_sequence(grid, pieces, cur, target, turn):
+    sequence = move_sequence(grid, pieces, cur, target, turn, avoid)
+    if not sequence.complete:
+        return MoveSequence(complete=False, unresolved=sequence.unresolved)
+    for i, o, park in sequence:
         k = 0 if park else turn.get(i, 0)
         p = rotated(pieces[i], k)
         out.append(Move(i, grid.center(o[0], o[1], p.w, p.h), 0.0,
                         tr("잠시 비켜 두기 (자리 비우기)") if park else
                         tr("{v0} 이 자리로", v0=turn_text(k)) if k else tr("가이드 배치 자리로"),
                         rot=(rots.get(i, 0) + k) % 4 if k else -1))
-    return out
+    return MoveSequence(out)
 
 
 def turn_text(k: int) -> str:
@@ -1542,7 +1683,10 @@ def plan_moves(plan: FullPlan, base: dict) -> List[Move]:
     """최적 배치로 가는 옮기기 (Move 목록, 잠시 비켜 두기 포함)."""
     geo = base.get("geo") or {}
     grid = grid_from_geo(geo)
+    if grid is None:
+        return MoveSequence(complete=False, unresolved=sorted(plan.origin_after))
     pieces, cur = pieces_from_base(base, grid, housing_types())
     target = {i: plan.origin_after.get(i, o) for i, o in cur.items()}
     rots = {b["id"]: int(b.get("rot") or 0) for b in base.get("buildings") or [] if "id" in b}
-    return _moves(grid, pieces, cur, target, {i: k for i, k in plan.turned.items() if i in cur}, rots)
+    return _moves(grid, pieces, cur, target, {i: k for i, k in plan.turned.items() if i in cur}, rots,
+                  entrance_cells(geo, grid))
