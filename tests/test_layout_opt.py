@@ -123,8 +123,10 @@ class LayoutOptTest(unittest.TestCase):
         mc, mr = o0[mine]
         near = [i for i, p in pieces.items() if p.type == "kBoulder"
                 and abs(o0[i][0] - mc - 0.5) <= 1.5 and abs(o0[i][1] - mr - 0.5) <= 1.5][:3]
-        cut = dict(base, buildings=[b for b in base["buildings"] if b["id"] not in near])
-        sug = {t: (c, n) for t, c, _sz, _g, n, _m in lo.suggest_tiles(cut)}
+        cut = dict(base, buildings=[dict(b, in_range={"kBoulder": 12 - len(near)}) if b["id"] == mine else b
+                                    for b in base["buildings"] if b["id"] not in near])
+        options = [{"type": "kBoulder", "size": (1, 1), "cost": (80, 0, 2, 0), "can_build_more": True}]
+        sug = {t: (c, n) for t, c, _sz, _g, n, _m in lo.suggest_tiles(cut, build_options=options)}
         self.assertIn("kBoulder", sug)
         self.assertGreaterEqual(sug["kBoulder"][1], 3)
         cx, cy = sug["kBoulder"][0]

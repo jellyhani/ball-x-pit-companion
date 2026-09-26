@@ -51,7 +51,7 @@ from .ui.card_highlight import CardHighlight
 from .ui.dps_meter import DpsMeter
 from .ui.base_overlay import BaseOverlay
 from .ui.layout_window import LayoutWindow
-from .engine.harvest import (AimRange, HarvestLog, advise_harvest, advise_resource_ratio, gold_bounce_tip,
+from .engine.harvest import (AimRange, HarvestLog, advise_harvest, gold_bounce_tip,
                              layout_key, need_resource, unfinished_buildings)
 from .services.sim_worker import SimWorker
 from .engine.base_advisor import suggest as suggest_base
@@ -305,9 +305,8 @@ class AppController(QObject):
                     log.info("채집 기록: 조준 %.0f° → 증가 %s", row["angle"], row["gain"])
             self.recommender.meta = self.meta
             self.fusion.meta = self.meta
-            need, _ = need_resource(self.meta, self._shortfalls())
-            note = advise_resource_ratio([b.type for b in self.meta.buildings], need)
-            self.control.set_meta(self.meta, note)
+            # 건물 개수 × 공략의 고정 생산량으로 새 생산 건물 건설을 권하지 않는다.
+            self.control.set_meta(self.meta)
             return
         if isinstance(snap.get("catalog"), dict):
             self.snapshots.set_catalog(snap)
@@ -596,11 +595,9 @@ class AppController(QObject):
         need, _ = need_resource(self.meta, self._shortfalls())
         workers = advise_workers(self.meta, self.meta.chars_raw, [b.type for b in self.meta.buildings],
                                  self.data, need)[:3]
-        from .engine.harvest import resource_ratio_gap
-        gap = resource_ratio_gap([b.type for b in self.meta.buildings], need)
-        key = (tuple((sg.kind, sg.type) for sg in todo), tuple((t, s) for _, t, s, *_r in demolish),
-               tuple((a.char_id, a.building, a.action) for a in workers), gap[:2] if gap else None)
-        if not todo and not demolish and not workers and not gap:
+        key = (tuple((sg.kind, sg.type, sg.cost, sg.affordable, sg.missing_text) for sg in todo),
+               tuple((t, s) for _, t, s, *_r in demolish), tuple((a.char_id, a.building, a.action) for a in workers))
+        if not todo and not demolish and not workers:
             if self.base_advice is not None:
                 self.base_advice = None
                 self._base_advice_key = None
@@ -612,8 +609,6 @@ class AppController(QObject):
         d = self.data
         verb = {"finish": tr("완성"), "build": tr("짓기"), "upgrade": tr("강화")}
         items = [(f"{verb[sg.kind]}: {sg.name}", sg.status) for sg in todo]
-        if gap:
-            items.append((tr("짓기: {v0} ({v1} 생산이 목표 비율보다 적음)", v0=gap[1], v1=RESOURCES[gap[0]]), tr("가이드")))
         items += [(tr("철거 후보: {v0}", v0=d.building_name(t)), tr("가이드") if t in GUIDE_DEMOLISH else tr("기여 {score:.1f}", score=score))
                   for _i, t, score, *_r in demolish]
         items += [(tr("일꾼 빼기: {v0}의 {v1} → 발사로", v0=d.building_name(a.building), v1=d.name(a.char_id)) if a.action == "remove" else
@@ -863,7 +858,16 @@ class AppController(QObject):
             self._update_spa(base)
         if base and (base.get("geo") or {}).get("colliders") and self.meta is not None and not self._layout_busy                 and state != "kRearrangeBuildings":        # 옮기는 도중에는 다시 계산하지 않는다 (목표가 흔들리지 않게)
             # 배치가 바뀌거나 미완성 건물이 생기고·끝나면 다시 계산
-            lk = (layout_key(base), tuple(sorted(u.id for u in unfinished_buildings(base, self.meta))))
+            options = self.meta.build_options if self.meta.build_options is not None else self.meta.blueprints
+            construction_key = tuple((b.type, b.size, b.cost, b.can_build_more,
+                                      min([8] + [self.meta.resources[i] // v if i < len(self.meta.resources) else 0
+                                                 for i, v in enumerate(b.cost) if v > 0])) for b in options)
+            production_key = tuple(sorted((b.get("id", -1), b.get("lvl"), b.get("worker"), b.get("range"), b.get("cap"),
+                                            tuple(sorted((b.get("in_range") or {}).items())))
+                                           for b in base.get("buildings") or []))
+            levels_key = tuple(sorted((c.get("type", ""), c.get("lvl", 0)) for c in self.meta.chars_raw))
+            lk = (layout_key(base), tuple(sorted(u.id for u in unfinished_buildings(base, self.meta))),
+                  construction_key, production_key, levels_key)
             if lk != getattr(self, "_layout_for", None):
                 # 기지에 들어왔거나 배치가 바뀌면 배치 추천을 다시 계산 (백그라운드)
                 self._layout_for = lk
@@ -1038,7 +1042,8 @@ class AppController(QObject):
             return
         team = hs.team_from_chars(self.meta.chars_raw, getattr(self, "_team_order", None))
         snap = json.loads(json.dumps(base))
-        bps = [{"type": b.type, "size": b.size} for b in self.meta.blueprints]
+        options = self.meta.build_options if self.meta.build_options is not None else self.meta.blueprints
+        bps = [b.construction_data() for b in options]
         targets = {u.id: u.hits_left for u in unfinished_buildings(base, self.meta)}
         need, _ = need_resource(self.meta, self._shortfalls())
         self._layout_busy = True
@@ -1047,7 +1052,7 @@ class AppController(QObject):
         # 계산할 때마다 목표가 바뀌어 헛걸음하던 것 (기록: 71 → 79 → 92 → 118번)
         prev = getattr(self.layout_plan, "final", None) if self.layout_plan else None
         self.sim.submit("layout", snap, sim_jobs.job_layout, snap, team, self._harvest_dur, bps, targets, need, 8.0,
-                        dict(prev) if prev else None, char_levels)
+                        dict(prev) if prev else None, char_levels, tuple(self.meta.resources))
 
     def _update_spa(self, base: dict):
         """스파 재채집 손익: 게임이 알려 준 비용과 내 채집 기록 평균을 비교 (비용·기록이 바뀔 때만)."""
@@ -1080,8 +1085,10 @@ class AppController(QObject):
         self.layout_plan = plan
         self.layout_win.set_result(snap, plan, sweeps)
         # 일꾼이 없으면 생산이 0인 건물 (금광·농장·야적장·채석장·채집가의 오두막 — 위키: 광마다 일꾼 1명)
+        from .engine.construction_policy import is_recommended_building
         idle = [b.get("type", "") for b in (snap or {}).get("buildings") or []
                 if b.get("type") in ("kGoldMine", "kIdleFarm", "kIdleLumberyard", "kIdleStoneMine", "kIdleLauncher")
+                and is_recommended_building(b.get("type", ""))
                 and isinstance(b.get("worker"), int) and b["worker"] < 0]
         self._unmanned = idle
         self.control.set_layout_plan(plan, idle)

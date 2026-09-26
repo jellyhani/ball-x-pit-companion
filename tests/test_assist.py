@@ -172,6 +172,28 @@ class ExpeditionTest(unittest.TestCase):
 
 
 class BaseTest(unittest.TestCase):
+    def test_retired_gold_mine_never_requests_construction_resources(self):
+        """철거 예정 금광은 건설·강화·완성 후보에서 빼고 다른 건물 비용은 보존한다."""
+        d = game_data()
+        raw = {"resources": [1, 2, 3, 4],
+               "buildings": [
+                   {"type": "kGoldMine", "state": "kScaffold"},
+                   {"type": "kGoldMine", "state": "kNormal", "can_upgrade": True,
+                    "upgrade_cost": [900, 800, 700, 600]},
+                   {"type": "kIdleFarm", "state": "kScaffold"},
+                   {"type": "kBank", "state": "kNormal", "can_upgrade": True,
+                    "upgrade_cost": [10, 20, 30, 40]}],
+               "blueprints": [
+                   {"type": "kGoldMine", "cost": [999, 888, 777, 666]},
+                   {"type": "kBank", "cost": [100, 200, 300, 400]}]}
+        m = parse_meta(raw, d)
+        out = suggest(m, d)
+        self.assertEqual({(s.kind, s.type) for s in out},
+                         {("finish", "kIdleFarm"), ("build", "kBank"), ("upgrade", "kBank")})
+        self.assertEqual(next(s.cost for s in out if s.kind == "build"), (100, 200, 300, 400))
+        self.assertEqual(m.resources, (1, 2, 3, 4))
+        self.assertEqual(sum(b.type == "kGoldMine" for b in m.buildings), 2)
+
     def test_meta_and_suggestions(self):
         d = game_data()
         m = parse_meta(META, d)

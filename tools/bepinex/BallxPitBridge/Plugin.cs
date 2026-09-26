@@ -24,7 +24,7 @@ namespace BallxPitBridge
     [BepInPlugin("dev.ballxpit.bridge", "BALL x PIT Bridge", Plugin.Version)]
     public class Plugin : BasePlugin
     {
-        public const string Version = "1.13.1";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
+        public const string Version = "1.14.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
         internal static ManualLogSource L;
 
         public override void Load()
@@ -1640,6 +1640,33 @@ namespace BallxPitBridge
                         try { w.WriteString("col", info.ColType.ToString()); } catch { }
                         try { w.WriteString("stat", info.GetStatBonus().ToString()); } catch { }
                     }
+                    w.WriteEndObject();
+                }
+            w.WriteEndArray();
+            // 이미 지은 반복 건설형도 포함한다. 원래 blueprints 는 미건설 설계도 목록으로 유지한다.
+            // 비용·추가 건설 가능 여부는 게임 getter 결과를 그대로 읽는다.
+            w.WriteStartArray("build_options");
+            if (bps != null)
+                for (int i = 0; i < bps.Length; i++)
+                {
+                    var bp = bps[i];
+                    if (bp == null || !bp.HasBlueprint || !infos.TryGetValue((int)bp.TgtBuilding, out var info)) continue;
+                    bool included, more;
+                    Cost cost;
+                    try { included = info.IsInGame && info.IncludeInGame(); more = info.CanBuildMore(); cost = info.GetCost(); }
+                    catch { continue; }
+                    if (!included || !more) continue;
+                    w.WriteStartObject();
+                    w.WriteString("type", info.Type.ToString());
+                    w.WriteString("slug", info.Slug);
+                    w.WriteString("cat", info.Cat.ToString());
+                    w.WriteBoolean("can_build_more", more);
+                    WriteCost(w, "cost", cost);
+                    WriteCost(w, "base_cost", info.BuildCost);
+                    w.WriteNumber("tw", info.TileSize.x);
+                    w.WriteNumber("th", info.TileSize.y);
+                    try { w.WriteNumber("max_instances", info.GetMaxBuildingInst()); } catch { }
+                    try { if (cost != null) w.WriteBoolean("affordable", cost.CanAfford()); } catch { }
                     w.WriteEndObject();
                 }
             w.WriteEndArray();

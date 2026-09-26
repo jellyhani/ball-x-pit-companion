@@ -1,7 +1,8 @@
 """생산 건물 비율 조언(advise_resource_ratio)·골드마인 조준 팁(gold_bounce_tip)."""
+import copy
 import unittest
 
-from src.engine.harvest import advise_resource_ratio, gold_bounce_tip
+from src.engine.harvest import advise_resource_ratio, gold_bounce_tip, unfinished_buildings
 
 
 class ResourceRatioTest(unittest.TestCase):
@@ -45,9 +46,23 @@ class GoldBounceTipTest(unittest.TestCase):
         base = {"buildings": [{"type": "kIdleFarm"}]}
         self.assertIsNone(gold_bounce_tip(base, [object()]))
 
-    def test_tip_when_both_present(self):
+    def test_retired_gold_mine_does_not_get_aiming_tip(self):
         base = {"buildings": [{"type": "kGoldMine"}, {"type": "kIdleFarm"}]}
-        self.assertIsNotNone(gold_bounce_tip(base, [object()]))
+        self.assertIsNone(gold_bounce_tip(base, [object()]))
+
+
+class UnfinishedPolicyTest(unittest.TestCase):
+    def test_retired_gold_mines_do_not_become_harvest_targets(self):
+        """금광 공사·강화에 채집을 쓰지 않되 실제 건물 정보는 그대로 둔다."""
+        base = {"buildings": [
+            {"id": 1, "type": "kGoldMine", "state": "kScaffold", "upg_tgt": 20, "upg_pts": 19},
+            {"id": 2, "type": "kGoldMine", "state": "kUpgrading", "upg_tgt": 20, "upg_pts": 18},
+            {"id": 3, "type": "kIdleFarm", "state": "kScaffold", "upg_tgt": 20, "upg_pts": 15}]}
+        before = copy.deepcopy(base)
+        out = unfinished_buildings(base, None)
+        self.assertEqual([(u.id, u.type, u.hits_left, u.exact) for u in out],
+                         [(3, "kIdleFarm", 5, True)])
+        self.assertEqual(base, before)
 
 
 

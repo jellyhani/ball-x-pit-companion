@@ -30,6 +30,10 @@ class Blueprint:
     category: str             # kEconomy | kWarfare | kHousing
     cost: Tuple[int, ...] = ()
     size: Optional[Tuple[int, int]] = None      # 타일 크기 (플러그인 1.9)
+    can_build_more: Optional[bool] = None
+
+    def construction_data(self) -> dict:
+        return {"type": self.type, "size": self.size, "cost": self.cost, "can_build_more": self.can_build_more}
 
 
 @dataclass(frozen=True)
@@ -55,6 +59,7 @@ class MetaState:
     resources: Tuple[int, ...] = ()
     buildings: List[BuildingState] = field(default_factory=list)
     blueprints: List[Blueprint] = field(default_factory=list)
+    build_options: Optional[List[Blueprint]] = None    # 1.14: 이미 지은 반복 건설형까지, None 은 옛 연동
     records: Dict[str, ItemRecord] = field(default_factory=dict)       # 항목 ID → 누적 기록
     bonuses: Dict[str, object] = field(default_factory=dict)
     chars: List[Tuple[str, int]] = field(default_factory=list)          # (캐릭터 ID, 레벨)
@@ -106,6 +111,14 @@ def parse_meta(meta: dict, data: GameData) -> MetaState:
     for b in meta.get("blueprints") or []:
         size = (int(b["tw"]), int(b["th"])) if isinstance(b.get("tw"), int) and isinstance(b.get("th"), int) else None
         st.blueprints.append(Blueprint(b.get("type", ""), b.get("slug", ""), b.get("cat", ""), _ints(b.get("cost")), size))
+    if isinstance(meta.get("build_options"), list):
+        st.build_options = []
+        for b in meta["build_options"]:
+            if not isinstance(b, dict) or b.get("can_build_more") is not True:
+                continue
+            size = (b["tw"], b["th"]) if all(isinstance(b.get(k), int) and b[k] > 0 for k in ("tw", "th")) else None
+            st.build_options.append(Blueprint(b.get("type", ""), b.get("slug", ""), b.get("cat", ""),
+                                               _ints(b.get("cost")), size, True))
     for key, kind in (("ball_stats", "ball"), ("passive_stats", "passive")):
         for enum_name, r in (meta.get(key) or {}).items():
             iid = data.item_by_log_id(enum_name)

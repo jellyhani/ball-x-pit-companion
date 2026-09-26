@@ -20,6 +20,7 @@ from typing import Dict, List, Optional, Tuple
 from ..gamedata import GameData
 from ..tracking.meta_state import RESOURCES, MetaState
 from ..i18n import tr
+from .construction_policy import EXCLUDED_BUILDINGS, is_recommended_building
 
 # 건물 종류 → 자원 번호 (0 골드, 1 밀, 2 나무, 3 돌). 이름 기준 + 보관 자원(held)으로 보정
 RES_BY_TYPE = {
@@ -200,7 +201,7 @@ class Unfinished:
 
 
 def unfinished_buildings(base: Optional[dict], meta: Optional[MetaState]) -> List[Unfinished]:
-    """기지 건물 중 미완성인 것 (완성에 가까운 것부터).
+    """기지 건물 중 완성을 권하는 미완성 건물 (완성에 가까운 것부터).
 
     상태는 base.buildings[].state(플러그인 1.7), 없으면 meta.buildings 의 같은 자리에서 가져온다
     (둘 다 게임 MetaSaveData.Buildings 순서 — 실제 기지에서 63개 모두 종류가 같은 순서로 확인).
@@ -212,7 +213,7 @@ def unfinished_buildings(base: Optional[dict], meta: Optional[MetaState]) -> Lis
         states = [m.state for m in meta.buildings]
     out = []
     for b, st in zip(blds, states):
-        if st not in UNFINISHED or "id" not in b:
+        if st not in UNFINISHED or "id" not in b or not is_recommended_building(b.get("type", "")):
             continue
         pct = float(b.get("upgrade_pct") or 0)
         tgt, pts = b.get("upg_tgt"), b.get("upg_pts")
@@ -273,7 +274,7 @@ BUILDING_UPGRADE = {"kFarmSpeed": "kIdleFarm", "kLumberyardSpeed": "kIdleLumbery
 SWAP_MARGIN = 1.0        # 이만큼 이상 발사 가치가 차이 나야 교체를 권함 (강화 1개) — 근거 없이 정함
 # 금광은 쓰지 않는다 (사용자 결정 2026-09-26: 무한 모드로 골드가 모자라지 않음) — 빈 금광을 채우라고 하지 않고,
 # 금광에서 일하는 캐릭터는 빼서 발사에 쓰라고 한다 (철거 후보는 layout_opt.GUIDE_DEMOLISH).
-SKIP_WORK = {"kGoldMine"}
+SKIP_WORK = EXCLUDED_BUILDINGS
 
 
 def launch_value(c: dict, need: Optional[int] = None) -> float:
@@ -386,7 +387,7 @@ def gold_bounce_tip(base: dict, unf: List) -> Optional[str]:
     'My Optimized Town Layout' — 골드마인에 조준하면 촘촘히 튕기며 공사장을 여러 번 맞힌다는 얘기).
     이 프로젝트는 아직 harvest_traces.jsonl 로 확인하지 못했으므로 조준점 자체는 바꾸지 않고
     참고용 문구로만 보여준다."""
-    if not unf:
+    if not is_recommended_building("kGoldMine") or not unf:
         return None
     if not any(b.get("type") == "kGoldMine" for b in base.get("buildings") or []):
         return None

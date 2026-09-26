@@ -639,8 +639,7 @@ class ControlWindow(QWidget):
         if unmanned:
             from collections import Counter
             names = " · ".join(f"{d.building_name(t)}{tr(' {n}개', n=n) if n > 1 else ''}" for t, n in Counter(unmanned).items())
-            self.base_layout.add(row(tr("일꾼 없음: {names}", names=names), chip(tr("생산 0"), "warn"),
-                                     tr("캐릭터를 배정해야 생산합니다 (금광은 광마다 1명, 배정 가능한 캐릭터는 최대 16명)")))
+            self.base_layout.add(row(tr("일꾼 없음: {names}", names=names), chip(tr("생산 0"), "warn")))
         if plan is None:
             self.base_layout.add(row(tr("배치 계산 실패 또는 기지 정보 없음")))
             return
@@ -652,9 +651,11 @@ class ControlWindow(QWidget):
             self.base_layout.add(row(tr("지금 배치가 가이드 기준으로 충분함"), chip(tr("유지"), "ok")))
         for t, _c, _sz, gain, n, *_ in (getattr(plan, "builds", None) or [])[:3]:
             from ..engine.layout_opt import TILE_RES
-            what = tr("튕김 많은 자리") if t == "kGoldMine" else tr("범위 효과 +{gain:.1f}", gain=gain)
+            what = tr("가이드") if t in TILE_RES else tr("범위 효과 +{gain:.1f}", gain=gain)
             title = tr("더 사기: {v0} {n}개", v0=d.building_name(t), n=n) if t in TILE_RES else tr("짓기: {v0}", v0=d.building_name(t))
             self.base_layout.add(row(title, chip(what, "accent"), tr("배치도의 초록 점선 자리")))
+        if getattr(plan, "construction_pending", False):
+            self.base_layout.add(row(tr("재배치 완료 후 건설 위치를 다시 계산합니다.")))
         for _i, t, what, gain in (getattr(plan, "activations", None) or [])[:3]:
             self.base_layout.add(row(f"{what}: {d.building_name(t)}", chip(tr("범위 효과 +{gain:.1f}", gain=gain), "neutral"),
                                      tr("지금은 효과를 절반으로 계산 중")))

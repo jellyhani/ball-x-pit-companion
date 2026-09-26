@@ -229,13 +229,15 @@ class LayoutWindow(QWidget):
         elif plan is None:
             self.steps.add(row(tr("계산 중이거나 기지 정보 없음")))
         self.builds.clear()
+        if plan and getattr(plan, "construction_pending", False):
+            self.builds.add(row(tr("재배치 완료 후 건설 위치를 다시 계산합니다.")))
         for t, _c, _sz, gain, n, *rest in (getattr(plan, "builds", None) or []) if plan else []:
             moved = rest[0] if rest else 0
-            from ..engine.layout_opt import TILE_RES, UNLIMITED_COST
-            cost = UNLIMITED_COST.get(t)
-            cost_txt = (tr(" · 비용 ") + " ".join(f"{RESOURCES[i]} {v}" for i, v in enumerate(cost) if v)) if cost else ""
+            from ..engine.layout_opt import TILE_RES
+            cost = (getattr(plan, "build_costs", None) or {}).get(t)
+            cost_txt = (tr(" · 1개 비용 ") + " ".join(f"{RESOURCES[i]} {v}" for i, v in enumerate(cost) if v)) if cost else ""
             if t in TILE_RES:
-                self.builds.add(row(tr("더 사기: {v0} {n}개", v0=d.building_name(t), n=n), value_label(tr("범위 효과 +{gain:.1f}", gain=gain)),
+                self.builds.add(row(tr("더 사기: {v0} {n}개", v0=d.building_name(t), n=n), None,
                                     tr("생산 건물 범위의 빈칸 채우기 — 첫 자리 초록 점선{cost_txt}", cost_txt=cost_txt)))
                 continue
             if t == "kGoldMine":
@@ -248,7 +250,7 @@ class LayoutWindow(QWidget):
         for _i, t, what, gain in (getattr(plan, "activations", None) or []) if plan else []:
             self.builds.add(row(f"{what}: {d.building_name(t)}", value_label(tr("범위 효과 +{gain:.1f}", gain=gain)),
                                 tr("지금은 효과를 절반으로 계산 중 — ") + (tr("일꾼을 배정하면") if what == tr("일꾼 배정") else tr("강화하면")) + tr(" 전부 켜짐")))
-        if plan is not None and not (getattr(plan, "builds", None) or getattr(plan, "activations", None)):
+        if plan is not None and not getattr(plan, "construction_pending", False) and not (getattr(plan, "builds", None) or getattr(plan, "activations", None)):
             self.builds.add(row(tr("추천할 새 건물·강화 없음"), None, tr("지을 수 있는 설계도 중 범위 효과 건물이 없음")))
         self.demolish.clear()
         dem = (getattr(plan, "demolish", None) or []) if plan else []

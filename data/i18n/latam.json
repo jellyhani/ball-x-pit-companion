@@ -847,6 +847,8 @@
   "범위 판정 검증: 게임이 센 '범위 안 자원 타일 수'와 {v0}/{v1}개 건물 일치 (범위 여유 {v2:.2f})": "Verificación de alcance: coincide con el recuento del juego de casillas de recurso en alcance para {v0}/{v1} edificios (margen de alcance {v2:.2f})",
   "범위 판정: 건물 중심 사이 거리 ≤ 게임 범위 값 (추정) — 플러그인 1.9부터 게임 값과 비교해 맞춥니다": "Verificación de alcance: distancia entre centros de edificios ≤ valor de alcance del juego (estimado) — desde el complemento 1.9 se compara con el valor del juego",
   "옮기기 {v0}번": "{v0} movimientos",
+  " · 1개 비용 ": " · Costo por unidad ",
+  "재배치 완료 후 건설 위치를 다시 계산합니다.": "Las ubicaciones de construcción se recalcularán al terminar la reorganización.",
   " · 비용 ": " · Coste ",
   "추천할 새 건물·강화 없음": "Sin nuevos edificios o mejoras que recomendar",
   "지을 수 있는 설계도 중 범위 효과 건물이 없음": "Ninguno de los planos construibles es un edificio de efecto de área",

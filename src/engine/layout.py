@@ -96,6 +96,8 @@ class LayoutPlan:
     notes: List[str] = field(default_factory=list)
     reach_after: Dict[int, int] = field(default_factory=dict)   # 최적 배치 뒤 미완성 건물별 최대 타격 수 (0 = 여전히 안 닿음)
     builds: List[tuple] = field(default_factory=list)            # 새로 지을 건물 추천 (종류, 중심, 크기, 늘어나는 점수, 대상 수)
+    build_costs: Dict[str, Tuple[int, ...]] = field(default_factory=dict)  # 게임이 보낸 다음 1개 건설 비용
+    construction_pending: bool = False  # 아직 적용하지 않은 배치의 계수를 실제 건설 근거로 쓰지 않음
     activations: List[tuple] = field(default_factory=list)       # 강화·일꾼 배정으로 켜지는 효과 (id, 종류, 할 일, 점수)
     demolish: List[tuple] = field(default_factory=list)           # 철거 후보 (id, 종류, 지금 기여 점수) — 점수 낮은 순
     calibration: Tuple[float, int, int] = (0.0, 0, 0)            # 범위 판정 게임 값 비교 (여유, 맞음, 비교 수)
@@ -409,7 +411,7 @@ def moved_base(base: dict, blds: Dict[int, Bld], a: int, to: Tuple[float, float]
 
 
 def plan_access(base: dict, targets: Sequence[int], reach_fn, max_moves: int = 2,
-                max_tries: int = 8, avoid: set = frozenset()) -> Tuple[List[Move], dict, set]:
+                max_tries: int = 8, avoid: set = frozenset(), accept_fn=None) -> Tuple[List[Move], dict, set]:
     """어떤 발사 각도로도 작업자가 닿지 않는 미완성 건물: 옆 건물 하나를 빈 자리로 옮겨 길을 여는 방법을 찾는다.
 
     실제 기지 확인: 강화 공사 중인 학교·영사관이 건물에 사방이 막혀 0%에서 멈춰 있었다.
@@ -455,6 +457,8 @@ def plan_access(base: dict, targets: Sequence[int], reach_fn, max_moves: int = 2
                 return effect_score(moved)[0]
             to = max(spots, key=score)
             nb = moved_base(cur_base, cur, i, to)
+            if accept_fn is not None and not accept_fn(nb):
+                continue
             r2 = reach_fn(nb["geo"])
             if r2.get(t):
                 found = (Move(i, to, float(r2[t]), tr("미완성 건물로 가는 길 열기"), target=t), nb, r2, here)

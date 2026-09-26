@@ -270,6 +270,7 @@ class Layout:
 
 def pieces_from_base(base: dict, grid: Grid, housing: Set[str], fixed: Sequence[int] = ()
                      ) -> Tuple[Dict[int, Piece], Dict[int, Tuple[int, int]]]:
+    from .construction_policy import is_recommended_building
     blds = buildings_from_base(base)
     masks = shape_masks(base.get("geo") or {}, blds, grid)
     raw = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
@@ -292,7 +293,7 @@ def pieces_from_base(base: dict, grid: Grid, housing: Set[str], fixed: Sequence[
         if b.type in REGEN_TYPES and int(info.get("lvl") or 0) >= 2:   # 게임 레벨은 0부터 — 2 = 화면 레벨 3
             rng_ += LVL3_RANGE_BONUS
         # 공사 중인 건물도 옮길 수 있다 (커뮤니티: 채집 구역 가장자리로 옮겨 일꾼이 치게 — Screen Rant 기지 공략)
-        unfinished = info.get("state") in UNFINISHED_STATES
+        unfinished = info.get("state") in UNFINISHED_STATES and is_recommended_building(b.type)
         movable = b.type not in FIXED_TYPES and i not in fixed
         cap = float(info.get("cap") or TILE_CAPACITY.get(b.type, 1)) if b.type in TILE_RES else 1.0
         pieces[i] = Piece(i, b.type, w, h, frozenset(rel), movable, rng_, factor, max(1.0, cap), unfinished)
@@ -358,6 +359,39 @@ def entrance_cells(geo: dict, grid: Grid) -> Set[Tuple[int, int]]:
 
 def lane_idle(p: "Piece") -> bool:
     return not (p.type in TILE_RES or p.type in BOUNCE_TYPES or p.unfinished)
+
+
+def preserves_production(base: dict, candidate: dict, pad: float = 0.0) -> bool:
+    """게임 현재 계수와 일치한 가동 생산 건물의 자원 수·용량을 줄이는 후보는 거른다."""
+    from .layout_city import PRODUCERS
+    before, after = buildings_from_base(base), buildings_from_base(candidate)
+    raw_before = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
+    raw_after = {b["id"]: b for b in candidate.get("buildings") or [] if "id" in b}
+
+    def coverage(building, all_buildings, raw, kind):
+        targets = [b for b in all_buildings.values() if TILE_RES.get(b.type) == kind and
+                   in_range(b.x - building.x, b.y - building.y, building.range + pad)]
+        capacity = sum(max(1, float(raw.get(b.id, {}).get("cap") or 1)) for b in targets)
+        return len(targets), capacity
+
+    for i, b in before.items():
+        info = raw_before[i]
+        count = info.get("in_range")
+        if b.type not in PRODUCERS or not isinstance(info.get("worker"), int) or info["worker"] < 0:
+            continue
+        if info.get("state") in UNFINISHED_STATES or not isinstance(count, dict) or not count:
+            continue
+        if not all(isinstance(v, int) and v >= 0 for v in count.values()):
+            continue
+        n0, c0 = coverage(b, before, raw_before, PRODUCERS[b.type])
+        if n0 != sum(count.values()):
+            continue
+        if i not in after:
+            return False
+        n1, c1 = coverage(after[i], after, raw_after, PRODUCERS[b.type])
+        if n1 < n0 or c1 + 1e-6 < c0:
+            return False
+    return True
 
 
 PRESETS = {"effect": tr("효과 최대"), "gold_u": tr("금광 U자"), "plan": tr("계획도시")}
@@ -985,6 +1019,8 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     for orig, s in cands:
         current = orig is cands[0][0]
         nb = to_base(orig)
+        if guide and not current and not preserves_production(base, nb, pad):
+            continue
         hv = harvest_eval(nb["geo"]) if harvest_eval and not current else h0
         if reach_ok is not None and not current and not reach_ok(nb):
             continue                                    # 미완성 건물로 가는 길을 막는 배치는 뺀다
@@ -1127,10 +1163,11 @@ def calibrate_range(base: dict) -> Tuple[float, int, int]:
 
 
 def suggest_builds(base: dict, blueprints: Sequence[dict], res_weight: Optional[Dict[int, float]] = None,
-                   pad: float = 0.0, seconds: float = 2.5) -> List[Tuple[str, Tuple[float, float], Tuple[int, int], float, int, int]]:
-    """지을 수 있는 범위 효과 건물마다: 새 건물을 넣고 주변을 다시 맞춘 배치에서의 자리와 늘어나는 범위 효과.
-    (가장 좋은 빈 자리에 넣은 뒤 담금질·마무리로 주변 건물도 옮겨 본다 — 빈 자리에만 넣으면 효과가 작게 나온다.)
-    새 건물은 강화·일꾼 배정을 마친 것으로 보고 센다 (지은 뒤 할 일).
+                   pad: float = 0.0, seconds: float = 2.5, *, resources: Optional[Sequence[int]] = None
+                   ) -> List[Tuple[str, Tuple[float, float], Tuple[int, int], float, int, int]]:
+    """게임이 건설 가능하다고 보낸 범위 효과 건물을 현재 배치의 빈 자리에 넣었을 때의 효과.
+    크기와 레벨 0 범위를 확인할 수 있는 항목만 계산하고, 안내 없는 주변 재배치는 포함하지 않는다.
+    새 생산 건물은 일꾼 배정을 마친 것으로 보고 센다 (지은 뒤 할 일).
     돌려주는 값: [(종류, 중심, 크기, 늘어나는 점수, 범위 안 대상 수, 함께 옮길 건물 수)]."""
     grid = grid_from_geo(base.get("geo") or {})
     if grid is None:
@@ -1140,57 +1177,73 @@ def suggest_builds(base: dict, blueprints: Sequence[dict], res_weight: Optional[
     pieces, origin = pieces_from_base(base, grid, housing)
     base_score = Scorer(pieces, stats, housing, res_weight, pad).score(Layout(grid, pieces, origin))[0]
     occ = Layout(grid, pieces, origin).occ
-    ranges = {p.type: p.range for p in pieces.values() if p.range > 0}
+    from .construction_policy import is_recommended_building
+    raw = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
+    ranges = {p.type: p.range for i, p in pieces.items() if p.range > 0 and raw.get(i, {}).get("lvl") == 0}
+    protected = entrance_cells(base.get("geo") or {}, grid)
     out = []
     seen = set()
     for bp in blueprints:
         t = bp.get("type", "")
-        if t not in EFFECTS or t in seen:
+        if t not in EFFECTS or t in seen or not is_recommended_building(t) or bp.get("can_build_more") is False:
             continue
         seen.add(t)
-        w, h = bp.get("size") or (int(bp.get("tw") or 2), int(bp.get("th") or 2))
+        existing = [b for b in raw.values() if b.get("type") == t]
+        if any(b.get("state") in UNFINISHED_STATES for b in existing):
+            continue
+        if EFFECTS[t][3] == "worker" and any(not isinstance(b.get("worker"), int) or b["worker"] < 0 for b in existing):
+            continue
+        size = bp.get("size")
+        cost = bp.get("cost")
+        radius = bp.get("range") or ranges.get(t)
+        if not size or len(size) != 2 or not all(isinstance(v, int) and v > 0 for v in size) or not radius:
+            continue
+        if not isinstance(cost, (list, tuple)) or len(cost) != 4 or not all(isinstance(v, int) and v >= 0 for v in cost):
+            continue
+        if resources is not None and any(i >= len(resources) or resources[i] < v for i, v in enumerate(cost)):
+            continue
+        w, h = size
         new_id = -1
         p = Piece(new_id, t, w, h, frozenset((dx, dy) for dx in range(w) for dy in range(h)), True,
-                  float(bp.get("range") or ranges.get(t) or (2.25 if t == "kIdleStoneMine" else 3.375)), 1.0)
+                  float(radius), 1.0)
         pcs = dict(pieces)
         pcs[new_id] = p
         scorer = Scorer(pcs, stats, housing, res_weight, pad)
         best = None
         for c, r in grid.tiles:
             cells = [(c + dx, r + dy) for dx, dy in p.rel]
-            if any(x not in grid.tiles or x in occ for x in cells):
+            if any(x not in grid.tiles or x in occ or x in protected for x in cells):
                 continue
             o = dict(origin)
             o[new_id] = (c, r)
             s, d = scorer.score(Layout(grid, pcs, o))
             if best is None or s > best[0]:
-                best = (s, (c, r), d.get(t, 0))
+                x, y = grid.center(c, r, w, h)
+                covered = sum(in_range(grid.center(*origin[j], pieces[j].w, pieces[j].h)[0] - x,
+                                       grid.center(*origin[j], pieces[j].w, pieces[j].h)[1] - y, p.range + pad)
+                              for j in scorer.targets[EFFECTS[t][0]] if j in origin)
+                best = (s, (c, r), covered)
         if best is None:
             continue
         o = dict(origin)
         o[new_id] = best[1]
-        lay = Layout(grid, pcs, o)
-        oo, _ = anneal(lay, scorer, seconds * 0.7, random.Random(len(out) + 7), origin0=o)
-        lay = Layout(grid, pcs, oo)
-        polish(lay, scorer, o, seconds * 0.3)
-        fo = canonicalize(pcs, o, lay.origin)
-        lay = Layout(grid, pcs, fo)
-        s, d = scorer.score(lay)
-        if s < best[0]:
-            lay, s, d = Layout(grid, pcs, o), best[0], {t: best[2]}
-        moved = sum(1 for i in lay.origin if i != new_id and lay.origin[i] != origin[i])
+        # 건설 안내에는 기존 건물을 옮기는 순서가 없다. 안내하지 않은 대규모 재배치 이득을 끼워 넣지 않는다.
+        lay, s, d = Layout(grid, pcs, o), best[0], {t: best[2]}
         if s - base_score > 0.05:
             no = lay.origin[new_id]
-            out.append((t, grid.center(no[0], no[1], w, h), (w, h), s - base_score, int(d.get(t, 0)), moved))
+            out.append((t, grid.center(no[0], no[1], w, h), (w, h), s - base_score, int(d.get(t, 0)), 0))
     out.sort(key=lambda x: -x[3])
     return out
 
 
 def suggest_tiles(base: dict, res_weight: Optional[Dict[int, float]] = None, pad: float = 0.0,
-                  max_each: int = 8) -> List[Tuple[str, Tuple[float, float], Tuple[int, int], float, int, int]]:
+                  max_each: int = 8, *, build_options: Sequence[dict] = (), resources: Optional[Sequence[int]] = None
+                  ) -> List[Tuple[str, Tuple[float, float], Tuple[int, int], float, int, int]]:
     """자원 타일을 더 사서 생산 건물 범위의 빈칸을 채우면 늘어나는 값 (사용자: '채석장 빈칸에 돌 넣는 게 낫지 않나').
-    타일마다 가장 좋은 빈칸에 하나씩 놓아 보며(욕심쟁이) 늘어나는 값이 있는 동안 반복한다.
-    돌려주는 값: [(종류, 첫 자리 중심, 크기, 늘어나는 점수 합, 놓을 개수, 0)]."""
+    게임의 추가 건설 목록·크기·현재 비용만 사용한다. 상위형이 있으면 하위형을 대신 권하지 않는다.
+    내부 점수는 빈자리 선택용이며 새 타일의 생산량 예측으로 표시하지 않는다.
+    돌려주는 값: [(종류, 첫 자리 중심, 크기, 배치 우선순위, 놓을 개수, 0)]."""
+    from .construction_policy import is_recommended_building, preferred_tile_types
     grid = grid_from_geo(base.get("geo") or {})
     if grid is None:
         return []
@@ -1198,24 +1251,57 @@ def suggest_tiles(base: dict, res_weight: Optional[Dict[int, float]] = None, pad
     stats = _stat_types(base)
     pieces, origin = pieces_from_base(base, grid, housing)
     have = {p.type for p in pieces.values()}
-    kinds = {EFFECTS[t][0] for t in have if t in EFFECTS and isinstance(EFFECTS[t][0], int)}
+    raw = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
+    sources = {}
+    for i, p in pieces.items():
+        eff = EFFECTS.get(p.type)
+        counted = raw.get(i, {}).get("in_range")
+        if not eff or not isinstance(eff[0], int) or p.factor < 1 or not isinstance(counted, dict) or not counted:
+            continue
+        if not all(isinstance(v, int) and v >= 0 for v in counted.values()):
+            continue
+        x, y = grid.center(*origin[i], p.w, p.h)
+        actual = sum(in_range(grid.center(*origin[j], q.w, q.h)[0] - x,
+                              grid.center(*origin[j], q.w, q.h)[1] - y, p.range + pad)
+                     for j, q in pieces.items() if TILE_RES.get(q.type) == eff[0])
+        if actual == sum(counted.values()):
+            sources[i] = (eff[0], x, y, p.range + pad)
+    kinds = {v[0] for v in sources.values()}
+    available = {bp.get("type"): bp for bp in build_options if isinstance(bp, dict)
+                 and bp.get("type") in TILE_RES and bp.get("can_build_more") is not False
+                 and is_recommended_building(bp.get("type", ""))}
+    selected = preferred_tile_types(available, have)
+    protected = entrance_cells(base.get("geo") or {}, grid)
+    remaining = list(resources) if resources is not None else None
+    pcs, o = dict(pieces), dict(origin)
     out = []
-    for t, size in (("kBoulder", (1, 1)), ("kWheatField", (2, 2)), ("kForest", (2, 2))):
+    for t in sorted(selected, key=lambda t: (-(res_weight or {}).get(TILE_RES[t], 1.0), t)):
         if TILE_RES[t] not in kinds:
             continue
-        pcs, o = dict(pieces), dict(origin)
+        option = available[t]
+        size, cost = option.get("size"), option.get("cost")
+        if not isinstance(size, (list, tuple)) or len(size) != 2 or not all(isinstance(v, int) and v > 0 for v in size):
+            continue
+        if not isinstance(cost, (list, tuple)) or len(cost) != 4 or not all(isinstance(v, int) and v >= 0 for v in cost):
+            continue
         s0 = Scorer(pcs, stats, housing, res_weight, pad).score(Layout(grid, pcs, o))[0]
         total, first, n = 0.0, None, 0
         for k in range(max_each):
-            nid = -100 - k
+            if remaining is not None and any(i >= len(remaining) or remaining[i] < v for i, v in enumerate(cost)):
+                break
+            nid = min([-100] + list(pcs)) - 1
             pcs[nid] = Piece(nid, t, size[0], size[1], frozenset((dx, dy) for dx in range(size[0]) for dy in range(size[1])),
-                             True, 0.0, 1.0, float(TILE_CAPACITY.get(t, 1)))
+                             True, 0.0, 1.0, 1.0)
             scorer = Scorer(pcs, stats, housing, res_weight, pad)
             occ = Layout(grid, {i: pcs[i] for i in o}, o).occ
             best = None
             for c, r in grid.tiles:
                 cells = [(c + dx, r + dy) for dx, dy in pcs[nid].rel]
-                if any(x not in grid.tiles or x in occ for x in cells):
+                if any(x not in grid.tiles or x in occ or x in protected for x in cells):
+                    continue
+                tx, ty = grid.center(c, r, size[0], size[1])
+                if not any(kind == TILE_RES[t] and in_range(tx - x, ty - y, radius)
+                           for kind, x, y, radius in sources.values()):
                     continue
                 o2 = dict(o)
                 o2[nid] = (c, r)
@@ -1229,6 +1315,8 @@ def suggest_tiles(base: dict, res_weight: Optional[Dict[int, float]] = None, pad
             s0 = best[0]
             o[nid] = best[1]
             n += 1
+            if remaining is not None:
+                remaining = [v - cost[i] if i < 4 else v for i, v in enumerate(remaining)]
             if first is None:
                 first = grid.center(best[1][0], best[1][1], size[0], size[1])
         if n:

@@ -137,7 +137,8 @@ def REACH_ANGLES():
 
 def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequence[dict],
                targets: Optional[Dict[int, int]] = None, need: int = 1, seconds: float = 12.0,
-               prefer: Optional[Dict[int, tuple]] = None, char_levels: Optional[Dict[str, int]] = None):
+               prefer: Optional[Dict[int, tuple]] = None, char_levels: Optional[Dict[str, int]] = None,
+               resources: Optional[Sequence[int]] = None):
     """가이드 배치(지금 배치에서 출발하는 담금질 + 가이드 허브 규칙, preset "guide") → 닿지 않는 미완성 건물로 길 열기 → 새 건물 자리. 자원별 추천 각도.
     seconds: 탐색 시간 상한. prefer: 이전 목표 배치(건물별 중심) — 새 계산이 2% 넘게 좋지 않으면 목표를 바꾸지 않는다.
 
@@ -192,7 +193,7 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
     grid = grid_from_geo(snap.get("geo") or {})
     if full is None or grid is None:
         return None, {}
-    plan = _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib)
+    plan = _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib, resources)
     plan.preset = "guide"
     world = hs.world_from_geo(lo.final_base(snap, full).get("geo") or {}, 0.03)
     sweeps = {}
@@ -203,13 +204,14 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
     return plan, sweeps
 
 
-def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib):
+def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib, resources=None):
     """최적화 결과(FullPlan) → 게임에서 할 옮기기 순서·새로 지을 것·강화 추천이 붙은 LayoutPlan."""
     from . import layout_opt as lo
     from .layout import LayoutPlan, Move, buildings_from_base, plan_access
     final_base = lo.final_base(snap, full)
     entrance = lo.entrance_cells(snap.get("geo") or {}, grid)
-    access, final_base, reserved = (plan_access(final_base, list(targets), reach, avoid=entrance) if targets and team
+    access, final_base, reserved = (plan_access(final_base, list(targets), reach, avoid=entrance,
+                                               accept_fn=lambda nb: lo.preserves_production(snap, nb, pad)) if targets and team
                                     else ([], final_base, set()))
     pieces, cur = lo.pieces_from_base(snap, grid, lo.housing_types())
     target_origin = dict(full.origin_after)
@@ -257,18 +259,22 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
         plan.notes.append(tr("채석장 바위: 게임 현재 {before}개 → 목표 자리 계산 {after}개 (이동 뒤 게임 값 확인)",
                              before=sum(counted.values()), after=after))
     plan.calibration = calib
-    # 새로 지을 것: 설계도 건물 + 여러 개 지을 수 있는 생산 건물(이미 있는 농장·채석장 하나 더) + 자원 타일 더 사기
-    have = {b.get("type") for b in final_base.get("buildings") or []}
-    more = [{"type": t} for t in ("kIdleFarm", "kIdleStoneMine") if t in have and t not in {bp.get("type") for bp in blueprints}]
-    plan.builds = lo.suggest_builds(final_base, list(blueprints) + more, res_weight, pad)
-    plan.builds += lo.suggest_tiles(final_base, res_weight, pad)
+    from .construction_policy import is_recommended_building
+    options = [bp for bp in blueprints if is_recommended_building(bp.get("type", ""))]
+    plan.build_costs = {bp["type"]: tuple(bp["cost"]) for bp in options if bp.get("cost") is not None}
+    # 게임이 추가 건설 가능하다고 보낸 항목만 쓴다. 보유 건물을 근거로 설계도를 만들어 내지 않는다.
+    plan.construction_pending = bool(steps)
+    if not plan.construction_pending:
+        plan.builds = lo.suggest_builds(snap, options, res_weight, pad, resources=resources)
+        plan.builds += lo.suggest_tiles(snap, res_weight, pad, build_options=options, resources=resources)
     plan.builds.sort(key=lambda x: -x[3])
     # 금광은 추천하지 않는다 (사용자 결정 2026-09-26: 무한 모드로 골드 충분 — 철거 후보는 suggest_demolish)
-    plan.builds = [b for b in plan.builds if b[0] != "kGoldMine"]
+    plan.builds = [b for b in plan.builds if is_recommended_building(b[0])]
     plan.builds = [b for b in plan.builds if not grid.cells(b[1][0], b[1][1], b[2][0], b[2][1]) & entrance]
     plan.activations = lo.activation_gains(final_base, res_weight, pad)
     plan.demolish = lo.suggest_demolish(final_base, res_weight, pad)
     from .layout import NewSpot
-    plan.new_spots = [NewSpot(t, c, sz, n, tr("범위 효과 +{g:.1f} (지은 뒤 강화·일꾼 배정 기준)", g=g))
+    plan.new_spots = [NewSpot(t, c, sz, n, tr("생산 건물 범위의 빈칸 채우기 — 첫 자리 초록 점선{cost_txt}", cost_txt="")
+                             if t in lo.TILE_RES else tr("범위 효과 +{g:.1f} (지은 뒤 강화·일꾼 배정 기준)", g=g))
                       for t, c, sz, g, n, *_ in plan.builds[:3]]
     return plan

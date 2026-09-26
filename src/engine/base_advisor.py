@@ -13,6 +13,7 @@ from typing import List, Tuple
 from ..gamedata import GameData
 from ..i18n import tr
 from ..tracking.meta_state import MetaState
+from .construction_policy import RESOURCE_TILE_TYPES, RESOURCE_VARIANTS, is_recommended_building, preferred_tile_types
 
 # 게임 설명(desc_ko)에서 이 낱말이 있으면 런에 직접 영향 주는 건물로 본다 — 게임 원문과 대조하는 것이라
 # 번역하면 안 된다(다국어 게임 문구 지원(gamedata.py) 은 아직 desc_ko 가 감지된 언어로 바뀌는 걸 반영 못 함 —
@@ -52,19 +53,32 @@ FINISH_LABEL = {"kScaffold": tr("공사 중"), "kUpgrading": tr("강화 공사 �
 
 def suggest(meta: MetaState, data: GameData, limit: int = 10) -> List[BaseSuggestion]:
     out: List[BaseSuggestion] = []
+    available = meta.build_options if meta.build_options is not None else meta.blueprints
+    preferred_tiles = preferred_tile_types((b.type for b in available), (b.type for b in meta.buildings))
+    available_by_type = {b.type: b for b in available}
+    known = set(available_by_type) | {b.type for b in meta.buildings}
+    superseded = {basic for advanced, basic in RESOURCE_VARIANTS if advanced in known}
     for b in meta.buildings:
-        if b.state in FINISH_LABEL:
+        if is_recommended_building(b.type) and b.state in FINISH_LABEL:
             out.append(BaseSuggestion("finish", b.type, tr("{v0} 완성", v0=data.building_name(b.type)), _desc(data, b.type),
                                       tr("{v0} · 채집 때 작업자를 이 건물에 맞히면 공사가 진행됨", v0=FINISH_LABEL[b.state]),
                                       True, "", True, "", 0))
     for bp in meta.blueprints:
+        if meta.build_options is not None:
+            if bp.type not in available_by_type:
+                continue
+            bp = available_by_type[bp.type]
+        if not is_recommended_building(bp.type):
+            continue
+        if bp.type in RESOURCE_TILE_TYPES and bp.type not in preferred_tiles:
+            continue
         desc = _desc(data, bp.type)
         short = meta.shortfall(bp.cost)
         out.append(BaseSuggestion("build", bp.type, data.building_name(bp.type), desc, meta.resource_text(bp.cost),
                                   meta.affordable(bp.cost), " · ".join(f"{k} {v}" for k, v in short.items()),
                                   any(w in desc for w in RUN_WORDS), bp.category, sum(short.values()), bp.cost))
     for b in meta.buildings:
-        if not b.can_upgrade or not b.upgrade_cost:
+        if not is_recommended_building(b.type) or b.type in superseded or not b.can_upgrade or not b.upgrade_cost:
             continue
         desc = _desc(data, b.type)
         short = meta.shortfall(b.upgrade_cost)
