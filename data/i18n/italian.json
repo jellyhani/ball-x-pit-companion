@@ -294,8 +294,8 @@
   "탐색 {k}번 (연속 {stale}번 더 좋은 배치 없음 — 수렴)": "{k} ricerche (nessuna disposizione migliore per {stale} volte di fila — convergenza)",
   "탐색 {k}번 (시간 상한)": "{k} ricerche (limite di tempo)",
   "금광 U자: 발사대 앞 자리 {v0}곳 중 {v1}곳에 금광": "Miniere d'oro a U: miniere d'oro in {v1} dei {v0} posti davanti al lanciatore",
-  "이전에 정한 최적 배치를 유지 (새 계산이 2% 넘게 좋지 않음)": "Mantenuta la disposizione ottimale scelta in precedenza (il nuovo calcolo non è migliore di oltre il 2%)",
-  "지금 배치가 최적에 가까움 — 범위 효과와 채집 발사량을 합쳐 2% 넘게 올리는 배치를 찾지 못함": "La disposizione attuale è vicina all'ottimo — non è stata trovata una disposizione che migliori insieme effetto ad area e lanci di raccolta di oltre il 2%",
+  "이전 목표 배치를 유지했습니다 (새 계산의 개선이 2% 미만).": "Mantenuta la disposizione obiettivo precedente (il nuovo calcolo migliora di meno del 2%).",
+  "이번 탐색에서 범위 효과와 채집 예상량을 합쳐 2% 넘는 개선을 찾지 못했습니다.": "Questa ricerca non ha trovato un miglioramento superiore al 2% per effetti ad area e raccolto stimato combinati.",
   "능력치·거처처럼 치여도 얻는 게 없는 건물을 발사대 앞에서 뒤·구석으로 (앞 구역 막음 {f0:.1f} → {f1:.1f})": "Spostamento degli edifici che non guadagnano nulla dai colpi (statistiche, alloggi) dalla zona anteriore del lanciatore verso il retro/gli angoli (blocco zona anteriore {f0:.1f} → {f1:.1f})",
   "자원 타일을 발사대 앞으로 (앞 구역 자원 타일 {t0} → {t1}개 — 공을 던져 캐는 몫)": "Caselle risorsa verso la parte anteriore del lanciatore (caselle risorsa in zona anteriore {t0} → {t1} — la quota raccolta dalle palle lanciate)",
   "일꾼 배정": "Assegnazione lavoratori",
@@ -972,6 +972,7 @@
   "지금 배치가 가이드 기준으로 더 낫거나 같음 — 옮기지 않음": "La disposizione attuale è uguale o migliore secondo la guida — nulla da spostare",
   "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} abitazioni di raccolta/ricrescita hanno le proprie caselle di risorse in portata (circondate non raccolgono — guida di apo)",
   "{text} — 단, {v0}은(는) 이미 {result2} 재료 ({names2})": "{text} — ma {v0} è già un ingrediente per {result2} ({names2})",
+  "Steam 공략의 일부 규칙을 참고한 적은 이동안입니다. 최적 배치를 보장하지 않습니다.": "Questa proposta con pochi spostamenti segue alcune regole delle guide Steam. Non garantisce una disposizione ottimale.",
   "색: 밀밭 노랑 · 숲 초록 · 바위 회색. 테두리 건물은 범위 효과 건물(점선 원 = 범위). 가이드 배치 = 지금 배치에서 출발해 Steam 공략 3개(Zarcos·apo·Drake) 규칙(잔병의 오두막 범위에 거처 전부 · 대위 막사 범위에 능력치 건물 · 쳐야 하는 건물은 강철 요새 범위의 발사대 앞)을 먼저 맞추고, 효과가 크게 오르는 것만 옮긴 배치. 주황 번호 = 옮기는 순서 (앞 10개) — 게임에서 재배치 모드에 들어가면 다음 옮기기가 게임 화면에 표시됩니다.": "Colori: grano giallo · foresta verde · roccia grigia. Gli edifici con bordo hanno effetti ad area (cerchio tratteggiato = portata). Disposizione della guida = partendo dalla disposizione attuale, prima si rispettano le regole di 3 guide Steam (Zarcos·apo·Drake) — tutte le abitazioni nella portata della Capanna del veterano · gli edifici delle statistiche nella portata degli Alloggi del capitano · gli edifici da colpire davanti al lanciatore, nella portata della Fortezza di ferro — poi si sposta solo ciò che aumenta nettamente l'effetto. Numeri arancioni = ordine degli spostamenti (primi 10) — in modalità riorganizzazione, il prossimo spostamento appare sullo schermo di gioco.",
   "가이드 배치: 지금 배치에서 출발해 공략 규칙(잔병의 오두막·대위 막사·강철 요새 범위에 전부, 쳐야 하는 건물은 발사대 앞)을 크게 쳐서 이득이 큰 것만 {v0}개 옮김": "Disposizione della guida: partendo da quella attuale, dando molto peso alle regole della guida (tutto nella portata di Capanna del veterano · Alloggi del capitano · Fortezza di ferro, edifici da colpire davanti al lanciatore), solo i {v0} spostamenti convenienti"
 }

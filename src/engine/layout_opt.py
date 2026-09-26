@@ -941,12 +941,12 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         pt = totals[id(prefer_orig)]
         if best[0] < pt[0] * 1.02 and (not guide or cov_of(prefer_orig) >= best_cov):
             best = pt
-            notes.append(tr("이전에 정한 최적 배치를 유지 (새 계산이 2% 넘게 좋지 않음)"))
+            notes.append(tr("이전 목표 배치를 유지했습니다 (새 계산의 개선이 2% 미만)."))
     _, orig, s, hv = best
     if best[1] is prefer_orig and prefer_orig is not None:
         pass
     elif best[0] < 2.0 * 1.02 and not (guide and best_cov > cov0):
-        notes.append(tr("지금 배치가 최적에 가까움 — 범위 효과와 채집 발사량을 합쳐 2% 넘게 올리는 배치를 찾지 못함"))
+        notes.append(tr("이번 탐색에서 범위 효과와 채집 예상량을 합쳐 2% 넘는 개선을 찾지 못했습니다."))
         if alt is not None and alt[0] > 1.02:
             notes.append(tr("범위 효과만 보면 +{v0:.0f}% 배치가 있지만 채집 발사량이 {v1:+.0f}% 라 권하지 않음", v0=(alt[0] - 1) * 100, v1=(alt[1] - 1) * 100))
         orig, s, hv = cands[0][0], e0, h0

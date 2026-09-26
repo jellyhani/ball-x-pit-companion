@@ -138,8 +138,20 @@ class LayoutWindow(QWidget):
         root = QHBoxLayout(self)
         left = QVBoxLayout()
         self.view = Segmented([tr("지금 배치"), tr("가이드 배치")], 0)
+        self.view.setStyleSheet("""
+            QFrame#segmented { background: #29292e; border: 1px solid #55555d; border-radius: 7px; }
+            QPushButton#segment { background: transparent; color: #b9b9c2; border: 0; padding: 5px 12px; }
+            QPushButton#segment:checked { background: #285b91; color: white; font-weight: bold; border-radius: 5px; }
+        """)
         self.view.changed.connect(lambda _i: self._redraw())
         left.addWidget(self.view)
+        self.view_label = QLabel(tr("지금 배치"))
+        self.view_label.setStyleSheet(f"color: {tk.css(tk.TEXT_2)}; font-weight: bold;")
+        left.addWidget(self.view_label)
+        scope = QLabel(tr("Steam 공략의 일부 규칙을 참고한 적은 이동안입니다. 최적 배치를 보장하지 않습니다."))
+        scope.setWordWrap(True)
+        scope.setStyleSheet("color: #e6b461;")
+        left.addWidget(scope)
         self.canvas = MapCanvas()
         left.addWidget(self.canvas, 1)
         cap = QLabel(tr("색: 밀밭 노랑 · 숲 초록 · 바위 회색. 테두리 건물은 범위 효과 건물(점선 원 = 범위). 가이드 배치 = 지금 배치에서 출발해 Steam 공략 3개(Zarcos·apo·Drake) 규칙(잔병의 오두막 범위에 거처 전부 · 대위 막사 범위에 능력치 건물 · 쳐야 하는 건물은 강철 요새 범위의 발사대 앞)을 먼저 맞추고, 효과가 크게 오르는 것만 옮긴 배치. 주황 번호 = 옮기는 순서 (앞 10개) — 게임에서 재배치 모드에 들어가면 다음 옮기기가 게임 화면에 표시됩니다."))
@@ -271,6 +283,7 @@ class LayoutWindow(QWidget):
         self._redraw()
 
     def _redraw(self):
+        self.view_label.setText(tr("가이드 배치") if self.view.group.checkedId() == 1 else tr("지금 배치"))
         if not self.base:
             self.canvas.set_state({}, {}, [], {})
             return
