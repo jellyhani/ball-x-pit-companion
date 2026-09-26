@@ -142,7 +142,7 @@ class LayoutWindow(QWidget):
         left.addWidget(self.view)
         self.canvas = MapCanvas()
         left.addWidget(self.canvas, 1)
-        cap = QLabel(tr("색: 밀밭 노랑 · 숲 초록 · 바위 회색. 테두리 건물은 범위 효과 건물(점선 원 = 범위). 가이드 배치 = Steam 공략 3개(Zarcos·apo·Drake) 규칙대로 다시 짠 배치 — 발사대 쪽은 자원 들판, 먼 쪽은 잔병의 오두막 둘레 거처 덩어리와 나머지 건물. 지금 배치보다 나아질 때만 권함. 주황 번호 = 옮기는 순서 (앞 10개) — 게임에서 재배치 모드에 들어가면 다음 옮기기가 게임 화면에 표시됩니다."))
+        cap = QLabel(tr("색: 밀밭 노랑 · 숲 초록 · 바위 회색. 테두리 건물은 범위 효과 건물(점선 원 = 범위). 가이드 배치 = 지금 배치에서 출발해 Steam 공략 3개(Zarcos·apo·Drake) 규칙(잔병의 오두막 범위에 거처 전부 · 대위 막사 범위에 능력치 건물 · 쳐야 하는 건물은 강철 요새 범위의 발사대 앞)을 먼저 맞추고, 효과가 크게 오르는 것만 옮긴 배치. 주황 번호 = 옮기는 순서 (앞 10개) — 게임에서 재배치 모드에 들어가면 다음 옮기기가 게임 화면에 표시됩니다."))
         cap.setWordWrap(True)
         cap.setStyleSheet(f"color: {tk.css(tk.TEXT_2)};")
         left.addWidget(cap)

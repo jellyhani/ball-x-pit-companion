@@ -374,6 +374,43 @@ class LayoutOptTest(unittest.TestCase):
         self.assertEqual(cur, {**o0, **plan.origin_after})
 
 
+class GuideFewMovesTest(unittest.TestCase):
+    """가이드 배치(preset guide): 지금 배치에서 출발해 허브 규칙을 고치고, 처음부터 다시 짜는 것보다 적게 옮긴다
+    (사용자 2026-09-26: '적게 움직이고 효율 최대, 가이드대로')."""
+
+    def test_repair_raises_coverage_without_overlap(self):
+        from src.engine import layout_guide as lg
+        fx, base, grid, pieces, o0 = setup()
+        lane = lo.lane_values(base["geo"], grid)
+        sc = lo.Scorer(pieces, lo._stat_types(base), lo.housing_types(), None, 0.0, lane=lane)
+        groups = lg.hub_groups(pieces, sc)
+        rep = lg.repair(grid, pieces, o0, groups, 0.0, lane)
+        self.assertIsNotNone(rep)
+        org, turn = rep
+        shaped = {i: lo.rotated(p, turn.get(i, 0)) for i, p in pieces.items()}
+        lay = lo.Layout(grid, shaped, org)
+        cells = [c for i in org for c in lay.cells(i)]
+        self.assertEqual(len(cells), len(set(cells)))
+        self.assertTrue(set(cells) <= grid.tiles)
+        self.assertGreaterEqual(lg.coverage(grid, shaped, org, groups, 0.0), lg.coverage(grid, pieces, o0, groups, 0.0))
+
+    def test_guide_moves_less_than_full_rebuild(self):
+        from src.engine import layout_guide as lg
+        fx, base, grid, pieces, o0 = setup()
+        guide = lo.optimize(base, None, None, preset="guide", seconds=3.0)
+        rebuild = lo.optimize(base, None, None, preset="plan")
+        self.assertLess(guide.moved, rebuild.moved)
+        shaped = {i: lo.rotated(p, guide.turned.get(i, 0)) for i, p in pieces.items()}
+        lay = lo.Layout(grid, shaped, guide.origin_after)
+        cells = [c for i in guide.origin_after for c in lay.cells(i)]
+        self.assertEqual(len(cells), len(set(cells)))
+        sc = lo.Scorer(pieces, lo._stat_types(base), lo.housing_types())
+        groups = lg.hub_groups(pieces, sc)
+        self.assertGreaterEqual(lg.coverage(grid, shaped, guide.origin_after, groups, 0.0),
+                                lg.coverage(grid, pieces, o0, groups, 0.0))
+        self.assertTrue(any("가이드 배치: 지금 배치에서 출발해" in n for n in guide.notes))
+
+
 class ProductionUnitTest(unittest.TestCase):
     def test_unit_fills_every_ring_in_range(self):
         """농장(2×2, 범위 3칸)은 둘레 두 겹(6×6 = 밀밭 32개)이 범위 안 — 한 겹만 두르면 바깥 겹 범위가 버려진다

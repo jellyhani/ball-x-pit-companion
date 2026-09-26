@@ -138,8 +138,8 @@ def REACH_ANGLES():
 def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequence[dict],
                targets: Optional[Dict[int, int]] = None, need: int = 1, seconds: float = 12.0,
                prefer: Optional[Dict[int, tuple]] = None, char_levels: Optional[Dict[str, int]] = None):
-    """가이드 배치(전체 재배치, layout_city) → 닿지 않는 미완성 건물로 길 열기 → 새 건물 자리. 자원별 추천 각도.
-    seconds·prefer 는 예전 담금질용 — 지금은 쓰지 않는다 (호출 쪽 호환용).
+    """가이드 배치(지금 배치에서 출발하는 담금질 + 가이드 허브 규칙, preset "guide") → 닿지 않는 미완성 건물로 길 열기 → 새 건물 자리. 자원별 추천 각도.
+    seconds: 탐색 시간 상한. prefer: 이전 목표 배치(건물별 중심) — 새 계산이 2% 넘게 좋지 않으면 목표를 바꾸지 않는다.
 
     돌려주는 값: (LayoutPlan, 자원별 각도 순위). LayoutPlan.swaps 는 게임에서 할 옮기기 순서(잠시 비켜 두기 포함),
     LayoutPlan.final 은 건물별 목표 중심(월드 좌표)."""
@@ -180,15 +180,20 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
 
     calib = lo.calibrate_range(snap)                  # 게임이 직접 센 범위 안 타일 수와 맞춤 (플러그인 1.9)
     pad = calib[0] if calib[2] else 0.0
-    # 배치 추천은 가이드 배치 하나 (사용자 결정 2026-09-25·26): Steam 공략 3개 규칙 (layout_city).
-    # 담금질이 아니라 정해진 규칙으로 짜서 1초 안팎, 재배치 도중 다시 계산해도 목표가 같다.
-    full = lo.optimize(snap, hv if team else None, None, res_weight=res_weight,
-                       fixed=list(targets or {}), pad=pad, preset="plan")
+    # 배치 추천은 가이드 배치 하나 (사용자 결정 2026-09-26: '적게 움직이고 효율 최대, 가이드대로').
+    # 처음부터 다시 짜는 계획도시(layout_city.plan_city)는 이미 거의 된 기지에서도 80개를 옮기라고 해서(+2%),
+    # 지금 배치에서 출발하는 담금질(옮기기 하나당 벌점)에 가이드 허브 규칙을 크게 쳐서 쓴다 (preset "guide").
+    # 쳐야 지어지는 건물은 어떤 각도로든 공이 닿는 배치만 고른다 (사용자 스크린샷: 도박장이 마을 구석에 묻힘).
+    def reach_all(nb: dict) -> bool:
+        got = reach(nb.get("geo") or {})
+        return all(got.get(t, 0) > 0 for t in targets)
+    full = lo.optimize(snap, hv if team else None, reach_all if (targets and team) else None, res_weight=res_weight,
+                       fixed=list(targets or {}), pad=pad, preset="guide", seconds=min(seconds, 8.0), prefer=prefer)
     grid = grid_from_geo(snap.get("geo") or {})
     if full is None or grid is None:
         return None, {}
     plan = _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib)
-    plan.preset = "plan"
+    plan.preset = "guide"
     world = hs.world_from_geo(lo.final_base(snap, full).get("geo") or {}, 0.03)
     sweeps = {}
     if world and team:

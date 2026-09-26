@@ -118,8 +118,7 @@ class LayoutModel:
             M.lane = a(_D, lane)
             idle, tiles = set(scorer.lane_ids), set(scorer.lane_tiles)
             M.lane_idle = a(_I, [1 if i in idle else 0 for i in ids])
-            M.lane_tile = a(_D, [scorer.res_weight.get(lo.TILE_RES[lay.pieces[i].type], 1.0) * lay.pieces[i].cap
-                                 if i in tiles else 0.0 for i in ids])
+            M.lane_tile = a(_D, [scorer.lane_weight.get(i, 0.0) for i in ids])
         else:
             M.lane = ctypes.cast(None, _P(_D))
             M.lane_idle = a(_I, [0] * len(ids))
@@ -150,6 +149,8 @@ class LayoutModel:
                 v = w * p.factor * (scorer.res_weight.get(kind, 1.0) * lay.pieces[t].cap if isinstance(kind, int) else 1.0)
                 if kind == "build" and lay.pieces[t].unfinished:
                     v *= lo.UNFINISHED_BUILD_W
+                if kind in lo.HUB_KINDS:
+                    v *= scorer.hub_w
                 tgt.append(ix[t])
                 val.append(v)
         M.m = len(e_piece)

@@ -1043,9 +1043,11 @@ class AppController(QObject):
         need, _ = need_resource(self.meta, self._shortfalls())
         self._layout_busy = True
         char_levels = {c.get("type"): c.get("lvl") for c in self.meta.chars_raw if c.get("type")}
-        # 가이드 배치는 정해진 규칙이라 재배치 도중 다시 계산해도 목표가 같다 → 이전 목표(prefer)를 넘길 필요 없음
-        self.sim.submit("layout", snap, sim_jobs.job_layout, snap, team, self._harvest_dur, bps, targets, need, 12.0,
-                        None, char_levels)
+        # 목표 고정: 이전 목표 배치를 넘겨, 새 계산이 2% 넘게 좋지 않으면 목표를 바꾸지 않는다 — 조금 옮기고 다시
+        # 계산할 때마다 목표가 바뀌어 헛걸음하던 것 (기록: 71 → 79 → 92 → 118번)
+        prev = getattr(self.layout_plan, "final", None) if self.layout_plan else None
+        self.sim.submit("layout", snap, sim_jobs.job_layout, snap, team, self._harvest_dur, bps, targets, need, 8.0,
+                        dict(prev) if prev else None, char_levels)
 
     def _update_spa(self, base: dict):
         """스파 재채집 손익: 게임이 알려 준 비용과 내 채집 기록 평균을 비교 (비용·기록이 바뀔 때만)."""

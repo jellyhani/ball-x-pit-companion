@@ -368,16 +368,25 @@ class Scorer:
     def __init__(self, pieces: Dict[int, Piece], stat_types: Set[str], housing: Set[str],
                  res_weight: Optional[Dict[int, float]] = None, pad: float = 0.0,
                  preset_spots: Sequence[Tuple[int, int]] = (), preset_type: str = "kGoldMine",
-                 lane: Optional[Dict[Tuple[int, int], float]] = None):
+                 lane: Optional[Dict[Tuple[int, int], float]] = None, hub_w: float = 1.0, build_lane: float = 0.0):
         self.pieces = pieces
+        self.res_weight = res_weight or {1: 1.0, 2: 1.0, 3: 1.0}
+        self.hub_w = hub_w                 # 가이드 허브(잔병의 오두막·대위 막사·강철 요새) 효과에 곱하는 값 (GUIDE_HUB_W)
         self.lane = lane or {}
         self.lane_ids = [i for i, p in pieces.items() if lane_idle(p)] if self.lane else []
-        self.lane_tiles = [i for i, p in pieces.items() if p.type in TILE_RES] if self.lane else []
+        # 앞 구역 가산: 자원 타일(자원 가중 × 용량) + build_lane 이면 공사 중 건물도 (쳐야 지어지므로 공이 닿는 발사대 앞에)
+        self.lane_weight: Dict[int, float] = {}
+        if self.lane:
+            for i, p in pieces.items():
+                if p.type in TILE_RES:
+                    self.lane_weight[i] = self.res_weight_of(p)
+                elif build_lane and p.unfinished:
+                    self.lane_weight[i] = build_lane
+        self.lane_tiles = list(self.lane_weight)
         self.preset_spots = set(preset_spots)
         self.preset_type = preset_type
         self.preset_cells = {s: {(s[0] + dx, s[1] + dy) for dx in range(2) for dy in range(2)} for s in self.preset_spots}
         self.pad = pad                     # 범위 판정 여유 (게임 값으로 맞춘 것, calibrate_range)
-        self.res_weight = res_weight or {1: 1.0, 2: 1.0, 3: 1.0}
         self.effects = [i for i, p in pieces.items() if p.type in EFFECTS and p.range > 0]
         self.targets: Dict[object, List[int]] = {1: [], 2: [], 3: [], "all": [], "stat": [], "housing": [], "statue": [], "build": []}
         for i, p in pieces.items():
@@ -392,6 +401,9 @@ class Scorer:
             if p.type in STATUE_TYPES or p.unfinished:
                 self.targets["build"].append(i)
             self.targets["all"].append(i)
+
+    def res_weight_of(self, p: "Piece") -> float:
+        return self.res_weight.get(TILE_RES[p.type], 1.0) * p.cap
 
     def score(self, lay: Layout) -> Tuple[float, Dict[str, float]]:
         ctr = {i: lay.center(i) for i in lay.origin}
@@ -418,6 +430,8 @@ class Scorer:
                 val = w * p.factor * (self.res_weight.get(kind, 1.0) * self.pieces[t].cap if isinstance(kind, int) else 1.0)
                 if kind == "build" and self.pieces[t].unfinished:
                     val *= UNFINISHED_BUILD_W
+                if kind in HUB_KINDS:
+                    val *= self.hub_w
                 if mode == "regen":
                     k = (p.type, t)
                     regen[k] = max(regen.get(k, 0.0), val)
@@ -435,7 +449,7 @@ class Scorer:
             total -= LANE_W * blocked
             detail["lane"] = round(blocked, 2)
             # 생산 건물·거처가 이미 캐는 타일은 빼고 (같은 타일 자원을 나눠 쓰므로 둘 다 더하면 이중 계산)
-            front = sum(self.lane.get(c, 0.0) * self.res_weight.get(TILE_RES[self.pieces[i].type], 1.0) * self.pieces[i].cap
+            front = sum(self.lane.get(c, 0.0) * self.lane_weight[i]
                         for i in self.lane_tiles if i in lay.origin and i not in harvest for c in lay.cells(i))
             total += LANE_TILE_W * front
             detail["lane_tiles"] = round(front, 2)
@@ -450,6 +464,15 @@ class Scorer:
 
 
 
+# 가이드 배치(preset "guide"): Steam 공략 3개(Zarcos·Drake·apo)가 '전부 범위 안에'라고 하는 허브 효과를 이만큼 크게 친다
+# — 잔병의 오두막(거처)·대위 막사(능력치 건물)·강철 요새(공사 중·무한 강화). 값은 임의: 3배면 거처 하나가 범위 밖일 때
+# 1.8 (밀밭 두 개 가까이) 손해라 옮길 만하고, 자원 들판(타일당 1.0)보다 먼저 맞춘다.
+HUB_KINDS = ("housing", "stat", "build")
+GUIDE_HUB_W = 3.0
+# 가이드 배치: 공사 중 건물의 앞 구역 가산 (자원 타일 가중 1 과 같은 식, 칸마다 앞 구역 값 × 이 값 × LANE_TILE_W). 값은 임의:
+# 3×2 건물을 발사대 가까이 두면 약 +4 — 거처 두 개를 범위에 넣는 것만큼. 사용자 스크린샷(2026-09-26): 가이드 배치대로
+# 옮겼더니 쳐야 하는 도박장이 마을 구석에 묻혀 어떤 각도로도 안 닿음.
+GUIDE_BUILD_LANE = 5.0
 MOVE_COST = 0.03        # 옮기는 건물 하나당 벌점 — 실제 기지에서 0.005(42번 옮김, 효과 +4%)·0.03(22번, +7.5%)·0.06(탐색 멈춤) 비교해 정함
 
 
@@ -706,16 +729,17 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     if grid is None:
         return None
     housing = housing_types()
-    stats = {b.get("type") for b in base.get("buildings") or []
-             if b.get("stat") and not any(x in b["stat"] for x in ("None", "Invalid", "Count", "Max"))}
-    stat_types = stats or STAT_FALLBACK
+    stat_types = _stat_types(base)       # kNum(능력치 없음) 제외 — 전에는 모든 건물을 능력치 건물로 셌다
     # 가이드 배치는 '쳐야 지어지는' 건물(fixed 로 넘어온 공사 중 건물)을 제자리에 묶지 않고 발사대 쪽으로 옮긴다
-    pieces, origin0 = pieces_from_base(base, grid, housing, () if preset == "plan" else fixed)
+    # 가이드 배치(plan·guide)는 공사 중 건물도 묶지 않는다 — 공이 닿는 자리로 옮긴다 (guide 는 reach_ok 로 확인)
+    pieces, origin0 = pieces_from_base(base, grid, housing, () if preset in ("plan", "guide") else fixed)
     if not pieces:
         return None
     preset_spots = gold_u_spots(geo, grid) if preset == "gold_u" else []
     lane = lane_values(geo, grid)
-    scorer = Scorer(pieces, stat_types, housing, res_weight, pad, preset_spots, lane=lane)
+    guide = preset == "guide"
+    scorer = Scorer(pieces, stat_types, housing, res_weight, pad, preset_spots, lane=lane,
+                    hub_w=GUIDE_HUB_W if guide else 1.0, build_lane=GUIDE_BUILD_LANE if guide else 0.0)
     plain = Scorer(pieces, stat_types, housing, res_weight, pad)        # 보고용 (프리셋 가산 없는 범위 효과)
     # 발사대 앞 구역(자원 타일은 앞에, 치여도 얻는 게 없는 건물은 뒤로)은 담금질과 후보 비교 모두에 넣는다.
     # 실제 기지 3곳에서 앞 구역을 넣은 쪽이 채집 발사 계산·범위 효과 모두 좋았다 (53.2 → 56.2, 49.8 → 52.1).
@@ -728,6 +752,43 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     e0, d0 = scorer.score(lay0)
     rng = random.Random(seed)
     cands = [(dict(origin0), e0)]
+    turn_of: Dict[int, Dict[int, int]] = {}             # 후보(id) → 회전 (가이드 배치가 거처 덩어리를 다시 짤 때)
+    starts: List[Tuple[Dict[int, Tuple[int, int]], Dict[int, int], Set[int]]] = [(origin0, {}, set())]
+    groups = []
+
+    def shaped_of(turn: Dict[int, int]) -> Dict[int, Piece]:
+        return {i: rotated(p, turn.get(i, 0)) for i, p in pieces.items()} if turn else pieces
+
+    def pinned_of(turn: Dict[int, int], pin: Set[int]) -> Dict[int, Piece]:
+        """담금질용 모양: pin 에 든 건물은 못 옮기게 (가이드 규칙을 지킨 허브·거처를 다시 빼지 않게)."""
+        sp = shaped_of(turn)
+        if not pin:
+            return sp
+        return {i: (Piece(p.id, p.type, p.w, p.h, p.rel, False, p.range, p.factor, p.cap, p.unfinished)
+                    if i in pin else p) for i, p in sp.items()}
+
+    def add_cand(orig: Dict[int, Tuple[int, int]], turn: Dict[int, int]):
+        sp = shaped_of(turn)
+        o = canonicalize(sp, origin0, orig)
+        cands.append((o, scorer.score(Layout(grid, sp, o))[0]))
+        if turn:
+            turn_of[id(o)] = dict(turn)
+    if guide:
+        # 가이드 배치: 허브 규칙을 먼저 고친 배치에서도 담금질을 시작한다 — 담금질만으로는 '다른 건물을 비켜야
+        # 들어가는' 거처를 못 넣었다 (실제 기지: 잔병의 오두막 범위 거처 7/12 에서 멈춤 → 고치면 10/12, 12번 옮김)
+        from .layout_guide import coverage, hub_groups, repair
+        groups = hub_groups(pieces, scorer)
+        rep = repair(grid, pieces, origin0, groups, pad, lane)
+        if rep is not None and (rep[0] != origin0 or rep[1]):
+            # 고친 배치에서 시작하는 담금질은 규칙을 지킨 허브·거처를 묶고 나머지(자원 타일 등)만 옮긴다
+            # (묶지 않으면 거처를 범위 밖으로 빼서 효과를 올렸다: 범위 거처 12 → 8)
+            from .layout_guide import satisfied
+            pin = satisfied(grid, shaped_of(rep[1]), rep[0], groups, pad, lane)
+            starts.append((rep[0], rep[1], pin))
+            add_cand(rep[0], rep[1])
+            lay = Layout(grid, pinned_of(rep[1], pin), rep[0])       # 담금질 없이 다듬기만 (채집 발사를 덜 흔든다)
+            polish(lay, scorer, origin0, RESTART_SECONDS)
+            add_cand(lay.origin, rep[1])
     search_note = ""
     from . import native_layout
     if native_layout._lib() is not None:
@@ -738,11 +799,12 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         best, stale, k = -1e18, 0, 0
         while k < max(restarts, MIN_RESTARTS) or (stale < CONVERGED and time.perf_counter() < deadline):
             k += 1
-            lay = Layout(grid, pieces, origin0)
+            so, st, pin = starts[k % len(starts)]
+            lay = Layout(grid, pinned_of(st, pin), so)
             o, _ = anneal(lay, scorer, RESTART_SECONDS * 0.8, rng, origin0=origin0)
-            lay = Layout(grid, pieces, o)
+            lay = Layout(grid, pinned_of(st, pin), o)
             v = polish(lay, scorer, origin0, RESTART_SECONDS * 0.2)
-            cands.append((canonicalize(pieces, origin0, lay.origin), scorer.score(lay)[0]))
+            add_cand(lay.origin, st)
             if v > best + max(1e-6, abs(best) * 0.001):
                 best, stale = v, 0
             else:
@@ -754,14 +816,20 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         restarts = 0
     for k in range(restarts):
         sc = scorer
-        lay = Layout(grid, pieces, origin0)
+        so, st, pin = starts[(k + 1) % len(starts)]
+        lay = Layout(grid, pinned_of(st, pin), so)
         o, _ = anneal(lay, sc, seconds * 0.7 / max(1, restarts), rng, origin0=origin0)
-        lay = Layout(grid, pieces, o)
+        lay = Layout(grid, pinned_of(st, pin), o)
         polish(lay, sc, origin0, seconds * 0.3 / max(1, restarts))
-        cands.append((canonicalize(pieces, origin0, lay.origin), scorer.score(lay)[0]))
+        add_cand(lay.origin, st)
     blds = buildings_from_base(base)
 
     def to_base(orig: Dict[int, Tuple[int, int]]) -> dict:
+        turn = turn_of.get(id(orig))
+        if turn:                                        # 회전해서 놓는 건물이 있으면 충돌 모양도 돌린다
+            L = Layout(grid, shaped_of(turn), orig)
+            return final_base(base, FullPlan(origin0, orig, {i: L.center(i) for i in orig}, 0.0, 0.0, {}, {},
+                                             turned=turn))
         g = geo
         cur = dict(blds)
         out_b = []
@@ -789,19 +857,29 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     prefer_orig = None
     if prefer:
         po = dict(origin0)
-        ok = True
-        for i, (x, y) in prefer.items():
+        pturn: Dict[int, int] = {}
+        for i, v in prefer.items():
             if i in pieces:
-                p = pieces[i]
+                x, y = v[0], v[1]
+                k = int(v[2]) % 4 if len(v) > 2 else 0
+                if k:
+                    pturn[i] = k
+                p = rotated(pieces[i], k)
                 po[i] = (round((x - p.w * grid.size / 2 - grid.ox) / grid.size),
                          round((y - p.h * grid.size / 2 - grid.oy) / grid.size))
-        cells = [c for i in po for c in Layout(grid, pieces, {}).cells(i, po[i])] if pieces else []
+        sp = shaped_of(pturn)
+        cells = [c for i in po for c in Layout(grid, sp, {}).cells(i, po[i])] if pieces else []
         ok = len(cells) == len(set(cells)) and set(cells) <= grid.tiles and \
-            all(po[i] == origin0[i] for i in po if not pieces[i].movable)
-        if ok and po != origin0:
+            all(po[i] == origin0[i] and not pturn.get(i) for i in po if not pieces[i].movable)
+        if ok and (po != origin0 or pturn):
             prefer_orig = po
-            cands.append((po, scorer.score(Layout(grid, pieces, po))[0]))
+            cands.append((po, scorer.score(Layout(grid, sp, po))[0]))
+            if pturn:
+                turn_of[id(po)] = pturn
     totals = {}
+    best_cov = 0
+    cov0 = coverage(grid, pieces, origin0, groups, pad) if guide else 0
+    cov_of = lambda o: coverage(grid, shaped_of(turn_of.get(id(o), {})), o, groups, pad) if guide else 0
     for orig, s in cands:
         current = orig is cands[0][0]
         nb = to_base(orig)
@@ -815,22 +893,25 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             alt = (rel_e, rel_h)
         if halved:
             continue                                    # 채집 발사로 얻던 자원 하나가 절반 아래로 줄면 뺀다
-        total = rel_e + rel_h - SELECT_MOVE_COST * sum(1 for i in orig if orig[i] != origin0.get(i))
+        tn = turn_of.get(id(orig), {})
+        total = rel_e + rel_h - SELECT_MOVE_COST * sum(1 for i in orig if orig[i] != origin0.get(i) or tn.get(i))
         totals[id(orig)] = (total, orig, s, hv)
-        if best is None or total > best[0]:
-            best = (total, orig, s, hv)
+        # 가이드 배치: 허브 범위 달성도가 먼저, 같으면 효과·채집·옮기는 수
+        cov = cov_of(orig)
+        if best is None or (cov, total) > (best_cov, best[0]):
+            best, best_cov = (total, orig, s, hv), cov
     if best is None:
         return None
     _, orig, s, hv = best
     if prefer_orig is not None and id(prefer_orig) in totals and best[1] is not prefer_orig:
         pt = totals[id(prefer_orig)]
-        if best[0] < pt[0] * 1.02:
+        if best[0] < pt[0] * 1.02 and (not guide or cov_of(prefer_orig) >= best_cov):
             best = pt
             notes.append(tr("이전에 정한 최적 배치를 유지 (새 계산이 2% 넘게 좋지 않음)"))
     _, orig, s, hv = best
     if best[1] is prefer_orig and prefer_orig is not None:
         pass
-    elif best[0] < 2.0 * 1.02:
+    elif best[0] < 2.0 * 1.02 and not (guide and best_cov > cov0):
         notes.append(tr("지금 배치가 최적에 가까움 — 범위 효과와 채집 발사량을 합쳐 2% 넘게 올리는 배치를 찾지 못함"))
         if alt is not None and alt[0] > 1.02:
             notes.append(tr("범위 효과만 보면 +{v0:.0f}% 배치가 있지만 채집 발사량이 {v1:+.0f}% 라 권하지 않음", v0=(alt[0] - 1) * 100, v1=(alt[1] - 1) * 100))
@@ -840,26 +921,35 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         cand_best = max(cands[1:], key=lambda c: c[1]) if len(cands) > 1 else cands[0]
         orig, s, hv = cand_best[0], cand_best[1], (harvest_eval(to_base(cand_best[0])["geo"]) if harvest_eval else None)
         notes = [tr("금광 U자: 발사대 앞 자리 {v0}곳 중 {v1}곳에 금광", v0=len(preset_spots), v1=sum(1 for i, p in pieces.items() if p.type == 'kGoldMine' and orig.get(i) in set(preset_spots)))]
-    lay = Layout(grid, pieces, orig)
+    turn = dict(turn_of.get(id(orig), {}))
+    shaped = shaped_of(turn)
+    lay = Layout(grid, shaped, orig)
     if lane:
-        def front(o):
-            L = Layout(grid, pieces, o)
+        def front(o, sp=pieces):
+            L = Layout(grid, sp, o)
             return sum(lane.get(c, 0.0) for i in laned.lane_ids if i in o for c in L.cells(i))
 
-        def tiles(o):
-            L = Layout(grid, pieces, o)
+        def tiles(o, sp=pieces):
+            L = Layout(grid, sp, o)
             return sum(1 for i in laned.lane_tiles if i in o and any(lane.get(c, 0.0) > 0 for c in L.cells(i)))
-        f0, f1 = front(origin0), front(orig)
+        f0, f1 = front(origin0), front(orig, shaped)
         if f0 - f1 >= 1.0:
             notes.append(tr("능력치·거처처럼 치여도 얻는 게 없는 건물을 발사대 앞에서 뒤·구석으로 (앞 구역 막음 {f0:.1f} → {f1:.1f})", f0=f0, f1=f1))
-        t0, t1 = tiles(origin0), tiles(orig)
+        t0, t1 = tiles(origin0), tiles(orig, shaped)
         if t1 - t0 >= 2:
             notes.append(tr("자원 타일을 발사대 앞으로 (앞 구역 자원 타일 {t0} → {t1}개 — 공을 던져 캐는 몫)", t0=t0, t1=t1))
     # 보고는 범위 효과만 (앞 구역 점수는 배치를 고를 때만 쓴다)
     e0, d0 = plain.score(Layout(grid, pieces, origin0))
     s, d1 = plain.score(lay)
-    moved = sum(1 for i in orig if orig[i] != origin0[i])
-    return FullPlan(origin0, orig, {i: lay.center(i) for i in orig}, e0, s, d0, d1, h0, hv, moved, notes)
+    moved = sum(1 for i in orig if orig[i] != origin0[i] or turn.get(i))
+    if guide:
+        from .layout_city import guide_report
+        head = [tr("가이드 배치: 지금 배치에서 출발해 공략 규칙(잔병의 오두막·대위 막사·강철 요새 범위에 전부, 쳐야 하는 건물은 발사대 앞)을 크게 쳐서 이득이 큰 것만 {v0}개 옮김", v0=moved)]
+        if turn:
+            head.append(tr("{v0}개는 회전해서 놓아야 빈틈 없이 맞물림 (ㄱ·ㅜ 자 모양 포함)", v0=len(turn)))
+        notes = head + notes + guide_report(grid, shaped, orig, plain, pad)
+    return FullPlan(origin0, orig, {i: lay.center(i) for i in orig}, e0, s, d0, d1, h0, hv, moved, notes,
+                    turned=turn)
 
 
 def _optimize_city(base: dict, grid: Grid, pieces: Dict[int, Piece], origin0: Dict[int, Tuple[int, int]],

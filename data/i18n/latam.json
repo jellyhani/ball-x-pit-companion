@@ -963,7 +963,6 @@
   "가이드 배치": "Disposición de la guía",
   "가이드 배치로 옮기기": "Pasar a la disposición de la guía",
   "순서대로 옮기면 가이드 배치가 됩니다 (잠시 비켜 두기 포함)": "Moviendo en orden se llega a la disposición de la guía (incluidos aparcamientos temporales)",
-  "색: 밀밭 노랑 · 숲 초록 · 바위 회색. 테두리 건물은 범위 효과 건물(점선 원 = 범위). 가이드 배치 = Steam 공략 3개(Zarcos·apo·Drake) 규칙대로 다시 짠 배치 — 발사대 쪽은 자원 들판, 먼 쪽은 잔병의 오두막 둘레 거처 덩어리와 나머지 건물. 지금 배치보다 나아질 때만 권함. 주황 번호 = 옮기는 순서 (앞 10개) — 게임에서 재배치 모드에 들어가면 다음 옮기기가 게임 화면에 표시됩니다.": "Colores: trigo amarillo · bosque verde · roca gris. Los edificios con borde tienen efecto en área (círculo punteado = alcance). Disposición de la guía = rehecha con las reglas de 3 guías de Steam (Zarcos·apo·Drake) — campos de recursos en el lado del lanzador y, en el lado lejano, un bloque de viviendas alrededor de la Cabaña del veterano más el resto de edificios. Solo se recomienda si mejora la disposición actual. Números naranjas = orden de los movimientos (primeros 10) — en el modo de reorganización, el siguiente movimiento aparece en la pantalla del juego.",
   "Steam 공략 3개 규칙으로 다시 짠 배치, 옮기는 순서, 채집 조준 각도": "Disposición rehecha con las reglas de 3 guías de Steam, orden de movimientos, ángulos de puntería de la recolección",
   "지금 배치가 가이드 기준으로 충분함": "La disposición actual basta según la guía",
   "목표 자리": "Lugar de destino",
@@ -972,5 +971,7 @@
   "가이드 배치: 땅이 모자라 다시 짤 수 없음 — 지금 배치 유지": "Disposición de la guía: no hay terreno suficiente para rehacerla — se mantiene la actual",
   "지금 배치가 가이드 기준으로 더 낫거나 같음 — 옮기지 않음": "La disposición actual es igual o mejor según la guía — no hay nada que mover",
   "채집·재생 거처 {v0}/{v1}개가 자기 자원 타일을 범위에 둠 (둘러싸이면 못 캠 — apo 가이드)": "{v0}/{v1} viviendas de recolección/regeneración tienen sus propias casillas de recursos al alcance (rodeadas no recolectan — guía de apo)",
-  "{text} — 단, {v0}은(는) 이미 {result2} 재료 ({names2})": "{text} — pero {v0} ya es ingrediente de {result2} ({names2})"
+  "{text} — 단, {v0}은(는) 이미 {result2} 재료 ({names2})": "{text} — pero {v0} ya es ingrediente de {result2} ({names2})",
+  "색: 밀밭 노랑 · 숲 초록 · 바위 회색. 테두리 건물은 범위 효과 건물(점선 원 = 범위). 가이드 배치 = 지금 배치에서 출발해 Steam 공략 3개(Zarcos·apo·Drake) 규칙(잔병의 오두막 범위에 거처 전부 · 대위 막사 범위에 능력치 건물 · 쳐야 하는 건물은 강철 요새 범위의 발사대 앞)을 먼저 맞추고, 효과가 크게 오르는 것만 옮긴 배치. 주황 번호 = 옮기는 순서 (앞 10개) — 게임에서 재배치 모드에 들어가면 다음 옮기기가 게임 화면에 표시됩니다.": "Colores: trigo amarillo · bosque verde · roca gris. Los edificios con borde tienen efecto en área (círculo punteado = alcance). Disposición de la guía = partiendo de la disposición actual, primero cumple las reglas de 3 guías de Steam (Zarcos·apo·Drake) — todas las viviendas al alcance de la Cabaña del veterano · los edificios de estadísticas al alcance del Cuartel del capitán · los edificios que hay que golpear delante del lanzador, al alcance de la Fortaleza de hierro — y luego solo mueve lo que sube claramente el efecto. Números naranjas = orden de los movimientos (primeros 10) — en el modo de reorganización, el siguiente movimiento aparece en la pantalla del juego.",
+  "가이드 배치: 지금 배치에서 출발해 공략 규칙(잔병의 오두막·대위 막사·강철 요새 범위에 전부, 쳐야 하는 건물은 발사대 앞)을 크게 쳐서 이득이 큰 것만 {v0}개 옮김": "Disposición de la guía: partiendo de la actual, dando mucho peso a las reglas de la guía (todo al alcance de la Cabaña del veterano · Cuartel del capitán · Fortaleza de hierro, edificios que golpear delante del lanzador), solo los {v0} movimientos que compensan"
 }
