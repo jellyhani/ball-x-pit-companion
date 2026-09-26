@@ -831,6 +831,11 @@ class AppController(QObject):
 
     def _on_base(self, base: Optional[dict]):
         """기지: 채집 조준 중이면 안내를 띄우고, 채집 전후 자원으로 조준 기록을 남긴다."""
+        if base:
+            from .engine.layout import fill_missing_colliders
+            if not hasattr(self, "_col_cache"):
+                self._col_cache = {}
+            base = fill_missing_colliders(base, self._col_cache)   # 재배치 중 집어 든 건물의 모양 (게임이 빼고 보냄)
         state = base.get("state", "") if base else ""
         res = list(self.meta.resources) if self.meta else []
         if state != self._base_state:

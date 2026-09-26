@@ -331,6 +331,31 @@ def turn_geo(geo: dict, a: int, frm: Tuple[float, float], to: Tuple[float, float
     return g
 
 
+def fill_missing_colliders(base: dict, cache: dict) -> dict:
+    """재배치 모드에서 집어 든 건물은 게임이 충돌 모양을 빼고 보낸다 (실제 기록 2026-09-26: 옮기는 연금술 공방만 없음)
+    → ㄱ·ㅏ 자 건물이 사각형으로 보였다. 마지막으로 본 모양을 지금 회전·자리로 돌려 채운다.
+    cache: 건물 id → (종류, rot, 중심, 충돌 모양 목록) — 부르는 쪽이 들고 있다가 계속 넘긴다."""
+    geo = base.get("geo") or {}
+    cols = geo.get("colliders")
+    if not cols:
+        return base
+    by_id: Dict[int, list] = {}
+    for c in cols:
+        by_id.setdefault(int(c.get("id", -1)), []).append(c)
+    extra = []
+    for b in base.get("buildings") or []:
+        i, t, rot = int(b.get("id", -1)), b.get("type"), int(b.get("rot") or 0)
+        xy = (float(b.get("x") or 0.0), float(b.get("y") or 0.0))
+        if i in by_id:
+            cache[i] = (t, rot, xy, by_id[i])
+        elif i in cache and cache[i][0] == t:
+            _t, rot0, xy0, old = cache[i]
+            extra += turn_geo({"colliders": old}, i, xy0, xy, rot - rot0)["colliders"]
+    if not extra:
+        return base
+    return dict(base, geo=dict(geo, colliders=list(cols) + extra))
+
+
 def swap_geo(geo: dict, blds: Dict[int, Bld], a: int, b: int) -> dict:
     """채집 궤적 계산용: 두 건물의 충돌 모양을 서로의 자리로 평행 이동한다."""
     A, B = blds[a], blds[b]

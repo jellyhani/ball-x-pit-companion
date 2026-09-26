@@ -420,6 +420,20 @@ class ShapeOutlineTest(unittest.TestCase):
         self.assertEqual(len(turned), 6)
         self.assertNotEqual(sorted((x - 10, y) for x, y in turned), sorted(now))   # 돌린 모양은 다름
 
+    def test_held_building_keeps_its_shape(self):
+        """재배치 모드에서 집어 든 건물은 게임이 충돌 모양을 빼고 보낸다 → 마지막 모양을 돌려 채운다 (사각형으로 안 보이게)."""
+        from src.engine.layout import fill_missing_colliders
+        tee = [{"id": 7, "shape": "box", "pts": [[0, 1], [3, 1], [3, 2], [0, 2]]},
+               {"id": 7, "shape": "box", "pts": [[1, 0], [2, 0], [2, 1], [1, 1]]}]
+        b = {"id": 7, "type": "kAlchemist", "x": 1.5, "y": 1.0, "rot": 0, "tw": 3, "th": 2}
+        cache = {}
+        fill_missing_colliders({"buildings": [b], "geo": {"colliders": tee}}, cache)
+        held = {"buildings": [dict(b, x=11.5, rot=1)], "geo": {"colliders": [{"id": 1, "shape": "box", "pts": []}]}}
+        got = [c for c in fill_missing_colliders(held, cache)["geo"]["colliders"] if c["id"] == 7]
+        self.assertEqual(len(got), 2)
+        self.assertEqual(got[0]["pts"][0], [11.5, 2.5])               # 왼쪽 끝 (0, 1) → 시계 90° 돌리면 위쪽 끝, 중심 (11.5, 1) 로
+        self.assertEqual(held["geo"]["colliders"][0]["id"], 1)         # 원본은 그대로
+
     def test_housing_does_not_need_korean_game_text(self):
         # 윈도우가 한국어가 아니면 게임 문구가 다른 언어로 추출돼 '거처' 낱말이 없다 — 그래도 거처를 알아야 가이드 배치가 된다
         orig = lo._game_text
