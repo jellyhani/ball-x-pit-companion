@@ -24,7 +24,7 @@ namespace BallxPitBridge
     [BepInPlugin("dev.ballxpit.bridge", "BALL x PIT Bridge", Plugin.Version)]
     public class Plugin : BasePlugin
     {
-        public const string Version = "1.12.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
+        public const string Version = "1.13.1";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
         internal static ManualLogSource L;
 
         public override void Load()
@@ -701,6 +701,19 @@ namespace BallxPitBridge
                                 if (c != null && c.IsPurchased) { w.WriteStartArray(); w.WriteNumberValue(c.X); w.WriteNumberValue(c.Y); w.WriteEndArray(); }
                             }
                 w.WriteEndArray();
+            }
+            catch { }
+            // 게임의 입구 청크 좌표를 읽는다. IsEntrance 는 타일이 아닌 청크 좌표를 받는다.
+            try
+            {
+                int ex = g.GetEntranceX(), ey = g.GetEntranceY();
+                if (g.IsEntrance(ex, ey))
+                {
+                    w.WriteStartArray("entrance_chunk");
+                    w.WriteNumberValue(ex);
+                    w.WriteNumberValue(ey);
+                    w.WriteEndArray();
+                }
             }
             catch { }
             try

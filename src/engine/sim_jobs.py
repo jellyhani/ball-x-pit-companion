@@ -208,7 +208,8 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
     from . import layout_opt as lo
     from .layout import LayoutPlan, Move, buildings_from_base, plan_access
     final_base = lo.final_base(snap, full)
-    access, final_base, reserved = (plan_access(final_base, list(targets), reach) if targets and team
+    entrance = lo.entrance_cells(snap.get("geo") or {}, grid)
+    access, final_base, reserved = (plan_access(final_base, list(targets), reach, avoid=entrance) if targets and team
                                     else ([], final_base, set()))
     pieces, cur = lo.pieces_from_base(snap, grid, lo.housing_types())
     target_origin = dict(full.origin_after)
@@ -220,7 +221,8 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
     turn = {i: k for i, k in (getattr(full, "turned", None) or {}).items() if i in cur}
     rots = {b["id"]: int(b.get("rot") or 0) for b in snap.get("buildings") or [] if "id" in b}
     steps = []
-    for i, o, park in lo.move_sequence(grid, pieces, cur, {i: o for i, o in target_origin.items() if i in cur}, turn):
+    for i, o, park in lo.move_sequence(grid, pieces, cur, {i: o for i, o in target_origin.items() if i in cur},
+                                      turn, entrance):
         k = 0 if park else turn.get(i, 0)
         p = lo.rotated(pieces[i], k)
         to = grid.center(o[0], o[1], p.w, p.h)
@@ -249,6 +251,7 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
     plan.builds.sort(key=lambda x: -x[3])
     # 금광은 추천하지 않는다 (사용자 결정 2026-09-26: 무한 모드로 골드 충분 — 철거 후보는 suggest_demolish)
     plan.builds = [b for b in plan.builds if b[0] != "kGoldMine"]
+    plan.builds = [b for b in plan.builds if not grid.cells(b[1][0], b[1][1], b[2][0], b[2][1]) & entrance]
     plan.activations = lo.activation_gains(final_base, res_weight, pad)
     plan.demolish = lo.suggest_demolish(final_base, res_weight, pad)
     from .layout import NewSpot

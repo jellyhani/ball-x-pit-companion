@@ -52,8 +52,10 @@ def coverage(grid: Grid, pieces: dict, origin: Dict[int, Cell], groups, pad: flo
 class _State:
     """고치는 중인 배치: 건물 자리·회전·점유 표. clone() 으로 두 방법(하나씩 넣기 / 덩어리 다시 짜기)을 비교한다."""
 
-    def __init__(self, grid: Grid, pieces: dict, origin0: Dict[int, Cell], pad: float, lane: Dict[Cell, float]):
+    def __init__(self, grid: Grid, pieces: dict, origin0: Dict[int, Cell], pad: float, lane: Dict[Cell, float],
+                 entrance: Set[Cell]):
         self.grid, self.pieces, self.origin0, self.pad, self.lane = grid, pieces, origin0, pad, lane
+        self.entrance = entrance
         self.org: Dict[int, Optional[Cell]] = dict(origin0)
         self.turn: Dict[int, int] = {}
         self.occ: Dict[Cell, int] = {}
@@ -66,6 +68,7 @@ class _State:
     def clone(self) -> "_State":
         c = object.__new__(_State)
         c.grid, c.pieces, c.origin0, c.pad, c.lane = self.grid, self.pieces, self.origin0, self.pad, self.lane
+        c.entrance = self.entrance
         c.org, c.turn, c.occ = dict(self.org), dict(self.turn), dict(self.occ)
         c.locked, c.evicted = set(self.locked), list(self.evicted)
         return c
@@ -89,7 +92,7 @@ class _State:
     def blockers(self, i: int, o: Cell, k: Optional[int] = None) -> Optional[Set[int]]:
         out = set()
         for c in self.cells(i, o, k):
-            if c not in self.grid.tiles:
+            if c not in self.grid.tiles or c in self.entrance:
                 return None
             j = self.occ.get(c)
             if j is None or j == i:
@@ -191,7 +194,7 @@ def _repack(st: _State, hid: int, members: List[int], spots, brick: bool):
                 if not st.ok(hid, m, o, k, brick):
                     continue
                 cells = st.cells(m, o, k)
-                if not all(c in st.grid.tiles and c not in st.occ for c in cells):
+                if not all(c in st.grid.tiles and c not in st.entrance and c not in st.occ for c in cells):
                     continue
                 own = set(cells)
                 adj = sum(1 for x, y in cells for n in ((x + 1, y), (x - 1, y), (x, y + 1), (x, y - 1))
@@ -208,10 +211,17 @@ def _repack(st: _State, hid: int, members: List[int], spots, brick: bool):
 
 
 def repair(grid: Grid, pieces: dict, origin0: Dict[int, Cell], groups, pad: float,
-           lane: Optional[Dict[Cell, float]] = None) -> Optional[Tuple[Dict[int, Cell], Dict[int, int]]]:
+           lane: Optional[Dict[Cell, float]] = None, entrance: Optional[Set[Cell]] = None
+           ) -> Optional[Tuple[Dict[int, Cell], Dict[int, int]]]:
     """허브 규칙을 맞춘 배치와 회전 (못 맞추면 가능한 만큼). 비켜 둔 건물을 다시 놓을 곳이 없으면 None."""
     from .layout_opt import in_range
-    st = _State(grid, pieces, origin0, pad, lane or {})
+    st = _State(grid, pieces, origin0, pad, lane or {}, entrance or set())
+    # 게임이 지정한 입구를 차지한 건물은 가장 가까운 빈 자리로 옮긴다.
+    for i in sorted({st.occ[c] for c in st.entrance if c in st.occ}):
+        if i in st.locked:
+            return None
+        st.lift(i)
+        st.evicted.append(i)
     cols = [c for c, _ in grid.tiles]
     rows = [r for _, r in grid.tiles]
     spots = [(c, r) for r in range(min(rows), max(rows) + 1) for c in range(min(cols), max(cols) + 1)]
@@ -266,11 +276,34 @@ def repair(grid: Grid, pieces: dict, origin0: Dict[int, Cell], groups, pad: floa
             st.locked.add(hid)
             continue                                        # 허브 자리를 못 찾음 — 아래에서 빈 곳에 다시 놓는다
         st = best[1]
+    # 공사·강화 중인 건물은 종류와 허브 유무에 관계없이 공이 지나는 앞 구역으로 옮긴다.
+    # 허브 단계에서 이미 앞에 둔 건물은 움직이지 않는다.
+    if st.lane:
+        for i in sorted((i for i, p in pieces.items() if p.unfinished and p.movable),
+                        key=lambda i: (-len(pieces[i].rel), i)):
+            if st.org.get(i) is not None and st.front(i, st.org[i]) > 0:
+                st.locked.add(i)
+                continue
+            best = None
+            for k in st.shapes_of(i):
+                for o in spots:
+                    front = st.front(i, o, k)
+                    if front <= 0:
+                        continue
+                    bl = st.blockers(i, o, k)
+                    if bl is None:
+                        continue
+                    key = (len(bl), _dist(origin0[i], o), -front, k)
+                    if best is None or key < best[0]:
+                        best = (key, o, k)
+            if best is not None:
+                st.put(i, best[1], best[2])
+                st.locked.add(i)
     # 비켜 둔 건물: 원래 자리에서 가장 가까운 빈 곳 (큰 것부터, 원래 방향)
     for e in sorted(set(i for i in st.evicted if st.org.get(i) is None), key=lambda i: (-len(pieces[i].rel), i)):
         best = None
         for o in spots:
-            if all(c in grid.tiles and c not in st.occ for c in st.cells(e, o, 0)):
+            if all(c in grid.tiles and c not in st.entrance and c not in st.occ for c in st.cells(e, o, 0)):
                 k = _dist(origin0[e], o)
                 if best is None or k < best[0]:
                     best = (k, o)

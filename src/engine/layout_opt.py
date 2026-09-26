@@ -339,6 +339,23 @@ def lane_values(geo: dict, grid: Grid) -> Dict[Tuple[int, int], float]:
     return out
 
 
+def entrance_cells(geo: dict, grid: Grid) -> Set[Tuple[int, int]]:
+    """게임의 입구 청크 아래 중앙 두 칸 × 두 줄을 비운다 (이전 플러그인은 보호 범위 없음)."""
+    chunk = geo.get("entrance_chunk") or geo.get("entrance_grid") or []
+    if not (isinstance(chunk, (list, tuple)) and len(chunk) == 2 and
+            all(isinstance(v, int) and not isinstance(v, bool) for v in chunk)):
+        return set()
+    width, height = geo.get("chunk_w"), geo.get("chunk_h")
+    if not (isinstance(width, int) and isinstance(height, int) and width >= 2 and height >= 2):
+        return set()
+    if chunk not in (geo.get("chunks") or []):
+        return set()
+    # 실제 게임 입구는 8×6 청크 한 덩어리다. 전체를 비우면 이사량이 커지므로 아래 중앙의 최소 통로만 보호한다.
+    left = chunk[0] * width + width // 2 - 1
+    bottom = chunk[1] * height
+    return {(c, r) for c in (left, left + 1) for r in (bottom, bottom + 1) if (c, r) in grid.tiles}
+
+
 def lane_idle(p: "Piece") -> bool:
     return not (p.type in TILE_RES or p.type in BOUNCE_TYPES or p.unfinished)
 
@@ -649,7 +666,8 @@ def canonicalize(pieces: Dict[int, Piece], origin0: Dict[int, Tuple[int, int]],
 
 
 def move_sequence(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int, int]],
-                  target: Dict[int, Tuple[int, int]], turn: Optional[Dict[int, int]] = None
+                  target: Dict[int, Tuple[int, int]], turn: Optional[Dict[int, int]] = None,
+                  avoid: Set[Tuple[int, int]] = frozenset()
                   ) -> List[Tuple[int, Tuple[int, int], bool]]:
     """지금 배치 → 목표 배치로 가는 옮기기 순서 (한 번에 한 건물, 항상 빈 자리로만).
 
@@ -701,7 +719,7 @@ def move_sequence(grid: Grid, pieces: Dict[int, Piece], cur: Dict[int, Tuple[int
             best = None
             for c, r in sorted(grid.tiles):
                 cells = {(c + dx, r + dy) for dx, dy in p.rel}
-                if not cells <= grid.tiles or cells & keep_clear:
+                if not cells <= grid.tiles or cells & (keep_clear | avoid):
                     continue
                 if any(lay.occ.get(x) not in (None, j) for x in cells):
                     continue
@@ -738,6 +756,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     preset_spots = gold_u_spots(geo, grid) if preset == "gold_u" else []
     lane = lane_values(geo, grid)
     guide = preset == "guide"
+    entrance = entrance_cells(geo, grid) if guide else set()
     scorer = Scorer(pieces, stat_types, housing, res_weight, pad, preset_spots, lane=lane,
                     hub_w=GUIDE_HUB_W if guide else 1.0, build_lane=GUIDE_BUILD_LANE if guide else 0.0)
     plain = Scorer(pieces, stat_types, housing, res_weight, pad)        # 보고용 (프리셋 가산 없는 범위 효과)
@@ -778,12 +797,16 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         # 들어가는' 거처를 못 넣었다 (실제 기지: 잔병의 오두막 범위 거처 7/12 에서 멈춤 → 고치면 10/12, 12번 옮김)
         from .layout_guide import coverage, hub_groups, repair
         groups = hub_groups(pieces, scorer)
-        rep = repair(grid, pieces, origin0, groups, pad, lane)
+        rep = repair(grid, pieces, origin0, groups, pad, lane, entrance)
         if rep is not None and (rep[0] != origin0 or rep[1]):
             # 고친 배치에서 시작하는 담금질은 규칙을 지킨 허브·거처를 묶고 나머지(자원 타일 등)만 옮긴다
             # (묶지 않으면 거처를 범위 밖으로 빼서 효과를 올렸다: 범위 거처 12 → 8)
             from .layout_guide import satisfied
             pin = satisfied(grid, shaped_of(rep[1]), rep[0], groups, pad, lane)
+            rep_pieces = shaped_of(rep[1])
+            rep_lay = Layout(grid, rep_pieces, rep[0])
+            pin.update(i for i, p in rep_pieces.items() if p.unfinished and
+                       any(lane.get(c, 0.0) > 0 for c in rep_lay.cells(i)))
             starts.append((rep[0], rep[1], pin))
             add_cand(rep[0], rep[1])
             lay = Layout(grid, pinned_of(rep[1], pin), rep[0])       # 담금질 없이 다듬기만 (채집 발사를 덜 흔든다)
@@ -877,9 +900,20 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             if pturn:
                 turn_of[id(po)] = pturn
     totals = {}
-    best_cov = 0
-    cov0 = coverage(grid, pieces, origin0, groups, pad) if guide else 0
-    cov_of = lambda o: coverage(grid, shaped_of(turn_of.get(id(o), {})), o, groups, pad) if guide else 0
+    best_cov = (0, 0, 0)
+
+    def cov_of(o):
+        if not guide:
+            return (0, 0, 0)
+        sp = shaped_of(turn_of.get(id(o), {}))
+        lay = Layout(grid, sp, o)
+        build_front = sum(1 for i, p in sp.items() if p.unfinished and
+                          any(lane.get(c, 0.0) > 0 for c in lay.cells(i)))
+        occupied = {c for i in o for c in lay.cells(i)}
+        clear = len(entrance - occupied)
+        return (build_front, clear, coverage(grid, sp, o, groups, pad))
+
+    cov0 = cov_of(origin0)
     for orig, s in cands:
         current = orig is cands[0][0]
         nb = to_base(orig)

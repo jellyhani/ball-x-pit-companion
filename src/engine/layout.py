@@ -409,7 +409,7 @@ def moved_base(base: dict, blds: Dict[int, Bld], a: int, to: Tuple[float, float]
 
 
 def plan_access(base: dict, targets: Sequence[int], reach_fn, max_moves: int = 2,
-                max_tries: int = 8) -> Tuple[List[Move], dict, set]:
+                max_tries: int = 8, avoid: set = frozenset()) -> Tuple[List[Move], dict, set]:
     """어떤 발사 각도로도 작업자가 닿지 않는 미완성 건물: 옆 건물 하나를 빈 자리로 옮겨 길을 여는 방법을 찾는다.
 
     실제 기지 확인: 강화 공사 중인 학교·영사관이 건물에 사방이 막혀 0%에서 멈춰 있었다.
@@ -444,7 +444,7 @@ def plan_access(base: dict, targets: Sequence[int], reach_fn, max_moves: int = 2
             w, h = cur[i].footprint
             here = building_cells(cur[i], grid, masks.get(i))
             occ = occupied(cur, grid, skip=[i], masks=masks)
-            spots = free_spots(grid, occ | here | reserved, w, h)
+            spots = free_spots(grid, occ | here | reserved | avoid, w, h)
             if not spots:
                 continue
             b = cur[i]

@@ -394,6 +394,43 @@ class GuideFewMovesTest(unittest.TestCase):
         self.assertTrue(set(cells) <= grid.tiles)
         self.assertGreaterEqual(lg.coverage(grid, shaped, org, groups, 0.0), lg.coverage(grid, pieces, o0, groups, 0.0))
 
+    def test_guide_clears_game_entrance_and_places_unfinished_forest_in_front(self):
+        """게임이 지정한 입구를 비우고, 강철 요새와 무관한 강화 중 숲도 공이 지나는 곳에 둔다."""
+        from src.engine import layout_guide as lg
+        _, base, grid, _, _ = setup()
+        base["geo"]["entrance_grid"] = [2, 0]  # 실행 중인 1.13.0 브리지와 같은 입구 청크 값
+        entrance = lo.entrance_cells(base["geo"], grid)
+        self.assertEqual(entrance, {(19, 0), (20, 0), (19, 1), (20, 1)})
+        next(b for b in base["buildings"] if b["id"] == 39)["state"] = "kUpgrading"
+        pieces, origin = lo.pieces_from_base(base, grid, lo.housing_types())
+        lane = lo.lane_values(base["geo"], grid)
+        self.assertFalse(any(lane.get(c, 0.0) > 0 for c in lo.Layout(grid, pieces, origin).cells(39)))
+        sc = lo.Scorer(pieces, lo._stat_types(base), lo.housing_types(), lane=lane)
+        rep = lg.repair(grid, pieces, origin, lg.hub_groups(pieces, sc), 0.0, lane, entrance)
+        self.assertIsNotNone(rep)
+        org, turn = rep
+        lay = lo.Layout(grid, {i: lo.rotated(p, turn.get(i, 0)) for i, p in pieces.items()}, org)
+        occupied = [c for i in org for c in lay.cells(i)]
+        self.assertEqual(len(occupied), len(set(occupied)))
+        self.assertTrue(set(occupied) <= grid.tiles)
+        self.assertFalse(entrance & set(occupied))
+        self.assertTrue(any(lane.get(c, 0.0) > 0 for c in lay.cells(39)))
+
+        plan = lo.optimize(base, None, None, preset="guide", seconds=2.0)
+        self.assertIsNotNone(plan)
+        final = lo.Layout(grid, shaped(pieces, plan), plan.origin_after)
+        self.assertFalse(entrance & {c for i in plan.origin_after for c in final.cells(i)})
+        self.assertTrue(any(lane.get(c, 0.0) > 0 for c in final.cells(39)))
+
+    def test_guide_ignores_unverified_entrance(self):
+        """옛 연동값이나 잘못된 칸으로 입구를 추측하지 않는다."""
+        _, base, grid, _, _ = setup()
+        self.assertEqual(lo.entrance_cells(base["geo"], grid), set())
+        base["geo"]["entrance_chunk"] = [100, 100]
+        self.assertEqual(lo.entrance_cells(base["geo"], grid), set())
+        base["geo"]["entrance_chunk"] = [2, 0]
+        self.assertEqual(lo.entrance_cells(base["geo"], grid), {(19, 0), (20, 0), (19, 1), (20, 1)})
+
     def test_guide_moves_less_than_full_rebuild(self):
         from src.engine import layout_guide as lg
         fx, base, grid, pieces, o0 = setup()
