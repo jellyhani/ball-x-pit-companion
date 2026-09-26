@@ -363,5 +363,47 @@ class LayoutOptTest(unittest.TestCase):
         self.assertEqual(cur, {**o0, **plan.origin_after})
 
 
+class ShapeOutlineTest(unittest.TestCase):
+    """배치도·재배치 HUD 가 ㄱ·ㅜ 자 건물을 사각형이 아니라 모양 그대로 그리는지."""
+
+    def test_l_shape_outline(self):
+        from src.engine.layout import mask_outline
+        ell = {(0, 0), (1, 0), (0, 1)}                        # ㄱ 자 3칸 (오른쪽 위가 빔)
+        self.assertEqual(sorted(mask_outline(ell)), sorted([(0, 0), (2, 0), (2, 1), (1, 1), (1, 2), (0, 2)]))
+        self.assertEqual(len(mask_outline({(0, 0), (1, 0), (0, 1), (1, 1)})), 4)   # 네모는 꼭짓점 4개
+
+    def test_turn_mask_matches_piece_rotation(self):
+        from src.engine.layout import turn_mask
+        tee = frozenset({(0, 1), (1, 1), (2, 1), (1, 0)})      # ㅜ 자 (3×2)
+        p = lo.Piece(1, "kX", 3, 2, tee, True, 0.0, 1.0, 1.0, False)
+        for k in range(4):
+            q = lo.rotated(p, k)
+            self.assertEqual(turn_mask(set(tee), 3, 2, k), (set(q.rel), q.w, q.h))
+
+    def test_target_outline_rotates_with_building(self):
+        from src.engine.layout import Bld, shape_outline_world
+        b = Bld(1, "kVilla", 0.0, 0.0, 2, 2, 0, 3.0)
+        ell = {(0, 0), (1, 0), (0, 1)}
+        now = shape_outline_world(b, ell, 1.0)
+        turned = shape_outline_world(b, ell, 1.0, (10.0, 0.0), 1)
+        self.assertEqual(len(now), 6)
+        self.assertEqual(len(turned), 6)
+        self.assertNotEqual(sorted((x - 10, y) for x, y in turned), sorted(now))   # 돌린 모양은 다름
+
+    def test_housing_does_not_need_korean_game_text(self):
+        # 윈도우가 한국어가 아니면 게임 문구가 다른 언어로 추출돼 '거처' 낱말이 없다 — 그래도 거처를 알아야 가이드 배치가 된다
+        orig = lo._game_text
+        try:
+            lo._game_text = lambda: {"buildings": {"villa": {"desc_ko": "Home of the Cogitator"}}}
+            lo.housing_types.cache_clear()
+            lo.house_characters.cache_clear()
+            self.assertIn("veteranhut", lo.housing_types())
+            self.assertEqual(lo.house_characters()["villa"][0], "cogitator")
+        finally:
+            lo._game_text = orig
+            lo.housing_types.cache_clear()
+            lo.house_characters.cache_clear()
+
+
 if __name__ == "__main__":
     unittest.main()

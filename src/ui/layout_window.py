@@ -10,7 +10,8 @@ from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QVBoxLayout, QWidget
 
-from ..engine.layout import TILE_TYPES, Bld, LayoutPlan, Move, buildings_from_base, swap_positions
+from ..engine.layout import (TILE_TYPES, Bld, LayoutPlan, Move, buildings_from_base, grid_from_geo, shape_masks,
+                             shape_outline_world, swap_positions)
 from ..engine.layout_opt import EFFECTS
 from ..gamedata import GameData
 from ..i18n import tr
@@ -30,9 +31,11 @@ class MapCanvas(QWidget):
         self.swaps: List = []
         self.names: Dict[int, str] = {}
         self.new_spots: List = []
+        self.shapes: Dict[int, list] = {}       # 건물 모양 윤곽 (월드 좌표) — ㄱ·ㅜ·ㅠ 자 건물을 모양 그대로 그림
 
-    def set_state(self, geo: dict, blds: Dict[int, Bld], swaps: List, names: Dict[int, str], new_spots=()):
+    def set_state(self, geo: dict, blds: Dict[int, Bld], swaps: List, names: Dict[int, str], new_spots=(), shapes=None):
         self.geo, self.blds, self.swaps, self.names, self.new_spots = geo, blds, swaps, names, list(new_spots)
+        self.shapes = dict(shapes or {})
         self.update()
 
     def paintEvent(self, e):
@@ -69,12 +72,24 @@ class MapCanvas(QWidget):
                 c = KIND_COLOR[kind]
                 p.fillRect(r.adjusted(1, 1, -1, -1), QColor(c.red(), c.green(), c.blue(), 170))
             else:
-                p.fillRect(r.adjusted(1, 1, -1, -1), QColor(70, 70, 78, 220))
+                outline = self.shapes.get(b.id)
+                body = QPainterPath()
+                if outline and len(outline) >= 3:
+                    body.moveTo(pt(*outline[0]))
+                    for x, y in outline[1:]:
+                        body.lineTo(pt(x, y))
+                    body.closeSubpath()
+                else:
+                    body.addRect(r.adjusted(1, 1, -1, -1))
+                p.fillPath(body, QColor(70, 70, 78, 220))
+                p.setPen(QPen(QColor(30, 30, 32), 1.5))             # 옆 건물과 경계가 보이게
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.drawPath(body)
                 if b.type in EFFECTS:
                     kind2 = EFFECTS[b.type][0]
                     c = KIND_COLOR.get(kind2, QColor(200, 150, 255))
                     p.setPen(QPen(c, 2))
-                    p.drawRect(r.adjusted(1, 1, -1, -1))
+                    p.drawPath(body)
                     p.setPen(QPen(QColor(c.red(), c.green(), c.blue(), 110), 1, Qt.PenStyle.DashLine))
                     p.setBrush(Qt.BrushStyle.NoBrush)
                     # 게임의 범위 표시와 같은 사각형 (중심에서 범위만큼)
@@ -272,5 +287,16 @@ class LayoutWindow(QWidget):
                     blds = swap_positions(blds, sw.a, sw.b)
         names = {i: self.data.building_name(b.type)[:4] for i, b in blds.items()
                  if b.type in EFFECTS or b.type not in TILE_TYPES}
-        self.canvas.set_state(self.base.get("geo") or {}, blds, swaps if self.view.group.checkedId() != 1 else [], names,
-                              self.plan.new_spots if self.plan else [])
+        # 건물 모양: 지금 기지의 충돌 모양을 목표 자리·회전으로 옮겨 그린다 (사각형이 아니라 ㄱ·ㅜ·ㅠ 모양 그대로)
+        geo = self.base.get("geo") or {}
+        grid = grid_from_geo(geo)
+        shapes = {}
+        if grid is not None:
+            orig = buildings_from_base(self.base)
+            masks = shape_masks(geo, orig, grid)
+            for i, b in blds.items():
+                o = orig.get(i)
+                if o is not None and b.type not in TILE_TYPES:
+                    shapes[i] = shape_outline_world(o, masks.get(i), grid.size, (b.x, b.y), b.rot if b.rot != o.rot else -1)
+        self.canvas.set_state(geo, blds, swaps if self.view.group.checkedId() != 1 else [], names,
+                              self.plan.new_spots if self.plan else [], shapes)

@@ -105,21 +105,39 @@ def set_char_levels(levels: Dict[str, int]):
             CHAR_LEVELS[_slug(k)] = v
 
 
-@functools.lru_cache(maxsize=1)
-def house_characters() -> Dict[str, Tuple[str, str]]:
-    """거처 slug → (캐릭터 slug, 캐릭터 이름). 게임 문구 '○○의 거처'와 캐릭터 이름을 맞춰 찾는다."""
+# 거처 slug → 사는 캐릭터 slug. 게임 건물 설명 '○○의 거처'와 캐릭터 이름을 맞춰 뽑은 표 (2026-09-26 한국어 추출본, 21개).
+# 문구로만 찾으면 윈도우가 한국어가 아닐 때(게임 문구를 다른 언어로 추출) 거처를 하나도 못 찾아 가이드 배치가 깨진다.
+HOUSE_CHAR: Dict[str, str] = {
+    "brickhouse": "brickhead", "campground": "radicalai", "captainquarters": "tactician", "cozyhome": "cohabitants",
+    "falconryhut": "falconer", "hauntedhouse": "recaller", "hiddentemple": "tiptoer", "hovel": "wimp",
+    "lab": "physicist", "logcabin": "backpacker", "mansion": "spendthrift", "mausoleum": "shade",
+    "monastery": "flagellant", "partyhouse": "carouser", "rockyhill": "sisyphus", "sheriffoffice": "itchyfinger",
+    "singlefamilyhome": "emptynester", "stonedomain": "tunneller", "unstabletower": "packrat",
+    "veteranhut": "embedded", "villa": "cogitator",
+}
+
+
+def _game_text() -> dict:
     from ..gamedata import DATA_DIR
-    path = os.path.join(DATA_DIR, "game_text_ko.json")
     try:
-        with open(path, encoding="utf-8") as f:
-            t = json.load(f)
+        with open(os.path.join(DATA_DIR, "game_text_ko.json"), encoding="utf-8") as f:
+            return json.load(f)
     except (OSError, ValueError):
         return {}
-    by_name = {c.get("name_ko"): c.get("slug") for c in (t.get("characters") or {}).values()}
-    out = {}
+
+
+@functools.lru_cache(maxsize=1)
+def house_characters() -> Dict[str, Tuple[str, str]]:
+    """거처 slug → (캐릭터 slug, 캐릭터 이름). 표(HOUSE_CHAR) + 한국어 게임 문구 '○○의 거처'로 새로 생긴 거처.
+    이름은 추출한 게임 문구의 언어 그대로 (없으면 slug)."""
+    t = _game_text()
+    chars = (t.get("characters") or {}).values()
+    name_of = {c.get("slug"): c.get("name_ko") for c in chars}
+    out = {h: (c, name_of.get(c) or c) for h, c in HOUSE_CHAR.items()}
+    by_name = {c.get("name_ko"): c.get("slug") for c in chars}
     for slug, v in (t.get("buildings") or {}).items():
         desc = v.get("desc_ko") or ""
-        if "의 거처" in desc:
+        if slug not in out and "의 거처" in desc:
             who = desc.split("의 거처")[0].strip()
             if who in by_name:
                 out[slug] = (by_name[who], who)
@@ -138,15 +156,9 @@ UNFINISHED_STATES = {"kScaffold", "kUpgrading"}
 
 @functools.lru_cache(maxsize=1)
 def housing_types() -> frozenset:
-    """거처(캐릭터가 사는 건물): 게임 건물 설명이 '… 거처'인 것."""
-    from ..gamedata import DATA_DIR
-    path = os.path.join(DATA_DIR, "game_text_ko.json")
-    try:
-        with open(path, encoding="utf-8") as f:
-            t = json.load(f)["buildings"]
-    except (OSError, ValueError, KeyError):
-        return frozenset()
-    return frozenset(slug for slug, v in t.items() if "거처" in (v.get("desc_ko") or ""))   # 소문자 slug (kSheriffOffice → sherifffoffice 비교)
+    """거처(캐릭터가 사는 건물, 소문자 slug): 표(HOUSE_CHAR) + 한국어 게임 설명이 '… 거처'인 것."""
+    t = _game_text().get("buildings") or {}
+    return frozenset(HOUSE_CHAR) | frozenset(slug for slug, v in t.items() if "거처" in (v.get("desc_ko") or ""))
 
 
 def _slug(type_name: str) -> str:

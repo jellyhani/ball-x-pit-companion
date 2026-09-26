@@ -45,7 +45,7 @@ class BaseOverlay(QWidget):
         self._path_best: List[Tuple[float, float]] = []     # 추천 각도의 예상 경로
         self._want_excluded = True
         self._swap_marks: List[Tuple[float, float, float, float, str]] = []   # 재배치 안내 (화면 좌표 두 점, 번호)
-        self._box_pts: List[Tuple[float, float]] = []       # 다음 옮길 자리 윤곽 (화면 좌표 네 점)
+        self._box_pts: List[Tuple[float, float]] = []       # 다음 옮길 자리 윤곽 (화면 좌표 — 건물 모양 그대로의 꼭짓점)
         self._drawn = QRect()        # 마지막으로 그린 내용의 경계 (논리 좌표)
         self._font = tk.base_font()
         self._font.setPixelSize(14)

@@ -963,17 +963,15 @@ class AppController(QObject):
             self.base_overlay.set_swap_marks(marks[:3])
             box = []
             if remain and hmat is not None and isinstance(remain[0], Move):
-                from .engine.layout import buildings_from_base, grid_from_geo
+                from .engine.layout import buildings_from_base, grid_from_geo, shape_masks, shape_outline_world
                 g = grid_from_geo(base.get("geo") or {})
-                b0 = buildings_from_base(base).get(remain[0].a)
+                blds0 = buildings_from_base(base)
+                b0 = blds0.get(remain[0].a)
                 if g is not None and b0 is not None:
-                    fw, fh = b0.footprint
-                    if getattr(remain[0], "rot", -1) >= 0 and (remain[0].rot - b0.rot) % 2:
-                        fw, fh = fh, fw                          # 회전해서 놓는 건물: 가로·세로가 바뀐 목표 칸
-                    cx, cy = remain[0].to
-                    hw, hh = fw * g.size / 2, fh * g.size / 2
+                    # ㄱ·ㅜ·ㅠ 자 건물은 사각형이 아니라 실제 모양 그대로, 회전해서 놓는 건물은 돌린 모양으로
+                    mask = shape_masks(base.get("geo") or {}, {b0.id: b0}, g).get(b0.id)
                     box = [hs.to_screen(hmat, x, y) for x, y in
-                           ((cx - hw, cy - hh), (cx + hw, cy - hh), (cx + hw, cy + hh), (cx - hw, cy + hh))]
+                           shape_outline_world(b0, mask, g.size, remain[0].to, getattr(remain[0], "rot", -1))]
             self.base_overlay.set_target_box(box)
             types = {b.get("id"): b.get("type", "") for b in base.get("buildings") or []}
             if remain:

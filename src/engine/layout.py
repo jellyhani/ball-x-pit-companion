@@ -176,6 +176,53 @@ def shape_masks(geo: dict, blds: Dict[int, "Bld"], grid: Grid) -> Dict[int, set]
     return out
 
 
+def turn_mask(mask: set, w: int, h: int, k: int) -> Tuple[set, int, int]:
+    """모양(사각형 왼쪽 아래 기준 칸)을 시계 방향 90° × k 돌린다 — layout_opt.rotated 와 같은 규칙."""
+    for _ in range(k % 4):
+        mask = {(y, w - 1 - x) for x, y in mask}
+        w, h = h, w
+    return mask, w, h
+
+
+def mask_outline(mask: set) -> List[Tuple[int, int]]:
+    """칸 모양의 바깥 윤곽 꼭짓점 (칸 단위, 반시계). ㄱ·ㅜ·ㅠ 자 건물을 사각형이 아니라 모양 그대로 그리려고 쓴다.
+    이어진 모양 하나만 (건물은 모두 이어져 있다). 곧은 변 가운데 점은 뺀다."""
+    edges = {}
+    for x, y in mask:
+        for a, b in (((x, y), (x + 1, y)), ((x + 1, y), (x + 1, y + 1)),
+                     ((x + 1, y + 1), (x, y + 1)), ((x, y + 1), (x, y))):
+            if (b, a) in edges:
+                del edges[(b, a)]                 # 두 칸이 맞붙은 변은 안쪽
+            else:
+                edges[(a, b)] = True
+    nxt = {a: b for a, b in edges}
+    if not nxt:
+        return []
+    start = min(nxt)
+    pts, cur = [start], nxt[start]
+    while cur != start and len(pts) <= len(nxt):
+        pts.append(cur)
+        cur = nxt.get(cur, start)
+    out = []
+    for i, p in enumerate(pts):
+        a, b = pts[i - 1], pts[(i + 1) % len(pts)]
+        if (p[0] - a[0]) * (b[1] - p[1]) != (p[1] - a[1]) * (b[0] - p[0]):
+            out.append(p)                         # 꺾이는 점만
+    return out
+
+
+def shape_outline_world(b: "Bld", mask: Optional[set], size: float, to: Optional[Tuple[float, float]] = None,
+                        rot: int = -1) -> List[Tuple[float, float]]:
+    """건물 모양 윤곽 (월드 좌표). to·rot 를 주면 그 자리·회전으로 옮긴 모양. mask 없으면 사각형."""
+    w, h = b.footprint
+    mask = set(mask) if mask else {(i, j) for i in range(w) for j in range(h)}
+    if rot >= 0:
+        mask, w, h = turn_mask(mask, w, h, rot - b.rot)
+    cx, cy = to if to is not None else (b.x, b.y)
+    x0, y0 = cx - w * size / 2, cy - h * size / 2
+    return [(x0 + vx * size, y0 + vy * size) for vx, vy in mask_outline(mask)]
+
+
 def building_cells(b: "Bld", grid: Grid, mask: Optional[set] = None) -> set:
     w, h = b.footprint
     c0 = round((b.x - w * grid.size / 2 - grid.ox) / grid.size)
