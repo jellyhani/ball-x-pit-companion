@@ -108,6 +108,28 @@ class TrTest(unittest.TestCase):
             for k in keys:
                 self.assertEqual(sorted(re.findall(r"\{\w+", k)), sorted(re.findall(r"\{\w+", table[k])), (code, k))
 
+    def test_data_texts_are_translated(self):
+        """rules.json·community.json 에서 화면에 나가는 문구(캐릭터 제약·성향·추천 빌드·조합 설명, 태그 이름)도
+        모든 언어 파일에 있어야 한다 — 표시할 때 tr() 을 거친다."""
+        import json
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        with open(os.path.join(root, "data", "rules.json"), encoding="utf-8") as fh:
+            rules = json.load(fh)
+        with open(os.path.join(root, "data", "community.json"), encoding="utf-8") as fh:
+            comm = json.load(fh)
+        texts = {t["label"] for t in rules["tags"].values()}
+        for c in rules["characters"].values():
+            if c.get("reason"):
+                texts.add(c["reason"])
+            if c.get("strategy"):
+                texts.add(c["strategy"]["why"])
+        texts |= {b["why"] for b in comm["char_builds"].values()}
+        texts |= {p["why"] for p in comm["char_pairs"]}
+        for code in i18n.SUPPORTED:
+            with open(os.path.join(i18n.DATA_DIR, f"{code}.json"), encoding="utf-8") as fh:
+                table = json.load(fh)
+            self.assertEqual(sorted(t for t in texts if t not in table), [], code)
+
     def test_forced_language_env(self):
         with mock.patch.dict("os.environ", {"BXP_LANG": "ja"}):
             self.assertEqual(i18n.detect_ui_lang(), "ja")

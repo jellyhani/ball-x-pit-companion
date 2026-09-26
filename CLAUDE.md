@@ -15,6 +15,8 @@ Windows 전용 게임 오버레이. 파이썬(PySide6) 앱 + BepInEx 연동 플�
 ## 화면 문구 번역
 - 사용자에게 보이는 문구는 `tr("한국어 원문", 이름=값)` 으로 감싼다 (`src/i18n.py`, 원문이 키). 번역은 `data/i18n/{en,ja,schinese,tchinese}.json`.
   새 문구를 넣으면 네 파일에 모두 추가 (`tests/test_i18n.py` 가 빠진 키·자리표시자 불일치를 잡음). 로그·docstring 은 한국어 그대로.
+- `data/rules.json`·`data/community.json` 에서 화면에 나가는 문구(캐릭터 reason·strategy.why, 추천 빌드·조합 why,
+  태그 label)는 한국어로 저장하고 표시할 때 `tr()` — 새로 넣으면 모든 언어 파일에도 추가 (`test_data_texts_are_translated`).
 - 비교·분기에 쓰는 값(런 결과 '보스 격퇴', 화면 판별 문구, 게임 원문 매칭 낱말)은 번역하지 않는다. 확인용: `BXP_LANG=en` 으로 실행·테스트.
 
 ## 꼭 지킬 것

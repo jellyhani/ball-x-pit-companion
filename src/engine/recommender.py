@@ -414,7 +414,7 @@ class Recommender:
                 continue
             cname = d.name(cid)
             if [t for t in rule.get("reduces_tags", []) if d.has_tag(item.id, t)]:
-                ev.warnings.append(Reason("char_reduces", tr("{cname}: {v0} — 효과가 줄거나 없을 수 있음", cname=cname, v0=rule['reason']), -18,
+                ev.warnings.append(Reason("char_reduces", tr("{cname}: {v0} — 효과가 줄거나 없을 수 있음", cname=cname, v0=tr(rule['reason'])), -18,
                                           tr("캐릭터와 안 맞음")))
             st_, dm_ = d.status_tags(item.id)
             if rule.get("boosts_wiki_status_or_aoe"):
@@ -472,9 +472,9 @@ class Recommender:
             worst = min(hits)
             cname = self.data.name(cid)
             if best[0] > 0:
-                ev.reasons.append(Reason("char_fit", tr("{cname} 궁합: {v0}", cname=cname, v0=st.get('why', '')), float(best[0]), tr("캐릭터 궁합")))
+                ev.reasons.append(Reason("char_fit", tr("{cname} 궁합: {v0}", cname=cname, v0=tr(st.get('why', ''))), float(best[0]), tr("캐릭터 궁합")))
             if worst[0] < 0:
-                ev.warnings.append(Reason("char_misfit", f"{cname}: {st.get('why', '')}", float(worst[0]), tr("캐릭터와 덜 맞음")))
+                ev.warnings.append(Reason("char_misfit", f"{cname}: {tr(st.get('why', ''))}", float(worst[0]), tr("캐릭터와 덜 맞음")))
 
     TIER_W = {"S": 3, "A": 1.5, "B": 0, "C": -1, "D": -1.5}   # 의견이라 작게: 비슷할 때 가르는 정도
 

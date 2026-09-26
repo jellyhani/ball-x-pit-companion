@@ -139,7 +139,7 @@ class GameData:
         return bool(t) and item_id in t.get("items", [])
 
     def tag_label(self, tag: str) -> str:
-        return self.rules.get("tags", {}).get(tag, {}).get("label", tag)
+        return tr(self.rules.get("tags", {}).get(tag, {}).get("label", tag))     # 데이터 문구도 표시할 때 번역
 
     def character_rule(self, char_id: str) -> dict:
         return self.rules.get("characters", {}).get(char_id, {})
@@ -201,7 +201,7 @@ class GameData:
         b = (self.community.get("char_builds") or {}).get(char_id)
         if not b:
             return set(), ""
-        return {self.item_by_english(n) for n in b.get("items", []) if self.item_by_english(n)}, b.get("why", "")
+        return {self.item_by_english(n) for n in b.get("items", []) if self.item_by_english(n)}, tr(b.get("why", ""))
 
     def status_tags(self, item_id: str) -> Tuple[Tuple[str, ...], Tuple[str, ...]]:
         """(상태 이상, 피해 종류) — 위키 태그, 없으면 게임 수치로 판정한 것."""

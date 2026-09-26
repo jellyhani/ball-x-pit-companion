@@ -61,7 +61,7 @@ def suggest_pairs(data: GameData, chars: Sequence[dict], history: Sequence = (),
         if cp:
             n = len(cp.get("src") or [1])
             score += SRC_W * n
-            why.append(tr("커뮤니티 추천 {n}곳: {v0}", n=n, v0=cp.get('why', '')))
+            why.append(tr("커뮤니티 추천 {n}곳: {v0}", n=n, v0=tr(cp.get('why', ''))))
         rec = _record(history, a, b)
         if rec is not None:
             rate, n = rec

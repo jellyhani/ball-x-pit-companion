@@ -230,7 +230,7 @@ class FusionAdvisor:
         for cid in run.character_ids:
             rule = d.character_rule(cid)
             if [t for t in rule.get("reduces_tags", []) if d.has_tag(item_id, t)]:
-                pick.warnings.append(Reason("char_reduces", f"{d.name(cid)}: {rule['reason']}", -12, tr("캐릭터와 안 맞음")))
+                pick.warnings.append(Reason("char_reduces", f"{d.name(cid)}: {tr(rule['reason'])}", -12, tr("캐릭터와 안 맞음")))
                 pick.score -= 12
             st_, dm_ = self.data.status_tags(it.id)
             if rule.get("boosts_wiki_status_or_aoe") and (st_ or "AOE" in dm_):
