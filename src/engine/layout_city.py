@@ -4,10 +4,11 @@
   거처       잔병의 오두막을 먼저 놓고 거처를 전부 그 범위 안에 (채집 거처는 발사대 쪽 가장자리 — 둘러싸이면 못 캠)
   능력치     대위 막사를 먼 쪽 가운데에 놓고 능력치 건물을 전부 그 범위 안에
   강철 요새  무한 강화·공사 중 건물을 그 범위 안에 (공이 닿는 발사대 쪽)
-  자원 들판  발사대 쪽(가이드: 땅의 약 70%)에 생산 건물을 자기 타일 한가운데 두고, 채집 거처 범위에 자기 타일을 먹인다
+  자원 들판  발사대 쪽(가이드: 땅의 약 70%)에 생산 건물을 자기 타일 한가운데 — 범위가 닿는 겹까지 전부 (농장 6×6),
+             같은 자원 채집 거처 옆이면 먼저. 남는 타일은 채집 거처 범위에 먹인다
   금광       쓰지 않는다 (사용자 결정) — 들판 뒤쪽에 모아 두고 철거 후보로.
 마을 폭·위치와 유닛 빈칸 예약 여부를 바꿔 가며 여러 번 짜 보고, 못 넣은 건물 수 → 가이드 달성도(허브 범위에 든 수)
-→ 범위 효과 − 빈틈 순으로 고른다. 마지막에 같은 모양끼리 맞바꾸기와 타일 다듬기(외톨이 타일 없이 뭉치게)를 한다.
+→ 범위 효과(+ 채집 거처 가점) − 빈틈 순으로 고른다. 마지막에 같은 모양끼리 맞바꾸기와 타일 다듬기(외톨이 타일 없이 뭉치게)를 한다.
 지금 배치보다 가이드 달성도·효과가 나아지지 않으면 옮기지 않는다. 이동 횟수는 아끼지 않는다 (사용자: 전체를 갈아엎어도 됨).
 """
 from __future__ import annotations
@@ -34,6 +35,9 @@ class _TileKind(dict):
 TILE_KIND = _TileKind()
 TIDY_W = 0.02        # 자원 타일 정돈 가점 (맞닿은 변 하나당) — 범위 효과 타일 하나(≈1)보다 훨씬 작게, 같을 때만 가른다
 MISS_W = 50.0        # 못 넣어서 아무 데나 놓은 건물 하나당 감점 (정돈이 깨지므로 가장 크게)
+# 채집·재생 거처가 자기 타일을 범위에 둔 것 하나당 가점 (범위 효과 점수 단위, 임의). 절대 조건으로 두면 밀밭을 농장(타일당 1.0)
+# 대신 거처(0.25~0.37)에 주느라 농장 범위가 비었다 (사용자 지적 2026-09-26) — 효과 점수에 조금 얹는 정도로만.
+HH_W = 1.0
 WASTE_W = 0.5        # 마을 테두리 사각형 안의 빈칸 하나당 감점 (빽빽할수록 좋게) — 값은 임의
 
 
@@ -50,19 +54,29 @@ def _single(p) -> _Item:
 
 
 def _unit(prod, tiles: list, pad: float, reserve: bool, size: float = 1.0) -> Tuple[_Item, list]:
-    """생산 건물 + 둘레 한 겹 자원 타일. size: 타일 한 칸의 월드 크기 (범위는 월드 단위). 돌려주는 값: (묶음, 안 쓴 타일)."""
+    """생산 건물 + 둘레 자원 타일 — 범위가 닿는 만큼 몇 겹이든 (농장 범위 3칸이면 두 겹 = 6×6, 채석장 2칸이면 한 겹 = 4×4).
+    한 겹만 두르면 바깥 겹의 범위가 빈 땅·다른 건물로 버려진다 (사용자 지적 2026-09-26).
+    size: 타일 한 칸의 월드 크기 (범위는 월드 단위). 돌려주는 값: (묶음, 안 쓴 타일)."""
     from .layout_opt import in_range
     if not tiles:
         return _single(prod), []
     sw, sh = Counter((t.w, t.h) for t in tiles).most_common(1)[0][0]
     fit = [t for t in tiles if (t.w, t.h) == (sw, sh)]
     other = [t for t in tiles if (t.w, t.h) != (sw, sh)]
-    uw, uh = prod.w + 2 * sw, prod.h + 2 * sh
-    px, py = sw + prod.w / 2, sh + prod.h / 2          # 생산 건물 중심 (유닛 왼쪽 아래 기준, 타일 단위)
+
+    def rings(half: float, step: int) -> int:               # 건물 가장자리에서 범위가 닿는 겹 수
+        n = 0
+        while n < 8 and in_range((half + (n + 0.5) * step) * size, 0.0, prod.range + pad):
+            n += 1
+        return max(1, n)
+    kx, ky = rings(prod.w / 2, sw), rings(prod.h / 2, sh)
+    ox, oy = kx * sw, ky * sh                               # 생산 건물 왼쪽 아래 (유닛 기준)
+    uw, uh = prod.w + 2 * ox, prod.h + 2 * oy
+    px, py = ox + prod.w / 2, oy + prod.h / 2          # 생산 건물 중심 (유닛 왼쪽 아래 기준, 타일 단위)
     slots = []
     for x in range(0, uw - sw + 1, sw):
         for y in range(0, uh - sh + 1, sh):
-            if x + sw > sw and x < sw + prod.w and y + sh > sh and y < sh + prod.h:
+            if x + sw > ox and x < ox + prod.w and y + sh > oy and y < oy + prod.h:
                 continue                                    # 생산 건물 자리
             dx, dy = x + sw / 2 - px, y + sh / 2 - py
             if in_range(dx * size, dy * size, prod.range + pad):
@@ -70,8 +84,8 @@ def _unit(prod, tiles: list, pad: float, reserve: bool, size: float = 1.0) -> Tu
     slots = [s for _, s in sorted(slots)]
     fit.sort(key=lambda t: -t.cap)                          # 고급 타일(용량 큼)부터 유닛에
     use, rest = fit[:len(slots)], fit[len(slots):]
-    members = [(prod.id, (sw, sh))] + [(t.id, s) for t, s in zip(use, slots)]
-    cells = {(sw + dx, sh + dy) for dx, dy in prod.rel}
+    members = [(prod.id, (ox, oy))] + [(t.id, s) for t, s in zip(use, slots)]
+    cells = {(ox + dx, oy + dy) for dx, dy in prod.rel}
     for t, (x, y) in zip(use, slots):
         cells |= {(x + dx, y + dy) for dx, dy in t.rel}
     if reserve:                                             # 빈 자리도 비워 둔다 (나중에 타일을 사서 채울 곳)
@@ -258,8 +272,8 @@ def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: O
       3) 공사 중·무한 강화 건물은 강철 요새 범위 안 발사대 쪽 (한 번 채집에 건설 끝나게).
       4) 나머지 마을 건물로 빈틈을 채우고, 대저택은 건물이 가장 많이 드는 자리.
       5) 발사대 쪽은 자원 들판 — 생산 건물을 자기 타일 한가운데 둔 유닛, 남는 타일 블록. 금광(안 씀)은 들판 뒤쪽.
-    후보(마을 폭·위치·넣는 순서·유닛 빈칸 예약)마다 가이드 달성도(못 넣은 건물 없음 > 오두막 > 대위 막사 > 강철 요새 >
-    채집 거처가 자기 타일을 범위에 둠)를 먼저, 그다음 범위 효과·빈틈으로 고른다. 지금 배치보다 나아지지 않으면 그대로 둔다."""
+    후보(마을 폭·위치·넣는 순서·유닛 빈칸 예약)마다 가이드 달성도(못 넣은 건물 없음 > 오두막 > 대위 막사 > 강철 요새)를
+    먼저, 그다음 범위 효과 + 채집 거처 가점(HH_W) − 빈틈으로 고른다. 지금 배치보다 나아지지 않으면 그대로 둔다."""
     from .layout_opt import STATUE_TYPES, TILE_RES, Layout
     tiles = grid.tiles
     size = grid.size
@@ -455,9 +469,13 @@ def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: O
                     miss += not put_field(p, prod_orders["center"])
                 units, blocks = items_by_reserve[reserve]
                 for it, tight in units:
-                    at = _place(it, prod_order, free)
+                    # 같은 자원의 채집·재생 거처 범위에 유닛 타일이 닿는 자리 먼저 — 타일을 전부 생산 건물에 주면
+                    # 거처가 캘 게 없다. 유닛을 거처 옆에 붙이면 둘 다 같은 타일을 쓴다.
+                    houses = _house_boxes(homes, hh_types, shape, out, PRODUCERS[pieces[it.members[0][0]].type],
+                                          pad, size)
+                    at = _place_unit(it, prod_order, free, houses, pieces)
                     if at is None:
-                        it, at = tight, _place(tight, prod_order, free)
+                        it, at = tight, _place_unit(tight, prod_order, free, houses, pieces)
                     if at is not None:
                         _put(it, at, free, out)
                         continue
@@ -490,7 +508,7 @@ def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: O
                 guide = _guide_score(shaped, final, veteran, captain, brick, homes, stats, builds, by_res, hh_types,
                                      pad, size)
                 eff = scorer.score(Layout(grid, shaped, final))[0]
-                key = (-miss,) + guide + (eff - WASTE_W * _waste(town_cells),)
+                key = (-miss,) + guide[:3] + (eff + HH_W * guide[3] - WASTE_W * _waste(town_cells),)
                 if best is None or key > best[0]:
                     best = (key, final, (w, anchor, reserve, miss), shaped,
                             {i: r for i, (_q, r) in shape.items() if r})
@@ -504,7 +522,7 @@ def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: O
     new_guide = _guide_score(shaped, final, veteran, captain, brick, homes, stats, builds, by_res, hh_types, pad, size)
     cur_eff = scorer.score(Layout(grid, pieces, origin0))[0]
     new_eff = scorer.score(Layout(grid, shaped, final))[0]
-    if (new_guide, new_eff) <= (cur_guide, cur_eff * 1.02):
+    if (new_guide[:3], new_eff + HH_W * new_guide[3]) <= (cur_guide[:3], (cur_eff + HH_W * cur_guide[3]) * 1.02):
         lay0 = Layout(grid, pieces, origin0)
         notes = [tr("지금 배치가 가이드 기준으로 더 낫거나 같음 — 옮기지 않음")]
         notes += _guide_notes(lay0, pieces, origin0, captain, veteran, stats, list(house_ids), homes, by_res, brick,
@@ -525,6 +543,32 @@ def plan_city(grid: Grid, pieces: dict, origin0: Dict[int, Cell], launcher_rc: O
     if turn:
         notes.append(tr("{v0}개는 회전해서 놓아야 빈틈 없이 맞물림 (ㄱ·ㅜ 자 모양 포함)", v0=len(turn)))
     return final, notes, turn
+
+
+def _house_boxes(homes, hh_types, shape, out, res: int, pad: float, size: float) -> List[Tuple[float, float, float]]:
+    """자원 res 를 캐는 채집·재생 거처의 (중심 x, y, 범위) — 타일 단위."""
+    boxes = []
+    for p in homes:
+        if p.type in hh_types and p.id in out and _effect_kind(p.type) == res:
+            q = shape.get(p.id, (p,))[0]
+            boxes.append(_center(q, out[p.id]) + ((p.range + pad) / size,))
+    return boxes
+
+
+def _place_unit(it: _Item, order: Sequence[Cell], free: Set[Cell], houses, pieces) -> Optional[Cell]:
+    """유닛 자리: 타일이 거처 범위에 닿는 거처 수가 많은 자리 > 발사대 쪽 순서."""
+    tcent = [(x + pieces[i].w / 2, y + pieces[i].h / 2) for i, (x, y) in it.members[1:]]
+    best = None
+    for k, (c, r) in enumerate(order):
+        if not all((c + dx, r + dy) in free for dx, dy in it.cells):
+            continue
+        n = sum(1 for hx, hy, rng in houses
+                if any(abs(c + tx - hx) <= rng + 1e-6 and abs(r + ty - hy) <= rng + 1e-6 for tx, ty in tcent))
+        if best is None or n > best[0]:
+            best = (n, (c, r))
+        if n == len(houses):
+            break                                           # 더 나아질 수 없음 — 앞 순서가 이김
+    return best[1] if best else None
 
 
 def _feed_houses(homes, hh_types, shape, out, blocks, free: Set[Cell], pad: float, size: float) -> List[list]:

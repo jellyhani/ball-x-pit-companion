@@ -227,7 +227,7 @@ class LayoutOptTest(unittest.TestCase):
         self.assertIn("가이드", out[0][3] + out[1][3])
 
     def test_plan_preset_builds_production_units(self):
-        """계획도시: 생산 건물마다 둘레를 자원 타일로 두른 유닛 — 채석장 둘레 바위 12개, 농장 둘레 밀밭 8개가 모두 범위 안."""
+        """가이드 배치: 생산 건물마다 둘레를 자원 타일로 두른 유닛 — 채석장 둘레 바위 12개, 농장 둘레 밀밭(2×2) 8개가 모두 범위 안."""
         fx, base, grid, pieces, o0 = setup()
         plan = lo.optimize(base, None, None, preset="plan")
         self.assertIsNotNone(plan)
@@ -258,11 +258,22 @@ class LayoutOptTest(unittest.TestCase):
         tcells = {c for i in town for c in lay.cells(i)}
         mean = lambda ids: sum(lay.center(i)[1] for i in ids) / len(ids)
         self.assertGreater(mean(town), mean(prod))                     # 발사대는 아래(행 0 쪽)
-        # 테두리 사각형 안의 '빈 땅'만 센다 — 채집 거처 옆에 일부러 둔 자원 타일은 빈틈이 아님
+        # 마을 테두리 사각형 안에서 바깥(들판)과 이어지지 않은 '갇힌 빈 땅'만 센다 — 아무것도 못 쓰는 낭비.
+        # 들판 쪽 가장자리가 들쭉날쭉한 것은 들판 타일 배치에 따라 달라져서 세지 않는다.
         occ = {c for i in plan.origin_after for c in lay.cells(i)}
         cs, rs = [c for c, _ in tcells], [r for _, r in tcells]
         rect = {(c, r) for c in range(min(cs), max(cs) + 1) for r in range(min(rs), max(rs) + 1)} & grid.tiles
-        self.assertLess(len(rect - occ), len(tcells) * 0.15)
+        empty = rect - occ
+        seen = [c for c in empty if any((c[0] + dx, c[1] + dy) in grid.tiles - rect - occ
+                                        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))]
+        opened = set(seen)
+        while seen:
+            c, r = seen.pop()
+            for n in ((c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1)):
+                if n in empty and n not in opened:
+                    opened.add(n)
+                    seen.append(n)
+        self.assertLess(len(empty - opened), len(tcells) * 0.15)
 
     def test_guide_rules_on_real_base(self):
         """가이드(Steam Zarcos·apo·Drake): 거처는 전부 잔병의 오두막 범위 안, 채집·재생 거처는 자기 자원 타일을 범위에,
@@ -361,6 +372,25 @@ class LayoutOptTest(unittest.TestCase):
             cells = [c for j in cur for c in lo.Layout(grid, live, cur).cells(j)]
             self.assertEqual(len(cells), len(set(cells)))
         self.assertEqual(cur, {**o0, **plan.origin_after})
+
+
+class ProductionUnitTest(unittest.TestCase):
+    def test_unit_fills_every_ring_in_range(self):
+        """농장(2×2, 범위 3칸)은 둘레 두 겹(6×6 = 밀밭 32개)이 범위 안 — 한 겹만 두르면 바깥 겹 범위가 버려진다
+        (사용자 스크린샷 2026-09-26: 농장·채석장 아래 한 줄이 비고, 채석장 범위에 밀밭)."""
+        from src.engine import layout_city as lc
+        size = 1.125
+        farm = lo.Piece(0, "kIdleFarm", 2, 2, frozenset({(0, 0), (1, 0), (0, 1), (1, 1)}), True, 3 * size, 1.0, 1.0, False)
+        wheat = [lo.Piece(i, "kDenseWheat", 1, 1, frozenset({(0, 0)}), True, 0.0, 1.0, 1.0, False) for i in range(1, 41)]
+        it, rest = lc._unit(farm, wheat, 0.0, False, size)
+        self.assertEqual((it.w, it.h), (6, 6))
+        self.assertEqual(len(it.members) - 1, 32)
+        self.assertEqual(len(rest), 8)
+        self.assertEqual(it.members[0][1], (2, 2))                    # 농장은 한가운데
+        quarry = lo.Piece(50, "kIdleStoneMine", 2, 2, farm.rel, True, 2 * size, 1.0, 1.0, False)
+        stones = [lo.Piece(i, "kBoulder", 1, 1, frozenset({(0, 0)}), True, 0.0, 1.0, 1.0, False) for i in range(60, 72)]
+        it, rest = lc._unit(quarry, stones, 0.0, False, size)
+        self.assertEqual(((it.w, it.h), len(it.members) - 1, rest), ((4, 4), 12, []))
 
 
 class ShapeOutlineTest(unittest.TestCase):
