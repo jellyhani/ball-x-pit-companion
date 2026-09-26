@@ -169,6 +169,8 @@ class AppController(QObject):
         self.layout_win.recalc_requested.connect(lambda: self.compute_layout(force=True))
         self.hud.compact = self.settings.hud_compact
         self.inputs = InputWatcher()
+        self._aim_extended = False
+        self.inputs.extend_aim.connect(self._on_aim_extended)
         self.inputs.resync.connect(lambda: self.scan_now(forced=True))
         self.inputs.toggle_hud.connect(self.toggle_hud)
         self.inputs.toggle_window.connect(self.toggle_control)
@@ -1173,13 +1175,22 @@ class AppController(QObject):
         import math
         from .engine import harvest_sim as hs
         from .engine import sim_jobs
+        from .engine.aim_preview import visible_path
         geo_ = base.get("geo") or {}
         h = self._homography(geo_.get("proj"))
         if not geo_.get("colliders") or h is None or self.meta is None:
+            self.base_overlay.set_paths([], [])
             return []
         team = hs.team_from_chars(self.meta.chars_raw, getattr(self, "_team_order", None))
         if not team:
+            self.base_overlay.set_paths([], [])
             return []
+        length = getattr(getattr(self, "settings", None), "aim_path_length", "normal")
+        extended = getattr(self, "_aim_extended", False)
+
+        def screen_path(result, recommended=False):
+            pts = visible_path(result.get("path"), length, recommended=recommended, extended=extended)
+            return [hs.to_screen(h, x, y) for x, y in pts]
         blds = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
         targets = {u.id: u.hits_left for u in unf}
         dur = self._harvest_dur
@@ -1204,7 +1215,7 @@ class AppController(QObject):
             got = self._sim_res.get("now")
             if got and got[1] and got[0] == (ang, key):
                 r = got[1]
-                now_path = [hs.to_screen(h, x, y) for x, y in r.get("path") or []]
+                now_path = screen_path(r)
                 lines.append((tr("지금 조준 {v0:.0f}°: {v1}", v0=r['angle'], v1=self._yield_text(r)), (255, 255, 255, 230)))
         best_path: list = []
         got = self._sim_res.get("sweep")
@@ -1224,10 +1235,10 @@ class AppController(QObject):
             cur = math.degrees(math.atan2(pl[3], pl[2])) if len(pl) >= 4 else 90.0
             if len(similar) > 1:
                 show = min(similar, key=lambda r: abs(r["angle"] - cur))
-                best_path = [hs.to_screen(h, x, y) for x, y in show.get("path") or []]
+                best_path = screen_path(show, True)
                 lines.append((tr("각도 차이 거의 없음 ({v0}곳 비슷) — 지금 조준에 가까운 {v1:.0f}° (파란 선): {v2}", v0=len(similar), v1=show['angle'], v2=self._yield_text(show)), (120, 180, 255, 255)))
             else:
-                best_path = [hs.to_screen(h, x, y) for x, y in best.get("path") or []]
+                best_path = screen_path(best, True)
                 lines.append((tr("1위 {v0:.0f}° (파란 선): {v1}", v0=best['angle'], v1=self._yield_text(best)), (120, 180, 255, 255)))
                 alts = " / ".join(tr("{i}위 {v0:.0f}° {v1}", i=i, v0=r['angle'], v1=self._yield_text(r)) for i, r in enumerate(top[1:3], 2))
                 if alts:
@@ -1242,7 +1253,8 @@ class AppController(QObject):
         if model_limitations(team, blds):
             lines.append((tr("채집 예상은 일부 강화 효과와 기본 채집량을 검증 중인 참고 계산입니다."),
                           (255, 190, 110, 255)))
-        lines.append((tr("흰·파란 선은 첫 작업자의 초기 예상 경로만 표시합니다. 이후 튕김은 실제와 달라질 수 있습니다."), (140, 140, 150, 255)))
+        lines.append((tr("흰색: 현재 조준 · 파랑: 추천 · 점: 예상 반사 · Shift: 길게 보기"), (170, 180, 195, 255)))
+        lines.append((tr("첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다."), (140, 140, 150, 255)))
         self.base_overlay.set_paths(now_path, best_path)
         return lines
 
@@ -1388,6 +1400,11 @@ class AppController(QObject):
         self.control.activateWindow()   # 사용자가 직접 연 창이므로 포커스를 준다
 
     # ---- 설정·수동 보정 ----
+    def _on_aim_extended(self, on: bool):
+        self._aim_extended = on
+        if self._base_snap and self._base_state == "kAimWorkers":
+            self._render_base(self._base_snap, self._base_state)
+
     def _on_settings_changed(self):
         if autostart.is_enabled() != self.settings.start_with_windows:
             autostart.set_enabled(self.settings.start_with_windows)
@@ -1399,6 +1416,8 @@ class AppController(QObject):
         if self.recommendation is not None and self.tracker.session is not None:
             self.hud.show_recommendation(self.recommendation, self.tracker.session.points_left)
         self._update_hud()
+        if self._base_snap and self._base_state == "kAimWorkers":
+            self._render_base(self._base_snap, self._base_state)
 
     def _on_run_edited(self):
         s = self.tracker.session

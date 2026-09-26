@@ -1016,5 +1016,11 @@
   "플러그인 경로가 게임 폴더 밖을 가리킵니다.": "La ruta del complemento apunta fuera de la carpeta del juego.",
   "플러그인 경로가 일반 파일이 아닙니다.": "La ruta del complemento no corresponde a un archivo normal.",
   "확인 가능한 주 효과는 같지만 다른 수치가 바뀜": "El efecto principal conocido no cambia, pero otros valores sí",
-  "공사 점수 +{points} (계산)": "Puntos de construcción +{points} (cálculo)"
+  "공사 점수 +{points} (계산)": "Puntos de construcción +{points} (cálculo)",
+  "짧게": "Corta",
+  "길게": "Larga",
+  "조준 경로 길이": "Longitud de la trayectoria",
+  "현재 조준 1 / 3 / 7회 반사 · 추천은 1회 · Shift를 누르는 동안 둘 다 7회": "Puntería actual: 1 / 3 / 7 rebotes · Sugerida: 1 · Mantén Shift: ambas 7",
+  "흰색: 현재 조준 · 파랑: 추천 · 점: 예상 반사 · Shift: 길게 보기": "Blanco: puntería actual · Azul: sugerida · Puntos: rebotes previstos · Shift: ampliar",
+  "첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다.": "Trayectoria prevista del primer trabajador. Los tramos lejanos discontinuos pueden diferir del movimiento real."
 }

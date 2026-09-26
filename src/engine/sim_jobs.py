@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Sequence
 
 from . import harvest_sim as hs
 from . import native
+from .aim_preview import worker_preview
 from ..i18n import tr
 
 
@@ -26,7 +27,7 @@ def job_now(geo: dict, blds: Dict[int, dict], team: Sequence[dict], angle: float
     targets = targets or {}
     per = {b: min(counts.get(b, 0), cap) for b, cap in targets.items() if counts.get(b)}
     per_points = {b: min(points.get(b, 0), cap) for b, cap in targets.items() if points.get(b)}
-    return {"angle": angle, "total": total, "path": [(x, y) for x, y, _t in ws[0].path[:2]] if ws else [],
+    return {"angle": angle, "total": total, "path": worker_preview(ws),
             "build_hits": sum(per.values()), "per_building": per,
             "build_points": sum(per_points.values()),
             "per_building_points": per_points,
@@ -70,7 +71,7 @@ def job_sweep(geo: dict, blds: Dict[int, dict], team: Sequence[dict], dur: float
         out.append({"angle": r.angle, "total": r.total, "build_hits": r.build_hits, "per_building": r.per_building,
                     "build_points": getattr(r, "build_points", None),
                     "per_building_points": getattr(r, "per_building_points", {}),
-                    "score": score, "path": [(x, y) for x, y, _t in ws[0].path[:2]] if ws else []})
+                    "score": score, "path": worker_preview(ws)})
     return {"top": out, "reach": reach, "model_limitations": hs.model_limitations(team, blds)}
 
 

@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import List, Optional, Tuple
 
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt
@@ -164,7 +165,7 @@ class BaseOverlay(QWidget):
             add(x, y, 40)
         for path in (self._path_now, self._path_best):
             for x, y in path:
-                add(x, y, 4)
+                add(x, y, 10)  # 반사점과 화살표까지 이전 영역을 지워 잔상을 막는다.
         if self._player and self._aim:
             add(*self._player, 10)
             add(*self._aim, 10)
@@ -202,15 +203,33 @@ class BaseOverlay(QWidget):
                 p.setFont(f3)
                 p.setPen(bc)
                 p.drawText(QRectF(q.x() - 30, q.y() - 40, 60, 14), Qt.AlignmentFlag.AlignCenter, tr("완성"))
-        # 예상 경로: 추천(파란 실선), 지금 조준(흰 점선)
-        for path, pen in ((self._path_best, QPen(QColor(64, 156, 255, 220), 3)),
-                          (self._path_now, QPen(QColor(255, 255, 255, 170), 2, Qt.PenStyle.DashLine))):
-            if len(path) >= 2:
-                p.setPen(pen)
+        # 첫 구간은 실선, 반사 뒤는 점차 흐린 점선. 통과 채집점은 경로에 들어 있지 않다.
+        for path, rgb, width in ((self._path_best, (64, 156, 255), 2.8),
+                                 (self._path_now, (255, 255, 255), 2.2)):
+            pts = [QPointF(x * k, y * k) for x, y in path]
+            for i, (a, b) in enumerate(zip(pts, pts[1:])):
+                alpha = 235 if i == 0 else max(55, round(175 * .80 ** (i - 1)))
+                color = QColor(*rgb, alpha)
+                p.setPen(QPen(color, width if i == 0 else 1.5,
+                              Qt.PenStyle.SolidLine if i == 0 else Qt.PenStyle.DashLine))
                 p.setBrush(Qt.BrushStyle.NoBrush)
-                pts = [QPointF(x * k, y * k) for x, y in path]
-                for a, b in zip(pts, pts[1:]):
-                    p.drawLine(a, b)
+                p.drawLine(a, b)
+                # 각 구간에 방향 표시 하나. 짧은 구간에는 화살표를 겹쳐 그리지 않는다.
+                dx, dy = b.x() - a.x(), b.y() - a.y()
+                distance = math.hypot(dx, dy)
+                if distance >= 36:
+                    ux, uy = dx / distance, dy / distance
+                    tip = a + (b - a) * .60
+                    p.setPen(QPen(color, 1.5))
+                    for side in (-1, 1):
+                        tail = QPointF(tip.x() - ux * 7 + side * uy * 3,
+                                       tip.y() - uy * 7 - side * ux * 3)
+                        p.drawLine(tail, tip)
+                # 마지막 점은 계산 종료/표시 한계일 수 있으므로 반사 표시를 붙이지 않는다.
+                if i < len(pts) - 2:
+                    p.setPen(QPen(QColor(20, 20, 24, alpha), 1))
+                    p.setBrush(color)
+                    p.drawEllipse(b, 3.5, 3.5)
         # 조준 추천선: 발사대 → 추천 지점 (궤적이 없을 때만)
         if self._player and self._aim and not self._path_best:
             pen = QPen(tk.qcolor(tk.ACCENT), 3, Qt.PenStyle.DashLine)

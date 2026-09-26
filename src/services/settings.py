@@ -17,6 +17,7 @@ APP_DIR = os.environ.get("BXP_APP_DIR") or os.path.join(
 class Settings:
     watch_enabled: bool = True          # 자동 감시
     font_scale: float = 1.0             # 1.0 보통, 1.2 크게
+    aim_path_length: str = "normal"     # short | normal | long: 현재 조준 반사 경로 길이
     hud_auto_show: bool = True          # 선택창에서 HUD 자동 표시
     card_outline: bool = True           # 추천 카드에 얇은 테두리
     hide_from_capture: str = "auto"     # auto(화면 인식 중에만) | always | never
@@ -63,6 +64,8 @@ class Settings:
             s.hide_from_capture = "auto"
         if s.dps_corner not in ("left", "right"):
             s.dps_corner = "right"
+        if s.aim_path_length not in ("short", "normal", "long"):
+            s.aim_path_length = "normal"
         return s
 
     def save(self):

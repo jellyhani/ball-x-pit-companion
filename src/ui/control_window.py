@@ -904,6 +904,12 @@ class ControlWindow(QWidget):
         seg = Segmented([tr("보통"), tr("크게")], 1 if s.font_scale > 1.05 else 0)
         seg.changed.connect(lambda i: self._set_scale(1.2 if i else 1.0))
         g.add(row(tr("글자 크기"), seg, tr("HUD와 이 창에 함께 적용")))
+        lengths = ["short", "normal", "long"]
+        path_length = Segmented([tr("짧게"), tr("보통"), tr("길게")],
+                                lengths.index(s.aim_path_length) if s.aim_path_length in lengths else 1)
+        path_length.changed.connect(lambda i: self._set("aim_path_length", lengths[i]))
+        g.add(row(tr("조준 경로 길이"), path_length,
+                  tr("현재 조준 1 / 3 / 7회 반사 · 추천은 1회 · Shift를 누르는 동안 둘 다 7회")))
         self.auto_cb = Toggle(s.hud_auto_show)
         self.auto_cb.toggled.connect(lambda on: self._set("hud_auto_show", on))
         g.add(row(tr("선택창에서 HUD 자동 표시"), self.auto_cb))

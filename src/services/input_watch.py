@@ -43,6 +43,7 @@ class InputWatcher(QObject):
     toggle_window = Signal()   # F10
     clicked = Signal(int, int, float)   # 화면 물리 좌표, monotonic
     status_changed = Signal(str)
+    extend_aim = Signal(bool)  # Shift를 누르는 동안 경로 펼치기 (입력 전달은 건드리지 않음)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -53,6 +54,21 @@ class InputWatcher(QObject):
         })
         self.keyboard_ok = False
         self.mouse_ok = False
+        self._shift_down: Set[str] = set()
+
+    def _key_event(self, name: str, pressed: bool):
+        if name in ("shift", "shift_l", "shift_r"):
+            before = bool(self._shift_down)
+            if pressed:
+                self._shift_down.add(name)
+            else:
+                self._shift_down.discard(name)
+            if before != bool(self._shift_down):
+                self.extend_aim.emit(bool(self._shift_down))
+        if pressed:
+            self._debouncer.press(name)
+        else:
+            self._debouncer.release(name)
 
     @staticmethod
     def _key_name(key) -> Optional[str]:
@@ -67,8 +83,8 @@ class InputWatcher(QObject):
             return
         try:
             self._kb = keyboard.Listener(
-                on_press=lambda k: self._debouncer.press(self._key_name(k) or ""),
-                on_release=lambda k: self._debouncer.release(self._key_name(k) or ""),
+                on_press=lambda k: self._key_event(self._key_name(k) or "", True),
+                on_release=lambda k: self._key_event(self._key_name(k) or "", False),
             )
             self._kb.daemon = True
             self._kb.start()
@@ -96,3 +112,6 @@ class InputWatcher(QObject):
                 except Exception:
                     pass
         self._kb = self._mouse = None
+        if self._shift_down:
+            self._shift_down.clear()
+            self.extend_aim.emit(False)
