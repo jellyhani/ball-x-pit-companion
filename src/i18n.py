@@ -24,7 +24,7 @@ SUPPORTED = {
     "french": "Français", "german": "Deutsch", "russian": "Русский",
     "brazilian": "Português (Brasil)", "italian": "Italiano", "polish": "Polski",
     "turkish": "Türkçe", "ukrainian": "Українська",
-    "spanish": "Español", "latam": "Español (Latinoamérica)",
+    "spanish": "Español", "latam": "Español (Latinoamérica)", "thai": "ไทย",
 }
 
 _cache: Dict[str, Dict[str, str]] = {}
@@ -72,6 +72,8 @@ def detect_ui_lang() -> str:
         return "ukrainian"
     if low.startswith("es"):
         return "spanish"
+    if low.startswith("th"):
+        return "thai"
     return "ko"
 
 
