@@ -1195,7 +1195,7 @@ class AppController(QObject):
         if not (l_ok and h_ok):
             lines.append((tr("추천 각도 범위 {lo:.0f}°~{hi:.0f}° (추정) — 마우스를 좌우 끝까지 밀면 게임 한계를 배웁니다", lo=lo, hi=hi),
                           (140, 140, 150, 255)))
-        lines.append((tr("실제 채집 기록 비교: 궤적 7~11초 일치 · 채집량 밀·나무 일치, 돌 ±5 (기록 1회)"), (140, 140, 150, 255)))
+        lines.append((tr("흰·파란 선은 첫 작업자의 초기 예상 경로만 표시합니다. 이후 튕김은 실제와 달라질 수 있습니다."), (140, 140, 150, 255)))
         self.base_overlay.set_paths(now_path, best_path)
         return lines
 

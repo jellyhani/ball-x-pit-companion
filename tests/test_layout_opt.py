@@ -431,6 +431,59 @@ class GuideFewMovesTest(unittest.TestCase):
         base["geo"]["entrance_chunk"] = [2, 0]
         self.assertEqual(lo.entrance_cells(base["geo"], grid), {(19, 0), (20, 0), (19, 1), (20, 1)})
 
+    def test_staffed_quarry_gets_free_coverage_move_below_global_cutoff(self):
+        """채석장 바위 2→4개는 전체 효과 +4% 미만이어도 한 번 옮겨 챙긴다."""
+        from src.engine.layout import buildings_from_base, moved_base
+        _, base, grid, pieces, _ = setup()
+        quarry = next(i for i, p in pieces.items() if p.type == "kIdleStoneMine")
+        keep = {i for i, p in pieces.items() if p.type == "kIdleFarm" or
+                (p.type in lo.TILE_RES and lo.TILE_RES[p.type] == 1)} | {quarry, 52, 53, 54, 55}
+        base["buildings"] = [b for b in base["buildings"] if b["id"] in keep]
+        base["geo"] = dict(base["geo"], colliders=[c for c in base["geo"]["colliders"] if c["id"] in keep])
+        poor = moved_base(base, buildings_from_base(base), quarry, grid.center(21, 0, 2, 2))
+        next(b for b in poor["buildings"] if b["id"] == quarry)["in_range"] = {"kBoulder": 2}
+        before_pieces, before = lo.pieces_from_base(poor, grid, lo.housing_types())
+        self.assertEqual(before_pieces[quarry].factor, 1.0)  # 일꾼 배정됨
+        plan = lo.optimize(poor, None, None, preset="guide", seconds=2.0)
+        self.assertIsNotNone(plan)
+
+        def covered(origin):
+            x, y = grid.center(*origin[quarry], 2, 2)
+            return sum(lo.in_range(grid.center(*origin[i], p.w, p.h)[0] - x,
+                                   grid.center(*origin[i], p.w, p.h)[1] - y, before_pieces[quarry].range)
+                       for i, p in before_pieces.items() if p.type in lo.TILE_RES and lo.TILE_RES[p.type] == 3)
+
+        self.assertEqual(covered(before), 2)
+        self.assertGreaterEqual(covered(plan.origin_after), 4)
+        self.assertLess((plan.effect_after / plan.effect_before - 1) * 100, 4)
+        next(b for b in poor["buildings"] if b["id"] == quarry)["in_range"] = {}
+        unverified = lo.optimize(poor, None, None, preset="guide", seconds=2.0)
+        self.assertEqual(unverified.origin_after[quarry], before[quarry])
+
+    def test_old_bank_target_without_real_gain_is_dropped(self):
+        """지난 목표가 은행을 앞 구역에서만 빼고 범위·채집 효과를 못 올리면 헛걸음을 남기지 않는다."""
+        from src.engine.layout import buildings_from_base, moved_base
+        _, base, grid, pieces, _ = setup()
+        bank = next(i for i, p in pieces.items() if p.type == "kWatchTower")
+        keep = {i for i, p in pieces.items() if p.type == "kIdleFarm" or
+                (p.type in lo.TILE_RES and lo.TILE_RES[p.type] == 1)} | {bank}
+        base["buildings"] = [dict(b, type="kBank", stat="kNum") if b["id"] == bank else b
+                             for b in base["buildings"] if b["id"] in keep]
+        base["geo"] = dict(base["geo"], colliders=[c for c in base["geo"]["colliders"] if c["id"] in keep])
+        parts, origin = lo.pieces_from_base(base, grid, lo.housing_types())
+        lay = lo.Layout(grid, parts, origin)
+        lane = lo.lane_values(base["geo"], grid)
+        spots = []
+        for at in grid.tiles:
+            cells = {(at[0] + dx, at[1] + dy) for dx, dy in parts[bank].rel}
+            if cells <= grid.tiles and all(lay.occ.get(c) in (None, bank) for c in cells):
+                spots.append((sum(lane.get(c, 0.0) for c in cells), at))
+        near, far = max(spots)[1], min(spots)[1]
+        poor = moved_base(base, buildings_from_base(base), bank, grid.center(*near, 2, 2))
+        previous_goal = {bank: grid.center(*far, 2, 2)}
+        plan = lo.optimize(poor, None, None, preset="guide", seconds=2.0, prefer=previous_goal)
+        self.assertEqual(plan.moved, 0)
+
     def test_guide_moves_less_than_full_rebuild(self):
         from src.engine import layout_guide as lg
         fx, base, grid, pieces, o0 = setup()

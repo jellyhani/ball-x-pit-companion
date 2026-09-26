@@ -49,6 +49,8 @@ class World:
     shapes: List[Shape]
     launcher: Tuple[float, float]
     radius: float = 0.07             # 작업자 반지름 (실제 궤적에 맞춘 값)
+    worker_speed: float = 5.0        # 게임이 알려 준 기본 작업자 속도
+    worker_speed_mult: float = 1.0  # 게임의 BuildingMgr.WorkerMoveSpeedMult (기지 강화 등에 따라 변함)
 
 
 def world_from_geo(geo: dict, radius: float = 0.07) -> Optional[World]:
@@ -62,8 +64,14 @@ def world_from_geo(geo: dict, radius: float = 0.07) -> Optional[World]:
             elif c.get("pts"):
                 kind = "box" if c.get("shape") in ("box", "bounds") else "poly"
                 shapes.append(Shape(int(c["id"]), kind, pts=[(float(x), float(y)) for x, y in c["pts"]]))
+        speed_mult = float(geo.get("worker_speed_mult") or 1.0)
+        if not math.isfinite(speed_mult) or speed_mult <= 0:
+            speed_mult = 1.0
+        base_speed = float(geo.get("worker_speed") or 5.0 * speed_mult)
+        if not math.isfinite(base_speed) or base_speed <= 0:
+            base_speed = 5.0 * speed_mult
         return World(float(geo["left"]), float(geo["right"]), float(geo["bottom"]), float(geo["top"]), shapes,
-                     (float(geo["launcher"][0]), float(geo["launcher"][1])), radius)
+                     (float(geo["launcher"][0]), float(geo["launcher"][1])), radius, base_speed, speed_mult)
     except (KeyError, TypeError, ValueError, IndexError):
         return None
 
@@ -424,7 +432,9 @@ def run_angle(world: World, buildings: Dict[int, dict], team: Sequence[dict], an
               duration: float, counts: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
     lx, ly = world.launcher
     dx, dy = math.cos(math.radians(angle)), math.sin(math.radians(angle))
-    ws = [Worker(lx, ly, dx, dy, m["speed"], i * LAUNCH_GAP, dict(m["upgrades"])) for i, m in enumerate(team)]
+    ws = [Worker(lx, ly, dx, dy, world.worker_speed + (m["speed"] - 5.0) * world.worker_speed_mult,
+                 i * LAUNCH_GAP, dict(m["upgrades"]))
+          for i, m in enumerate(team)]
     return simulate_team(world, buildings, ws, duration, counts=counts)
 
 

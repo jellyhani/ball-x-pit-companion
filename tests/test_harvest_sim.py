@@ -63,6 +63,18 @@ class HarvestSimTest(unittest.TestCase):
         p = hs.simulate(self.world, 90, 3.0, 5.0)
         self.assertGreater(p.points[1][1], self.world.launcher[1])
 
+    def test_game_worker_speed_multiplier_changes_launch_timing(self):
+        """게임이 보낸 배율 1.3은 첫 작업자의 실제 시작 속도 5→6.5에 적용된다."""
+        geo = dict(self.fx["geo"], worker_speed=6.5, worker_speed_mult=1.3)
+        faster = hs.world_from_geo(geo, 0.03)
+        for base_speed in (5.0, 6.0):
+            team = [{"speed": base_speed, "upgrades": {}}]
+            _, normal = hs.run_angle(self.world, self.blds, team, 48, 8.0)
+            _, scaled = hs.run_angle(faster, self.blds, team, 48, 8.0)
+            self.assertAlmostEqual(normal[0].path[1][0], scaled[0].path[1][0], places=3)
+            self.assertAlmostEqual(normal[0].path[1][1], scaled[0].path[1][1], places=3)
+            self.assertAlmostEqual(normal[0].path[1][2] / 1.3, scaled[0].path[1][2], places=3)
+
 
 class LayoutTest(unittest.TestCase):
     def test_swap_moves_colliders_with_buildings(self):

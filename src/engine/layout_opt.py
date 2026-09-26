@@ -792,7 +792,64 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         cands.append((o, scorer.score(Layout(grid, sp, o))[0]))
         if turn:
             turn_of[id(o)] = dict(turn)
+    producer_ids = []
+    producer_targets = {}
     if guide:
+        from .layout_city import PRODUCERS
+        producer_ids = [i for i, p in pieces.items() if p.type in PRODUCERS and p.factor >= 1.0 and p.movable]
+        producer_targets = {kind: list(scorer.targets[kind]) for kind in set(PRODUCERS.values())}
+
+    def producer_coverage(orig, turn):
+        sp = shaped_of(turn)
+        out = {}
+        for i in producer_ids:
+            p = sp[i]
+            x, y = grid.center(*orig[i], p.w, p.h)
+            kind = PRODUCERS[p.type]
+            out[i] = sum(in_range(grid.center(*orig[t], sp[t].w, sp[t].h)[0] - x,
+                                  grid.center(*orig[t], sp[t].w, sp[t].h)[1] - y, p.range + pad)
+                         for t in producer_targets[kind] if t != i)
+        return out
+
+    producer0 = producer_coverage(origin0, {})
+    if guide:
+        raw = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
+        # 게임이 직접 센 현재 범위와 기하 계산이 일치할 때만 가상 자리 후보를 만든다.
+        # 후보 자리는 게임 값을 읽을 수 없으므로 이동 뒤 다시 게임의 in_range 로 검증해야 한다.
+        producer_ids = [i for i in producer_ids if isinstance(raw.get(i, {}).get("in_range"), dict) and
+                        bool(raw[i]["in_range"]) and
+                        all(isinstance(v, int) and v >= 0 for v in raw[i]["in_range"].values()) and
+                        sum(raw[i]["in_range"].values()) == producer0[i]]
+        producer0 = {i: producer0[i] for i in producer_ids}
+
+    def producer_gain(orig, turn):
+        after = producer_coverage(orig, turn)
+        if any(after[i] < count for i, count in producer0.items()):
+            return 0
+        return max((after[i] - count for i, count in producer0.items()), default=0)
+
+    if guide:
+        # 이미 배정된 생산 건물이 자기 자원 타일을 거의 못 쓰면, 건물 하나만 빈 자리로 옮기는 후보를 먼저 넣는다.
+        # 실제 기지: 채석장 범위 바위 1/12, 빈 자리 한 곳으로 옮기면 4/12인데 전체 점수 2% 문턱에 묻혔다.
+        for i in producer_ids:
+            p = pieces[i]
+            kind = PRODUCERS[p.type]
+            best_spot = None
+            for at in sorted(grid.tiles):
+                cells = {(at[0] + dx, at[1] + dy) for dx, dy in p.rel}
+                if not cells <= grid.tiles or cells & entrance or any(lay0.occ.get(c) not in (None, i) for c in cells):
+                    continue
+                x, y = grid.center(*at, p.w, p.h)
+                covered = sum(in_range(grid.center(*origin0[t], pieces[t].w, pieces[t].h)[0] - x,
+                                       grid.center(*origin0[t], pieces[t].w, pieces[t].h)[1] - y, p.range + pad)
+                              for t in producer_targets[kind] if t != i)
+                if covered < producer0[i] + 2:
+                    continue
+                key = (covered, -abs(at[0] - origin0[i][0]) - abs(at[1] - origin0[i][1]))
+                if best_spot is None or key > best_spot[0]:
+                    best_spot = (key, at)
+            if best_spot is not None:
+                add_cand({**origin0, i: best_spot[1]}, {})
         # 가이드 배치: 허브 규칙을 먼저 고친 배치에서도 담금질을 시작한다 — 담금질만으로는 '다른 건물을 비켜야
         # 들어가는' 거처를 못 넣었다 (실제 기지: 잔병의 오두막 범위 거처 7/12 에서 멈춤 → 고치면 10/12, 12번 옮김)
         from .layout_guide import coverage, hub_groups, repair
@@ -914,6 +971,17 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         return (build_front, clear, coverage(grid, sp, o, groups, pad))
 
     cov0 = cov_of(origin0)
+    plain0 = plain.score(lay0)[0]
+
+    def meaningful_guide(orig, hv):
+        """이전 목표의 남은 이동이 실제 범위·채집·생산 규칙 중 하나라도 개선하는지."""
+        turn = turn_of.get(id(orig), {})
+        if cov_of(orig) > cov0 or producer_gain(orig, turn) >= 2:
+            return True
+        if plain.score(Layout(grid, shaped_of(turn), orig))[0] > plain0 + 1e-6:
+            return True
+        return bool(hv and h0 and wsum(hv) > wsum(h0))
+
     for orig, s in cands:
         current = orig is cands[0][0]
         nb = to_base(orig)
@@ -939,13 +1007,20 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
     _, orig, s, hv = best
     if prefer_orig is not None and id(prefer_orig) in totals and best[1] is not prefer_orig:
         pt = totals[id(prefer_orig)]
-        if best[0] < pt[0] * 1.02 and (not guide or cov_of(prefer_orig) >= best_cov):
+        if best[0] < pt[0] * 1.02 and (not guide or (cov_of(prefer_orig) >= best_cov and
+                                                            producer_gain(prefer_orig, turn_of.get(id(prefer_orig), {})) >=
+                                                            producer_gain(best[1], turn_of.get(id(best[1]), {})) and
+                                                            meaningful_guide(prefer_orig, pt[3]))):
             best = pt
             notes.append(tr("이전 목표 배치를 유지했습니다 (새 계산의 개선이 2% 미만)."))
     _, orig, s, hv = best
+    if guide and best[1] is prefer_orig and not meaningful_guide(orig, hv):
+        best = totals[id(cands[0][0])]
+        _, orig, s, hv = best
     if best[1] is prefer_orig and prefer_orig is not None:
         pass
-    elif best[0] < 2.0 * 1.02 and not (guide and best_cov > cov0):
+    elif best[0] < 2.0 * 1.02 and not (guide and (cov_of(orig) > cov0 or
+                                                 producer_gain(orig, turn_of.get(id(orig), {})) >= 2)):
         notes.append(tr("이번 탐색에서 범위 효과와 채집 예상량을 합쳐 2% 넘는 개선을 찾지 못했습니다."))
         if alt is not None and alt[0] > 1.02:
             notes.append(tr("범위 효과만 보면 +{v0:.0f}% 배치가 있지만 채집 발사량이 {v1:+.0f}% 라 권하지 않음", v0=(alt[0] - 1) * 100, v1=(alt[1] - 1) * 100))

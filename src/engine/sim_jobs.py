@@ -16,7 +16,7 @@ from ..i18n import tr
 
 def job_now(geo: dict, blds: Dict[int, dict], team: Sequence[dict], angle: float, dur: float,
             targets: Optional[Dict[int, int]] = None) -> dict:
-    """지금 조준의 예상: 팀 채집량, 첫 작업자 경로(월드 좌표, 앞 11개 꺾임), 미완성 건물 타격."""
+    """지금 조준의 예상: 팀 채집량, 첫 작업자의 초기 경로(월드 좌표), 미완성 건물 타격."""
     world = hs.world_from_geo(geo, 0.03)
     if world is None:
         return {}
@@ -24,13 +24,13 @@ def job_now(geo: dict, blds: Dict[int, dict], team: Sequence[dict], angle: float
     total, ws = hs.run_angle(world, blds, team, angle, dur, counts)
     targets = targets or {}
     per = {b: min(counts.get(b, 0), cap) for b, cap in targets.items() if counts.get(b)}
-    return {"angle": angle, "total": total, "path": [(x, y) for x, y, _t in ws[0].path[:11]] if ws else [],
+    return {"angle": angle, "total": total, "path": [(x, y) for x, y, _t in ws[0].path[:2]] if ws else [],
             "build_hits": sum(per.values()), "per_building": per}
 
 
 def job_sweep(geo: dict, blds: Dict[int, dict], team: Sequence[dict], dur: float, need: int,
               targets: Optional[Dict[int, int]] = None, lo: float = 12.0, hi: float = 168.0) -> dict:
-    """각도 탐색 결과 상위 5개(top, 1위는 첫 작업자 경로 포함)와 미완성 건물별 최대 타격 수(reach — 0 이면
+    """각도 탐색 결과 상위 5개(top, 1위는 첫 작업자의 초기 경로 포함)와 미완성 건물별 최대 타격 수(reach — 0 이면
     어떤 각도로도 닿지 않음)."""
     world = hs.world_from_geo(geo, 0.03)
     if world is None:
@@ -62,7 +62,7 @@ def job_sweep(geo: dict, blds: Dict[int, dict], team: Sequence[dict], dur: float
         score = 100 * r.build_hits + r.total[need] + 0.25 * (sum(r.total) - r.total[need])
         _, ws = hs.run_angle(world, blds, team, r.angle, dur)
         out.append({"angle": r.angle, "total": r.total, "build_hits": r.build_hits, "per_building": r.per_building,
-                    "score": score, "path": [(x, y) for x, y, _t in ws[0].path[:11]] if ws else []})
+                    "score": score, "path": [(x, y) for x, y, _t in ws[0].path[:2]] if ws else []})
     return {"top": out, "reach": reach}
 
 
@@ -242,6 +242,20 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
         plan.reach_after = {b: v for b, v in reach(final_base.get("geo") or {}).items() if b in targets}
         plan.reach_after.update({b: 0 for b in targets if b not in plan.reach_after})
     plan.notes = list(full.notes)
+    for b in snap.get("buildings") or []:
+        if b.get("type") != "kIdleStoneMine" or b.get("id") not in final_blds:
+            continue
+        i = b["id"]
+        if i not in cur or full.origin_after.get(i) == full.origin_before.get(i):
+            continue
+        counted = b.get("in_range")
+        if not isinstance(counted, dict) or not all(isinstance(v, int) for v in counted.values()):
+            continue
+        q = final_blds[i]
+        after = sum(lo.in_range(t.x - q.x, t.y - q.y, q.range + pad)
+                    for t in final_blds.values() if t.type in lo.TILE_RES and lo.TILE_RES[t.type] == 3)
+        plan.notes.append(tr("채석장 바위: 게임 현재 {before}개 → 목표 자리 계산 {after}개 (이동 뒤 게임 값 확인)",
+                             before=sum(counted.values()), after=after))
     plan.calibration = calib
     # 새로 지을 것: 설계도 건물 + 여러 개 지을 수 있는 생산 건물(이미 있는 농장·채석장 하나 더) + 자원 타일 더 사기
     have = {b.get("type") for b in final_base.get("buildings") or []}
