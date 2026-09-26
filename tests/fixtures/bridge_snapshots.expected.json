@@ -463,24 +463,24 @@
  },
  {
   "seq": 5208,
-  "status": "recommend",
-  "best": "ball:stone",
+  "status": "hold",
+  "best": null,
   "cards": [
    [
     "ball:stone",
-    "best"
+    "neutral"
    ],
    [
     "passive:armor",
-    "banish"
+    "neutral"
    ],
    [
     "passive:stoneeffigy",
-    "skip"
+    "neutral"
    ]
   ],
-  "banish": "passive:armor",
-  "reroll": "keep"
+  "banish": null,
+  "reroll": "consider"
  },
  {
   "seq": 5243,

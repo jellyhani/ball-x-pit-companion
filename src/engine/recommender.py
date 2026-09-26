@@ -76,6 +76,12 @@ class ActionEval:
         """진화 레시피로 현재 덱과 이어지는지."""
         return any(r.rule_id.startswith(("evo_", "passive_recipe")) for r in self.reasons)
 
+    @property
+    def plan_blocked(self) -> bool:
+        """덱 계획상 안 고르는 편이 나은 새 항목 (마지막 칸·무한 모드에서 진화와 안 이어짐).
+        캐릭터 궁합 같은 가산점이 있어도 '확실 추천' 으로 올리지 않는다 — 새로고침이 나은 상황."""
+        return any(w.rule_id in ("last_slot", "endless_unlinked") for w in self.warnings)
+
     def top_reasons(self, n: int = 2) -> List[Reason]:
         return sorted((r for r in self.reasons if r.rule_id not in BASE_RULES),
                       key=lambda r: -r.weight)[:n]
@@ -204,7 +210,7 @@ class Recommender:
         ranked = sorted(known, key=lambda e: (-e.score, e.card.index))
         best = ranked[0]
         close = [e for e in ranked[1:] if best.score - e.score < CLOSE_MARGIN]
-        if not any(e.strong for e in known):
+        if not any(e.strong and not e.plan_blocked for e in known):
             status, headline = "hold", tr("뚜렷한 차이 없음")
             limitations.append(tr("현재 조합과 연결되는 선택지를 찾지 못함"))
         elif close:

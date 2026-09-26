@@ -251,6 +251,15 @@ class ProgressTest(unittest.TestCase):
         self.assertEqual(r.banish_card.item_id, "ball:petrify")
         self.assertIn("2번째 등장", r.banish_text)
 
+    def test_all_blocked_cards_hold_instead_of_confident_pick(self):
+        # 마지막 칸인데 세 장 다 진화와 안 이어지면 (캐릭터 궁합 가산점이 있어도) 1위 '확실' 이 아니라 보류
+        p = self.progress(turn=100, balls=3)
+        cards = [card(i, x) for i, x in enumerate(self.UNLINKED)]
+        r = self.rec.recommend(session(cards, progress=p), self.run)
+        self.assertTrue(all(e.plan_blocked for e in r.evals))
+        self.assertEqual(r.status, "hold")
+        self.assertIsNone(r.best)
+
     def test_plan_items_are_never_banished(self):
         p = self.progress(endless=True, turn=300, final_boss_turn=190)
         from src.engine.deck_plan import build_plan
