@@ -1064,5 +1064,7 @@
   "검사한 각도에서 채집 경로 미확인: {targets}. 새 자원 구매보다 배치 확인이 먼저입니다.": "No harvest path found at tested angles: {targets}. Check placement before buying more resources.",
   "발사 위치는 같은 기지의 최근 실제 채집 기록을 사용했습니다.": "Launch position uses the latest observed harvest in the same base.",
   "실제 채집 발사 위치를 아직 확인하지 못해 경로 검사를 보류했습니다.": "Path checks are deferred until a real harvest launch position is observed.",
-  "생산 건물을 채집 가능한 자원 쪽으로 이동": "Move producer near harvestable resources"
+  "생산 건물을 채집 가능한 자원 쪽으로 이동": "Move producer near harvestable resources",
+  "발사 불가 — 입구를 비우거나 조준 위치를 바꿔 주세요.": "Cannot launch — clear the entrance or change your aim position.",
+  "발사 가능 여부 미확인 — 궤적 표시를 보류합니다. 연동 상태를 확인해 주세요.": "Launch permission unconfirmed — trajectory hidden. Check the game connection."
 }

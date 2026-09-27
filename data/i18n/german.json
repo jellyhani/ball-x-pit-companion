@@ -1064,5 +1064,7 @@
   "검사한 각도에서 채집 경로 미확인: {targets}. 새 자원 구매보다 배치 확인이 먼저입니다.": "Kein Ernteweg bei getesteten Winkeln gefunden: {targets}. Vor weiteren Ressourcenkäufen die Anordnung prüfen.",
   "발사 위치는 같은 기지의 최근 실제 채집 기록을 사용했습니다.": "Die Startposition stammt aus der letzten beobachteten Ernte in derselben Basis.",
   "실제 채집 발사 위치를 아직 확인하지 못해 경로 검사를 보류했습니다.": "Die Wegprüfung wartet auf eine tatsächlich beobachtete Startposition.",
-  "생산 건물을 채집 가능한 자원 쪽으로 이동": "Produktionsgebäude in die Nähe erntbarer Ressourcen verschieben"
+  "생산 건물을 채집 가능한 자원 쪽으로 이동": "Produktionsgebäude in die Nähe erntbarer Ressourcen verschieben",
+  "발사 불가 — 입구를 비우거나 조준 위치를 바꿔 주세요.": "Abschuss nicht möglich — Eingang freimachen oder Zielposition ändern.",
+  "발사 가능 여부 미확인 — 궤적 표시를 보류합니다. 연동 상태를 확인해 주세요.": "Abschussfreigabe unbestätigt — Flugbahn ausgeblendet. Spielverbindung prüfen."
 }

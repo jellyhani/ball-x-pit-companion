@@ -24,7 +24,7 @@ namespace BallxPitBridge
     [BepInPlugin("dev.ballxpit.bridge", "BALL x PIT Bridge", Plugin.Version)]
     public class Plugin : BasePlugin
     {
-        public const string Version = "1.16.1";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
+        public const string Version = "1.17.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
         internal static ManualLogSource L;
 
         public override void Load()
@@ -554,6 +554,22 @@ namespace BallxPitBridge
             }
             w.WriteStartObject("base");
             try { var st = bm.CurState.ToString(); Aiming = st == "kAimWorkers"; w.WriteString("state", st); } catch { }
+            // BaseMgr.LaunchWorkers가 확인하는 실제 입력 허용 상태. 추정 충돌이나 색으로 대신하지 않는다.
+            try
+            {
+                var preview = BallPreview.I;
+                if (Aiming && preview != null)
+                {
+                    bool allowed = preview.IsInputEnabled();
+                    var direction = preview.GetAimDir();
+                    w.WriteBoolean("launch_allowed", allowed);
+                    w.WriteStartArray("launch_aim");
+                    w.WriteNumberValue(Math.Round(direction.x, 3));
+                    w.WriteNumberValue(Math.Round(direction.y, 3));
+                    w.WriteEndArray();
+                }
+            }
+            catch { } // 확인 실패를 발사 가능으로 간주하지 않는다.
             // 알선소로 2명 원정: 로드아웃 화면의 두 캐릭터 패널이 지금까지 고른 캐릭터를 담고 있다
             // (kSelectingChar 로 캐릭터 고르는 화면이 열려 있는 동안에도 로드아웃 화면은 뒤에 그대로 있다).
             try

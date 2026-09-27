@@ -67,6 +67,7 @@ If the overlay is missing, check its visibility, game window state, and bridge s
 - Hotkeys and recent left-click coordinates are observed to identify choices; the app does not record typed text.
 - Game updates may break the bridge. Physics approximations, heuristic scores, and unverified effects can affect advice.
 - Harvest paths include unopened base chunks as solid walls, even with building-piercing upgrades. Their rectangular model uses the purchased chunk map and dimensions; distant reflections remain approximate.
+- The overlay hides harvest paths when the game rejects the current launch or its permission is unknown. This requires bridge 1.17.0 or newer; an older bridge cannot confirm launch permission.
 - Unofficial fan project; not affiliated with the developer or publisher. Compatibility with every game policy or leaderboard rule has not been established.
 
 ## Report a problem

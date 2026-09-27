@@ -238,7 +238,7 @@ class BaseAimFlowTest(unittest.TestCase):
             {"type": b["type"], "lvl": 0, "state": states.get(b["id"], "kNormal")} for b in blds],
             "chars": [{"type": w["char"], "harvest": w["upgrades"]} for w in fx["workers"]]}
         c._on_bridge_snapshot({"meta": meta}, time.monotonic())
-        base = {"state": "kAimWorkers", "harvest_secs_left": fx["duration"], "buildings": blds, "geo": fx["geo"],
+        base = {"launch_allowed": True, "state": "kAimWorkers", "harvest_secs_left": fx["duration"], "buildings": blds, "geo": fx["geo"],
                 "player": [960, 900, 0.67, 0.74]}
         try:
             c.bridge.last_at = time.monotonic()

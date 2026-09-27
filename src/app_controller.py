@@ -1011,6 +1011,17 @@ class AppController(QObject):
             if self.base_overlay.isVisible():
                 self.base_overlay.hide()
             return
+        blocked = AppController._launch_block_message(base)
+        if blocked:
+            AppController._clear_harvest_paths(self)
+            self.base_overlay.set_build_marks([])
+            game = geo.phys_to_logical_rect(self.window.rect)
+            scale = game.width() / max(1, self.window.size[0])
+            # adv/조준점을 넘기지 않아 기존 대체 추천선도 남지 않게 한다.
+            self.base_overlay.show_advice(game, scale, None, None, [(blocked, (255, 159, 10, 255))])
+            if not self.base_overlay.isVisible():
+                self.base_overlay.show()
+            return
         unf = unfinished_buildings(base, self.meta)
         adv = advise_harvest(base, self.meta, self._shortfalls(), self.harvest_log)
         texts = []
@@ -1213,6 +1224,33 @@ class AppController(QObject):
         parts += [f"{RESOURCES[i]} +{v}" for i, v in enumerate(r.get("total") or []) if v]
         return " · ".join(parts) or tr("채집 없음")
 
+    @staticmethod
+    def _launch_block_message(base: dict):
+        allowed = base.get("launch_allowed")
+        if allowed is False:
+            return tr("발사 불가 — 입구를 비우거나 조준 위치를 바꿔 주세요.")
+        if allowed is not True:
+            return tr("발사 가능 여부 미확인 — 궤적 표시를 보류합니다. 연동 상태를 확인해 주세요.")
+        direction, player = base.get("launch_aim"), base.get("player") or []
+        if direction is not None:
+            try:
+                import math
+                aligned = len(direction) == 2 and len(player) >= 4 and all(
+                    math.isfinite(float(direction[i])) and abs(float(direction[i])-float(player[i+2])) <= .002
+                    for i in range(2))
+            except (TypeError, ValueError, IndexError):
+                aligned = False
+            if not aligned:
+                return tr("발사 가능 여부 미확인 — 궤적 표시를 보류합니다. 연동 상태를 확인해 주세요.")
+        return None
+
+    def _clear_harvest_paths(self):
+        self.base_overlay.set_paths([], [])
+        self._stuck_text = ""
+        for channel in ("now", "sweep"):
+            self._sim_req.pop(channel, None)
+            self._sim_res.pop(channel, None)
+
     def _harvest_sim(self, base: dict, need: int, unf) -> List[tuple]:
         """채집 궤적: 지금 조준·추천 각도의 예상 경로와 결과. 계산은 계산 프로세스에 맡기고(가장 최근 요청만),
         여기서는 요청과 이미 나온 결과 표시만 한다. 표시할 글 줄을 돌려준다."""
@@ -1220,6 +1258,10 @@ class AppController(QObject):
         from .engine import harvest_sim as hs
         from .engine import sim_jobs
         from .engine.aim_preview import visible_path
+        blocked = AppController._launch_block_message(base)
+        if blocked:
+            AppController._clear_harvest_paths(self)
+            return [(blocked, (255, 159, 10, 255))]
         geo_ = base.get("geo") or {}
         h = self._homography(geo_.get("proj"))
         if not geo_.get("colliders") or h is None or self.meta is None:

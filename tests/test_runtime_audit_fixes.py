@@ -25,7 +25,7 @@ def aiming():
              _homography=lambda _: np.eye(3), _harvest_dur=9,
              aim_range=NS(limits=(25, 155), learned=(True, True)), _sim_req={}, _sim_res={},
              sim=NS(submit=Mock()), base_overlay=NS(set_paths=Mock()), _yield_text=AppController._yield_text)
-    base = {"geo": {"colliders": [{"id": 1}], "launcher": [0, 0], "worker_speed": 5},
+    base = {"launch_allowed": True, "geo": {"colliders": [{"id": 1}], "launcher": [0, 0], "worker_speed": 5},
             "buildings": [{"id": 1, "type": "kHome", "x": 2, "y": 2, "rot": 0, "res": 0}],
             "player": [0, 0, 1, 1]}
     return ctx, base
