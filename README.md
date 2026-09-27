@@ -66,6 +66,7 @@ If the overlay is missing, check its visibility, game window state, and bridge s
 - Setup downloads dependencies and BepInEx. The read-only bridge uses a local named pipe and no Harmony patches.
 - Hotkeys and recent left-click coordinates are observed to identify choices; the app does not record typed text.
 - Game updates may break the bridge. Physics approximations, heuristic scores, and unverified effects can affect advice.
+- Harvest paths include unopened base chunks as solid walls, even with building-piercing upgrades. Their rectangular model uses the purchased chunk map and dimensions; distant reflections remain approximate.
 - Unofficial fan project; not affiliated with the developer or publisher. Compatibility with every game policy or leaderboard rule has not been established.
 
 ## Report a problem

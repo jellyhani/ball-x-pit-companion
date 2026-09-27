@@ -23,7 +23,7 @@ SPEED_UP = 0.2
 @dataclass
 class Shape:
     bid: int                       # 건물 id
-    kind: str                      # box | circle | poly
+    kind: str                      # box | circle | poly | wall (미개방 구역)
     pts: List[Tuple[float, float]] = field(default_factory=list)
     c: Tuple[float, float] = (0.0, 0.0)
     r: float = 0.0
@@ -53,6 +53,43 @@ class World:
     worker_speed_mult: float = 1.0  # 게임의 BuildingMgr.WorkerMoveSpeedMult (기지 강화 등에 따라 변함)
 
 
+def _chunk_walls(geo: dict) -> List[Shape]:
+    """게임의 구매 구역 사이에 남은 덮개를 벽으로 복원한다.
+
+    게임 1.301 level2의 Chunk_Base_Cover: BoxCollider2D 9×6.75, trigger=False.
+    BaseGridMgr.RefreshChunkCovers(0x44D130)는 미구매 덮개를 켠다.
+    위치는 연동의 구역 크기·구매 좌표·기지 경계로 구성한다. 외곽 네 벽은 기존 판정을 유지한다.
+    """
+    raw = geo.get("chunks")
+    if not raw:
+        return []  # 구역 정보가 없는 구형 입력.
+    chunks = {tuple(c) for c in raw}
+    if any(len(c) != 2 or any(type(v) is not int or v < 0 for v in c) for c in chunks):
+        raise ValueError("잘못된 구역 좌표")
+    width = geo.get("chunk_world_w")
+    height = geo.get("chunk_world_h")
+    if width is None:
+        width = geo.get("chunk_w", 0) * geo.get("space_w", 0)
+    if height is None:
+        height = geo.get("chunk_h", 0) * geo.get("space_h", geo.get("space_w", 0))
+    width, height = float(width), float(height)
+    if not (math.isfinite(width) and math.isfinite(height) and width > 0 and height > 0):
+        raise ValueError("구역 크기 없음")
+    x0, y0 = min(c[0] for c in chunks), min(c[1] for c in chunks)
+    x1, y1 = max(c[0] for c in chunks), max(c[1] for c in chunks)
+    walls = []
+    for x in range(x0, x1 + 1):
+        for y in range(y0, y1 + 1):
+            if (x, y) in chunks:
+                continue
+            left = float(geo["left"]) + (x - x0) * width
+            bottom = float(geo["bottom"]) + (y - y0) * height
+            walls.append(Shape(-1000000-len(walls), "wall",
+                               pts=[(left, bottom), (left+width, bottom),
+                                    (left+width, bottom+height), (left, bottom+height)]))
+    return walls
+
+
 def world_from_geo(geo: dict, radius: float = 0.07) -> Optional[World]:
     try:
         shapes = []
@@ -64,6 +101,7 @@ def world_from_geo(geo: dict, radius: float = 0.07) -> Optional[World]:
             elif c.get("pts"):
                 kind = "box" if c.get("shape") in ("box", "bounds") else "poly"
                 shapes.append(Shape(int(c["id"]), kind, pts=[(float(x), float(y)) for x, y in c["pts"]]))
+        shapes.extend(_chunk_walls(geo))
         speed_mult = float(geo.get("worker_speed_mult") or 1.0)
         if not math.isfinite(speed_mult) or speed_mult <= 0:
             speed_mult = 1.0
@@ -128,7 +166,7 @@ def _hit_shape(s: Shape, ox, oy, dx, dy, r) -> Optional[Tuple[float, float, floa
         hx, hy = ox + dx * t - cx, oy + dy * t - cy
         return t, hx, hy
     pts = s.pts
-    if s.kind == "box" and r > 0:
+    if s.kind in ("box", "wall") and r > 0:
         x0, y0, x1, y1 = s.aabb()
         pts = [(x0 - r, y0 - r), (x1 + r, y0 - r), (x1 + r, y1 + r), (x0 - r, y1 + r)]
     best = None
@@ -146,7 +184,7 @@ def _inside_shape(s: Shape, x: float, y: float, radius: float) -> bool:
     """통과 타일의 출구를 새 채집으로 세지 않기 위한 내부 판정."""
     if s.kind == "circle":
         return (x - s.c[0]) ** 2 + (y - s.c[1]) ** 2 < (s.r + radius) ** 2
-    if s.kind == "box":
+    if s.kind in ("box", "wall"):
         x0, y0, x1, y1 = s.bb
         return x0 - radius < x < x1 + radius and y0 - radius < y < y1 + radius
     inside = False
@@ -217,7 +255,7 @@ def simulate(world: World, angle_deg: float, duration: float, speed0: float = 5.
             h = _hit_shape(s, ox, oy, dx, dy, r)
             if not h:
                 continue
-            if s.bid in pierce:
+            if s.kind != "wall" and s.bid in pierce:
                 passed.append((h[0], s.bid))
             elif best is None or h[0] < best[0]:
                 best = (h[0], h[1], h[2], s)
@@ -235,7 +273,7 @@ def simulate(world: World, angle_deg: float, duration: float, speed0: float = 5.
         t_now += dt
         ox, oy = ox + dx * t, oy + dy * t
         pts.append((ox, oy))
-        if s is not None:
+        if s is not None and s.kind != "wall":
             hits.append((s.bid, t_now))
         # 축 방향 반사: 법선의 큰 성분 쪽 방향만 뒤집는다 (실제 궤적 확인)
         if abs(nx) >= abs(ny):
@@ -443,7 +481,7 @@ def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Wor
                 if h and (best is None or h[0] < best[0]):
                     best = (h[0], h[1], h[2], None, True)
         for sh in world.shapes:
-            solid = blocks(sh.bid, w)
+            solid = sh.kind == "wall" or blocks(sh.bid, w)
             pickup_r = effects[id(w)][2] if not solid and is_tile.get(sh.bid) else r
             # 빈 타일은 사건을 만들지 않는다. 통과 채집도 실제 접촉 시각의 사건으로 처리한다.
             if not solid and res_left.get(sh.bid, 0) <= 0:
@@ -474,7 +512,7 @@ def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Wor
         w = workers[wi]
         w.x, w.y, w.t = w.x + w.dx * dist, w.y + w.dy * dist, when
         changed = sh is not None and res_left.get(sh.bid, 0) > 0
-        if sh is not None:
+        if sh is not None and sh.kind != "wall":
             harvest(sh.bid, w)
             if solid and counts is not None:
                 counts[sh.bid] = counts.get(sh.bid, 0) + 1     # 건물에 부딪힌 횟수 (미완성 건물 건설용)
@@ -496,7 +534,7 @@ def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Wor
                 old = events[j]
                 if j != wi and old is not None and old[0] == when:
                     _, _, onx, ony, target, _ = old
-                    blocking = target is None or blocks(target.bid, other)
+                    blocking = target is None or target.kind == "wall" or blocks(target.bid, other)
                     if blocking or res_left.get(target.bid, 0) > 0:
                         simultaneous[j] = (when, 0.0, onx, ony, target, blocking)
                 if j != wi and other.t < when:

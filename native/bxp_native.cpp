@@ -28,7 +28,7 @@ namespace {
 const double EPS = 1e-6;
 const double SPEED_UP = 0.2;
 
-enum { K_CIRCLE = 0, K_BOX = 1, K_POLY = 2 };      // 모양 종류 (파이썬 Shape.kind)
+enum { K_CIRCLE = 0, K_BOX = 1, K_POLY = 2, K_WALL = 3 }; // 미개방 구역은 관통되지 않는 벽
 enum { F_WHEAT = 1, F_TILE = 2, F_BUILD = 4 };       // 건물 성질
 enum { U_PIERCE_BUILDINGS = 1, U_PIERCE_STONE = 2, U_PIERCE_WOOD = 4 };   // 작업자 채집 강화
 
@@ -98,7 +98,7 @@ bool hit_shape(const Geo& g, int i, double ox, double oy, double dx, double dy, 
     double box[8];
     const double* p = g.pts + 2 * g.pt_off[i];
     int n = g.pt_cnt[i];
-    if (g.kind[i] == K_BOX && r > 0) {
+    if ((g.kind[i] == K_BOX || g.kind[i] == K_WALL) && r > 0) {
         double x0 = bb[0], y0 = bb[1], x1 = bb[2], y1 = bb[3];
         box[0] = x0 - r; box[1] = y0 - r; box[2] = x1 + r; box[3] = y0 - r;
         box[4] = x1 + r; box[5] = y1 + r; box[6] = x0 - r; box[7] = y1 + r;
@@ -121,7 +121,7 @@ bool inside_shape(const Geo& g, int i, double x, double y, double r) {
         double dx = x - g.circ[3 * i], dy = y - g.circ[3 * i + 1], rr = g.circ[3 * i + 2] + r;
         return dx * dx + dy * dy < rr * rr;
     }
-    if (g.kind[i] == K_BOX) {
+    if (g.kind[i] == K_BOX || g.kind[i] == K_WALL) {
         const double* bb = g.bb + 4 * i;
         return bb[0] - r < x && x < bb[2] + r && bb[1] - r < y && y < bb[3] + r;
     }
@@ -137,7 +137,7 @@ bool inside_shape(const Geo& g, int i, double x, double y, double r) {
 
 }  // namespace
 
-BXP_API int bxp_version() { return 4; }
+BXP_API int bxp_version() { return 5; }
 
 // 여러 작업자를 시간 순서로 함께 돌린다 (harvest_sim.simulate_team 과 같음).
 //   world: left, right, bottom, top, radius
@@ -202,7 +202,7 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
             }
         }
         for (int i = 0; i < n_shapes; i++) {
-            bool blocking = blocks(slot[i], wi);
+            bool blocking = kind[i] == K_WALL || blocks(slot[i], wi);
             double pickup_r = !blocking && (flags[slot[i]] & F_TILE) ? pickup_radius[wi] : r;
             if (!blocking && res[slot[i]] <= 0) continue;
             if (!blocking && inside_shape(g, i, w[0], w[1], pickup_r)) continue;
@@ -236,7 +236,7 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
         int shape = event_kinds[2 * wi], solid = event_kinds[2 * wi + 1];
         w[0] = w[0] + w[2] * distance; w[1] = w[1] + w[3] * distance; w[5] = when;
         bool changed = false;
-        if (shape >= 0) {
+        if (shape >= 0 && kind[shape] != K_WALL) {
             int sl = slot[shape], n = res[sl], kd = rtype[sl];
             changed = n > 0;
             if (n > 0 && kd >= 0) {
@@ -267,7 +267,7 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
                 int* old_kind = event_kinds + 2 * j;
                 int target = old_kind[0];
                 bool simultaneous = j != wi && target != -2 && old[0] == when;
-                bool blocking = simultaneous && (target < 0 || blocks(slot[target], j));
+                bool blocking = simultaneous && (target < 0 || kind[target] == K_WALL || blocks(slot[target], j));
                 bool keep = simultaneous && (blocking || res[slot[target]] > 0);
                 if (j != wi && q[5] < when) {
                     double d = (when - q[5]) * q[4];

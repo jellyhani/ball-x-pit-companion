@@ -17,7 +17,7 @@ _lib = None
 
 F_WHEAT, F_TILE, F_BUILD = 1, 2, 4
 U_PIERCE_BUILDINGS, U_PIERCE_STONE, U_PIERCE_WOOD = 1, 2, 4
-KIND = {"circle": 0, "box": 1, "poly": 2}
+KIND = {"circle": 0, "box": 1, "poly": 2, "wall": 3}
 
 
 def lib():
@@ -30,7 +30,7 @@ def lib():
         return None
     try:
         dll = ctypes.CDLL(_DLL)
-        if dll.bxp_version() != 4:
+        if dll.bxp_version() != 5:
             return None
         P = ctypes.POINTER
         d, i = ctypes.c_double, ctypes.c_int
