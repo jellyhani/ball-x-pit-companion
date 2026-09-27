@@ -1057,5 +1057,9 @@
   "체력이 낮아 성장 준비보다 생존을 우선": "Mało zdrowia: przetrwanie ważniejsze niż rozwój",
   "성장 추천": "Zalecany rozwój",
   "이미 융합된 볼은 다시 융합할 수 없음": "Połączonej kuli nie można połączyć ponownie",
-  "융합 불가": "Fuzja niemożliwa"
+  "융합 불가": "Fuzja niemożliwa",
+  "채집 가능한 자리로 자원 이동": "Przenieś zasób w miejsce dostępne do zbioru",
+  "자원 접근 검사: {before}/{total} → {after}/{total} (발사 각도 검사·가동 생산 범위)": "Dostęp do zasobów: {before}/{total} → {after}/{total} (sprawdzone kąty / aktywna produkcja)",
+  "채집 경로가 없던 자원 {count}개를 우선 이동합니다. 범위 점수 2% 기준과 별도로 판단했습니다.": "Najpierw przenieś {count} zasobów bez potwierdzonej drogi zbioru. Decyzja niezależna od progu 2% punktacji zasięgu.",
+  "검사한 각도에서 채집 경로 미확인: {targets}. 새 자원 구매보다 배치 확인이 먼저입니다.": "Brak potwierdzonej drogi przy sprawdzonych kątach: {targets}. Sprawdź układ przed zakupem kolejnych zasobów."
 }

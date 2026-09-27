@@ -116,6 +116,9 @@ class LayoutPlan:
     unresolved_moves: Tuple[int, ...] = ()                    # 목표를 보류한 건물 id
     evaluated_base: dict = field(default_factory=dict)        # 이동·길 열기를 모두 반영한 단일 계산 기준
     model_limitations: List[str] = field(default_factory=list) # 물리 계산이 아직 재현하지 못하는 게임 효과
+    resource_access_checked: bool = False
+    resource_unreachable_before: Tuple[int, ...] = ()
+    resource_unreachable_after: Tuple[int, ...] = ()
 
 
 def build_purchase_cost(row: tuple, costs: Dict[str, Tuple[int, ...]]) -> Optional[Tuple[int, ...]]:

@@ -1057,5 +1057,9 @@
   "체력이 낮아 성장 준비보다 생존을 우선": "Vie faible : priorité à la survie plutôt qu’à la progression",
   "성장 추천": "Progression conseillée",
   "이미 융합된 볼은 다시 융합할 수 없음": "Une balle déjà fusionnée ne peut pas fusionner à nouveau",
-  "융합 불가": "Fusion impossible"
+  "융합 불가": "Fusion impossible",
+  "채집 가능한 자리로 자원 이동": "Déplacer la ressource vers un emplacement récoltable",
+  "자원 접근 검사: {before}/{total} → {after}/{total} (발사 각도 검사·가동 생산 범위)": "Accès aux ressources : {before}/{total} → {after}/{total} (angles testés / producteurs actifs)",
+  "채집 경로가 없던 자원 {count}개를 우선 이동합니다. 범위 점수 2% 기준과 별도로 판단했습니다.": "Déplacer en priorité {count} ressources sans trajet de récolte vérifié, indépendamment du seuil de 2% du score de portée.",
+  "검사한 각도에서 채집 경로 미확인: {targets}. 새 자원 구매보다 배치 확인이 먼저입니다.": "Aucun trajet trouvé aux angles testés : {targets}. Vérifiez la disposition avant d’acheter plus de ressources."
 }

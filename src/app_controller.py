@@ -1059,6 +1059,14 @@ class AppController(QObject):
             return
         team = hs.team_from_chars(self.meta.chars_raw, getattr(self, "_team_order", None))
         snap = json.loads(json.dumps(base))
+        # 원정 중 live_state에는 기지가 없다. 마지막 계산 입력은 진단용으로 따로 보존한다.
+        try:
+            path = os.path.join(self.dump_dir, "last_base.json")
+            with open(path + ".tmp", "w", encoding="utf-8") as f:
+                json.dump({"captured_at": time.time(), "base": snap}, f, ensure_ascii=False)
+            os.replace(path + ".tmp", path)
+        except OSError:
+            log.debug("마지막 기지 입력 저장 실패", exc_info=True)
         options = self.meta.build_options if self.meta.build_options is not None else self.meta.blueprints
         bps = [b.construction_data() for b in options]
         targets = {u.id: u.hits_left for u in unfinished_buildings(base, self.meta)}

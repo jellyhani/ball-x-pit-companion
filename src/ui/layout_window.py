@@ -209,7 +209,7 @@ class LayoutWindow(QWidget):
             for note in getattr(plan, "notes", []) or []:
                 self.steps.add(row(note))
             if getattr(plan, "model_limitations", None):
-                self.steps.add(row(tr("채집 예상은 일부 강화 효과와 기본 채집량을 검증 중인 참고 계산입니다.")))
+                self.steps.add(row(tr("게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다.")))
         if plan and plan.swaps:
             for n, sw in enumerate(plan.swaps, 1):
                 a = blds.get(sw.a)
@@ -219,7 +219,7 @@ class LayoutWindow(QWidget):
                     park = sw.reason in (tr("잠시 비켜 두기 (자리 비우기)"), tr("잠시 비켜 두기 (다른 건물 자리 비우기)"))
                     self.steps.add(row(f"{n}. {d.building_name(a.type)} → {tr('빈 곳에 잠시') if park else tr('목표 자리')}",
                                        value_label(tr("비켜 두기") if park else tr("옮기기")),
-                                       tr("다른 건물이 들어갈 자리를 비우려고 잠시 옮김 — 나중에 목표 자리로 다시 옮김") if park else ""))
+                                       tr("다른 건물이 들어갈 자리를 비우려고 잠시 옮김 — 나중에 목표 자리로 다시 옮김") if park else sw.reason))
                 elif isinstance(sw, Move) and sw.target >= 0:
                     t = blds.get(sw.target)
                     tname = d.building_name(t.type) if t else tr("미완성 건물")

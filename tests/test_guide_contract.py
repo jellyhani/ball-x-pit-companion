@@ -102,6 +102,9 @@ class GuideContractTest(unittest.TestCase):
             self.assertEqual(AppController._shortfalls(state), {"밀": 2})
 
     def test_layout_uses_current_game_duration_before_any_aim(self):
+        import json
+        import tempfile
+        from pathlib import Path
         from types import SimpleNamespace
         from unittest.mock import Mock
         from src.app_controller import AppController
@@ -112,5 +115,9 @@ class GuideContractTest(unittest.TestCase):
                                 _harvest_dur=16, layout_plan=None, sim=SimpleNamespace(submit=submit),
                                 _shortfalls=lambda: {}, aim_range=SimpleNamespace(limits=(25, 155)),
                                 _layout_fingerprint=lambda _b: "test-key", _sim_req={})
-        AppController.compute_layout(state)
+        with tempfile.TemporaryDirectory() as folder:
+            state.dump_dir = folder
+            AppController.compute_layout(state)
+            saved = json.loads((Path(folder) / "last_base.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["base"], state._base_snap)
         self.assertEqual(submit.call_args.args[5], 9)

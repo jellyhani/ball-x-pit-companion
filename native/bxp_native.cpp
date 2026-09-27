@@ -137,7 +137,7 @@ bool inside_shape(const Geo& g, int i, double x, double y, double r) {
 
 }  // namespace
 
-BXP_API int bxp_version() { return 3; }
+BXP_API int bxp_version() { return 4; }
 
 // 여러 작업자를 시간 순서로 함께 돌린다 (harvest_sim.simulate_team 과 같음).
 //   world: left, right, bottom, top, radius
@@ -156,7 +156,7 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
                               double* out_path, int path_cap, double* event_values, int* event_kinds,
                               const int* build_bonus, int* out_build_points,
                               const int* harvest_amount, const int* clock_bonus, const double* pickup_radius,
-                              int* clock_counts) {
+                              int* clock_counts, int* out_collected) {
     const double left = world[0], right = world[1], bottom = world[2], top = world[3], r = world[4];
     Geo g{kind, pt_off, pt_cnt, pts, circ, bb};
     int npath = 0;
@@ -243,6 +243,7 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
                 const int idx = 4 * wi + kd;
                 if (n > harvest_amount[idx]) n = harvest_amount[idx];
                 res[sl] -= n; out_gain[4 * wi + kd] += n; out_total[kd] += n;
+                out_collected[sl] += n;  // 반사하지 않는 관통 채집도 별도로 기록한다.
                 // 게임 BaseMgr.IncreaseHarvestClock: 캐릭터·자원마다 최대 20회.
                 if (clock_bonus[idx] > 0 && clock_counts[idx] < 20) {
                     duration += clock_bonus[idx] * 0.2;

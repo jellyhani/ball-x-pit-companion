@@ -1057,5 +1057,9 @@
   "체력이 낮아 성장 준비보다 생존을 우선": "Low health: survival takes priority over future growth",
   "성장 추천": "Growth recommendation",
   "이미 융합된 볼은 다시 융합할 수 없음": "An already fused ball cannot be fused again",
-  "융합 불가": "Cannot fuse"
+  "융합 불가": "Cannot fuse",
+  "채집 가능한 자리로 자원 이동": "Move resource to a harvestable position",
+  "자원 접근 검사: {before}/{total} → {after}/{total} (발사 각도 검사·가동 생산 범위)": "Resource access: {before}/{total} → {after}/{total} (tested launch angles / active producers)",
+  "채집 경로가 없던 자원 {count}개를 우선 이동합니다. 범위 점수 2% 기준과 별도로 판단했습니다.": "Move {count} resources with no verified harvest path first. This is independent of the 2% range-score threshold.",
+  "검사한 각도에서 채집 경로 미확인: {targets}. 새 자원 구매보다 배치 확인이 먼저입니다.": "No harvest path found at tested angles: {targets}. Check placement before buying more resources."
 }

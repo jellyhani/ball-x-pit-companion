@@ -361,7 +361,8 @@ def _team_tables(buildings: Dict[int, dict]):
 
 def simulate_team(world: World, buildings: Dict[int, dict], workers: List[Worker], duration: float,
                   max_events: int = 4000, counts: Optional[Dict[int, int]] = None,
-                  build_points: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
+                  build_points: Optional[Dict[int, int]] = None,
+                  collected: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
     """여러 작업자를 시간 순서로 함께 돌린다 (한 명이 비운 채집지를 다른 작업자는 통과).
 
     채집: 자원별 강화 레벨만큼 1회 채집량을 늘리고, 채집 시간 증가는 캐릭터·자원마다 20회로 제한한다.
@@ -378,15 +379,16 @@ def simulate_team(world: World, buildings: Dict[int, dict], workers: List[Worker
         k = rtype.get(bid)
         return f, (-1 if k is None else int(k)), int(res_left.get(bid, 0))
 
-    total = native.simulate_team(world, buildings, workers, duration, max_events, counts, flags_of, build_points)
+    total = native.simulate_team(world, buildings, workers, duration, max_events, counts, flags_of, build_points, collected)
     if total is not None:
         return total, workers
-    return simulate_team_py(world, buildings, workers, duration, max_events, counts, build_points)
+    return simulate_team_py(world, buildings, workers, duration, max_events, counts, build_points, collected)
 
 
 def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Worker], duration: float,
                      max_events: int = 4000, counts: Optional[Dict[int, int]] = None,
-                     build_points: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
+                     build_points: Optional[Dict[int, int]] = None,
+                     collected: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
     """simulate_team 의 파이썬 구현 (네이티브 모듈이 없을 때, 그리고 결과 비교 기준)."""
     res_left, rtype, is_tile = _team_tables(buildings)
     total = [0, 0, 0, 0]
@@ -423,6 +425,8 @@ def simulate_team_py(world: World, buildings: Dict[int, dict], workers: List[Wor
             res_left[bid] -= n
             w.gain[kind] += n
             total[kind] += n
+            if collected is not None:
+                collected[bid] = collected.get(bid, 0) + n  # 관통 채집도 건물별 접근 증거에 포함한다.
             if clock[kind] and clock_counts[id(w)][kind] < 20:
                 duration += clock[kind] * .2
                 clock_counts[id(w)][kind] += 1
@@ -550,7 +554,8 @@ def team_from_chars(chars_raw: Sequence[dict], order: Optional[Sequence[str]] = 
 
 def run_angle(world: World, buildings: Dict[int, dict], team: Sequence[dict], angle: float,
               duration: float, counts: Optional[Dict[int, int]] = None,
-              build_points: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
+              build_points: Optional[Dict[int, int]] = None,
+              collected: Optional[Dict[int, int]] = None) -> Tuple[List[int], List[Worker]]:
     lx, ly = world.launcher
     dx, dy = math.cos(math.radians(angle)), math.sin(math.radians(angle))
     ws = []
@@ -560,7 +565,7 @@ def run_angle(world: World, buildings: Dict[int, dict], team: Sequence[dict], an
         speed = (world.worker_speed * (1.0 + speed_pct / 100.0) if speed_pct is not None else
                  world.worker_speed + (m["speed"] - 5.0) * world.worker_speed_mult)
         ws.append(Worker(lx, ly, dx, dy, speed, i * LAUNCH_GAP, dict(m["upgrades"]), harvest_bonus=bonuses))
-    return simulate_team(world, buildings, ws, duration, counts=counts, build_points=build_points)
+    return simulate_team(world, buildings, ws, duration, counts=counts, build_points=build_points, collected=collected)
 
 
 @dataclass

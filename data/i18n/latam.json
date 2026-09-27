@@ -1057,5 +1057,9 @@
   "체력이 낮아 성장 준비보다 생존을 우선": "Poca salud: priorizar supervivencia sobre crecimiento",
   "성장 추천": "Crecimiento recomendado",
   "이미 융합된 볼은 다시 융합할 수 없음": "Una bola ya fusionada no puede fusionarse de nuevo",
-  "융합 불가": "No se puede fusionar"
+  "융합 불가": "No se puede fusionar",
+  "채집 가능한 자리로 자원 이동": "Mover el recurso a una posición recolectable",
+  "자원 접근 검사: {before}/{total} → {after}/{total} (발사 각도 검사·가동 생산 범위)": "Acceso a recursos: {before}/{total} → {after}/{total} (ángulos probados / productores activos)",
+  "채집 경로가 없던 자원 {count}개를 우선 이동합니다. 범위 점수 2% 기준과 별도로 판단했습니다.": "Mover primero {count} recursos sin ruta de recolección verificada, independientemente del umbral del 2% de la puntuación de alcance.",
+  "검사한 각도에서 채집 경로 미확인: {targets}. 새 자원 구매보다 배치 확인이 먼저입니다.": "No se encontró ruta con los ángulos probados: {targets}. Revisa la distribución antes de comprar más recursos."
 }
