@@ -29,6 +29,10 @@ datas = [
     ("vendor/bepinex/BallxPitBridge.dll", "vendor/bepinex"),       # our bridge plugin (BepInEx is downloaded)
     ("LICENSE", "."),
     ("NOTICE.md", "."),
+    ("DISCLAIMER.md", "."),
+    ("PRIVACY.md", "."),
+    ("README.md", "."),
+    ("docs", "docs"),
     (str(metadata_dir / "build-info.json"), "."),
 ]
 datas += collect_notices()

@@ -32,4 +32,10 @@ Bağlantı salt okunurdur: Harmony yaması, kayıt değişikliği veya oyuna gir
 
 Katman görünmüyorsa görünürlüğü, oyun penceresini ve bağlantıyı kontrol edin. [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues) bölümünde sürümleri, dili, çözünürlüğü, adımları, beklenen ve gerçek sonucu belirtin. Görsellerden ve günlüklerden özel bilgileri kaldırın; kayıt dosyalarını veya çıkarılmış oyun varlıklarını yüklemeyin.
 
+## Haklar, sorumluluk ve gizlilik
+
+Bu resmî olmayan araç olduğu gibi sunulur. Oyun ve üçüncü taraf materyallerinin hakları ilgili hak sahiplerine aittir. Kanunen sınırlandırılamayan haklar saklıdır.
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

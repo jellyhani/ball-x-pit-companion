@@ -32,4 +32,10 @@ Il collegamento è di sola lettura: niente patch Harmony, modifiche ai salvatagg
 
 Se l’overlay non appare, controlla visibilità, finestra del gioco e connessione. In [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues) indica versioni, lingua, risoluzione, passaggi, risultato atteso e risultato effettivo. Rimuovi dati privati da immagini e registri; non caricare salvataggi o risorse estratte dal gioco.
 
+## Diritti, responsabilità e privacy
+
+Questo strumento non ufficiale viene fornito così com’è. I diritti sul gioco e sui materiali di terzi appartengono ai rispettivi titolari. I diritti inderogabili per legge restano validi.
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

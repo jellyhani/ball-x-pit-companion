@@ -32,4 +32,10 @@ The bridge is read-only, uses no Harmony patches, and does not change saves or s
 
 If the overlay is missing, check visibility, the game window, and bridge status. Include versions, language, resolution, steps, expected result, and actual result in [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues). Remove private information from screenshots/logs; do not upload saves or extracted game assets.
 
+## Rights, responsibility, and privacy
+
+This unofficial tool is provided as-is. Game and third-party materials belong to their respective rights holders. Rights that cannot lawfully be excluded remain unaffected.
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

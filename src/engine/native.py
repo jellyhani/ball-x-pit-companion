@@ -3,6 +3,7 @@
 DLL 이 없거나 불러오지 못하면 None — 부르는 쪽은 파이썬 구현으로 계산한다.
 환경 변수 BXP_NO_NATIVE=1 이면 쓰지 않는다 (비교·디버깅용).
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -16,6 +17,7 @@ _DLL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bxp_native.dll"
 _lib = None
 
 F_WHEAT, F_TILE, F_BUILD, F_RESOURCE, F_NO_RAY = 1, 2, 4, 8, 16
+# 아래 비트와 모양 번호는 bxp_native.cpp와 공유한다. 표시용 enum처럼 임의로 재정렬하면 안 된다.
 U_PIERCE_BUILDINGS, U_PIERCE_STONE, U_PIERCE_WOOD = 1, 2, 4
 KIND = {"circle": 0, "box": 1, "poly": 2, "wall": 3, "edge": 4}
 
@@ -35,9 +37,46 @@ def lib():
         P = ctypes.POINTER
         d, i = ctypes.c_double, ctypes.c_int
         dll.bxp_simulate_team.restype = i
-        dll.bxp_simulate_team.argtypes = [P(d), i, P(i), P(i), P(i), P(i), P(i), P(d), P(d), P(d), P(i), P(i), P(i),
-                                          i, P(d), P(i), d, i, P(i), P(i), P(i), P(d), i, P(d), P(i),
-                                          P(i), P(i), P(i), P(i), P(d), P(i), P(i), i, P(d), d, i, P(i), P(i)]
+        dll.bxp_simulate_team.argtypes = [
+            P(d),
+            i,
+            P(i),
+            P(i),
+            P(i),
+            P(i),
+            P(i),
+            P(d),
+            P(d),
+            P(d),
+            P(i),
+            P(i),
+            P(i),
+            i,
+            P(d),
+            P(i),
+            d,
+            i,
+            P(i),
+            P(i),
+            P(i),
+            P(d),
+            i,
+            P(d),
+            P(i),
+            P(i),
+            P(i),
+            P(i),
+            P(i),
+            P(d),
+            P(i),
+            P(i),
+            i,
+            P(d),
+            d,
+            i,
+            P(i),
+            P(i),
+        ]
         _lib = dll
         log.info("네이티브 계산 모듈 사용 (%s)", _DLL)
     except (OSError, AttributeError) as e:
@@ -54,7 +93,10 @@ class PackedWorld:
     """기지 모양을 DLL 에 넘길 배열로 (World 마다 한 번)."""
 
     def __init__(self, world):
-        self.world = _arr(ctypes.c_double, [world.left, world.right, world.bottom, world.top, world.radius, float(world.use_bounds)])
+        self.world = _arr(
+            ctypes.c_double,
+            [world.left, world.right, world.bottom, world.top, world.radius, float(world.use_bounds)],
+        )
         self.roads = _arr(ctypes.c_double, [v for box in world.roads for v in box])
         shapes = world.shapes
         self.n = len(shapes)
@@ -70,7 +112,11 @@ class PackedWorld:
             circ += [s.c[0], s.c[1], s.r]
             bb += list(s.bb)
         self.pt_off, self.pt_cnt = _arr(ctypes.c_int, off), _arr(ctypes.c_int, cnt)
-        self.pts, self.circ, self.bb = _arr(ctypes.c_double, pts), _arr(ctypes.c_double, circ), _arr(ctypes.c_double, bb)
+        self.pts, self.circ, self.bb = (
+            _arr(ctypes.c_double, pts),
+            _arr(ctypes.c_double, circ),
+            _arr(ctypes.c_double, bb),
+        )
         # 건물 슬롯: 모양의 건물 id 마다 하나 (id 가 같은 모양은 같은 슬롯 — 자원·횟수가 건물 단위)
         self.slot_ids: List[int] = []
         idx: Dict[int, int] = {}
@@ -81,10 +127,17 @@ class PackedWorld:
         self.slot = _arr(ctypes.c_int, [idx[b] for b in self.bids])
 
 
-def simulate_team(world, buildings: Dict[int, dict], workers: list, duration: float, max_events: int,
-                  counts: Optional[Dict[int, int]], flags_of,
-                  build_points: Optional[Dict[int, int]] = None,
-                  collected: Optional[Dict[int, int]] = None) -> Optional[List[int]]:
+def simulate_team(
+    world,
+    buildings: Dict[int, dict],
+    workers: list,
+    duration: float,
+    max_events: int,
+    counts: Optional[Dict[int, int]],
+    flags_of,
+    build_points: Optional[Dict[int, int]] = None,
+    collected: Optional[Dict[int, int]] = None,
+) -> Optional[List[int]]:
     """harvest_sim.simulate_team 과 같은 계산. 작업자(Worker)의 위치·경로·획득을 채우고 합계를 돌려준다.
     flags_of(bid) → (flags, rtype, res). 쓸 수 없으면 None (파이썬으로 계산)."""
     dll = lib()
@@ -103,42 +156,85 @@ def simulate_team(world, buildings: Dict[int, dict], workers: list, duration: fl
     flags, rtype, res = _arr(ctypes.c_int, fl), _arr(ctypes.c_int, rt), _arr(ctypes.c_int, rs)
     nw = len(workers)
     wk = _arr(ctypes.c_double, [v for w in workers for v in (w.x, w.y, w.dx, w.dy, w.speed, w.t)])
-    ups = _arr(ctypes.c_int, [(U_PIERCE_BUILDINGS if w.upgrades.get("kPierceBuildings") else 0)
-                              | (U_PIERCE_STONE if w.upgrades.get("kPierceStone") else 0)
-                              | (U_PIERCE_WOOD if w.upgrades.get("kPierceWood") else 0) for w in workers])
+    ups = _arr(
+        ctypes.c_int,
+        [
+            (U_PIERCE_BUILDINGS if w.upgrades.get("kPierceBuildings") else 0)
+            | (U_PIERCE_STONE if w.upgrades.get("kPierceStone") else 0)
+            | (U_PIERCE_WOOD if w.upgrades.get("kPierceWood") else 0)
+            for w in workers
+        ],
+    )
     total = (ctypes.c_int * 4)()
     gain = (ctypes.c_int * max(1, 4 * nw))()
     cnt = (ctypes.c_int * max(1, ns))()
     points = (ctypes.c_int * max(1, ns))()
     harvested = (ctypes.c_int * max(1, ns))()
     from .harvest_sim import _game_bonus
+
     build_bonus = _arr(ctypes.c_int, [(_game_bonus(w.harvest_bonus, "kMoreBuildPts") or 0) for w in workers])
     from .harvest_sim import harvest_effects
+
     effects = [harvest_effects(w.upgrades, w.harvest_bonus) for w in workers]
     amounts = _arr(ctypes.c_int, [v for amount, _, _ in effects for v in amount])
     clocks = _arr(ctypes.c_int, [v for _, clock, _ in effects for v in clock])
     radii = _arr(ctypes.c_double, [radius for _, _, radius in effects])
     clock_counts = (ctypes.c_int * max(1, 4 * nw))()
-    touching=_arr(ctypes.c_int,[int(bid in w.touching) for w in workers for bid in pw.slot_ids])
-    bounced=_arr(ctypes.c_int,[int(w.just_bounced) for w in workers])
+    touching = _arr(ctypes.c_int, [int(bid in w.touching) for w in workers for bid in pw.slot_ids])
+    bounced = _arr(ctypes.c_int, [int(w.just_bounced) for w in workers])
     cap = max_events + nw + 8
     path = (ctypes.c_double * (4 * cap))()
     # 다음 사건의 시각·거리·법선과 충돌 대상을 작업자별로 저장한다.
     event_values = (ctypes.c_double * max(1, 4 * nw))()
     event_kinds = (ctypes.c_int * max(1, 2 * nw))()
-    n = dll.bxp_simulate_team(pw.world, pw.n, pw.kind, pw.slot, pw.bid, pw.pt_off, pw.pt_cnt, pw.pts, pw.circ, pw.bb,
-                              flags, rtype, res, nw, wk, ups, float(duration), int(max_events),
-                              total, gain, cnt, path, cap, event_values, event_kinds, build_bonus, points,
-                              amounts, clocks, radii, clock_counts, harvested, len(world.roads), pw.roads, world.road_speed_mult,
-                              ns,touching,bounced)
+    n = dll.bxp_simulate_team(
+        pw.world,
+        pw.n,
+        pw.kind,
+        pw.slot,
+        pw.bid,
+        pw.pt_off,
+        pw.pt_cnt,
+        pw.pts,
+        pw.circ,
+        pw.bb,
+        flags,
+        rtype,
+        res,
+        nw,
+        wk,
+        ups,
+        float(duration),
+        int(max_events),
+        total,
+        gain,
+        cnt,
+        path,
+        cap,
+        event_values,
+        event_kinds,
+        build_bonus,
+        points,
+        amounts,
+        clocks,
+        radii,
+        clock_counts,
+        harvested,
+        len(world.roads),
+        pw.roads,
+        world.road_speed_mult,
+        ns,
+        touching,
+        bounced,
+    )
     if n < 0:
         return None
     for i, w in enumerate(workers):
-        w.x, w.y, w.dx, w.dy, w.speed, w.t = wk[6 * i:6 * i + 6]
-        w.gain = list(gain[4 * i:4 * i + 4])
+        w.x, w.y, w.dx, w.dy, w.speed, w.t = wk[6 * i : 6 * i + 6]
+        w.gain = list(gain[4 * i : 4 * i + 4])
         w.path = []
-        w.touching={bid for j,bid in enumerate(pw.slot_ids) if touching[i*ns+j]}
-        w.just_bounced=bool(bounced[i])
+        w.touching = {bid for j, bid in enumerate(pw.slot_ids) if touching[i * ns + j]}
+        w.just_bounced = bool(bounced[i])
     for k in range(n):
         wi = int(path[4 * k])
         workers[wi].path.append((path[4 * k + 1], path[4 * k + 2], path[4 * k + 3]))

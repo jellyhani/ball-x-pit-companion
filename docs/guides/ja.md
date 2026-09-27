@@ -32,4 +32,10 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 表示されない場合は、表示設定、ゲームウィンドウ、接続状態を確認してください。[Issues](https://github.com/jellyhani/ball-x-pit-companion/issues)にはバージョン、言語、解像度、再現手順、期待した結果と実際の結果を記載してください。画像やログの個人情報を削除し、セーブや抽出したゲーム素材は投稿しないでください。
 
+## 権利・責任・プライバシー
+
+本ツールは非公式で、現状のまま提供されます。ゲームおよび第三者の資料の権利は各権利者に帰属します。法律上排除できない権利を制限しません。
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

@@ -9,6 +9,8 @@ namespace BallxPitBridge
 {
     internal static class PhysicsSnapshot
     {
+        // 환경 모양은 매 스냅샷 전부 탐색하지 않는다. 상태가 바뀌거나 1초가 지나면 갱신하고,
+        // 시간·참가자·건물의 변하는 값은 별도로 읽는다. 캐시는 게임 객체를 변경하지 않는다.
         static string _environment;
         static float _environmentAt = -10;
         static string _environmentState;
@@ -17,15 +19,15 @@ namespace BallxPitBridge
         {
             try
             {
-                string state=bm.CurState.ToString();
-                if (_environment == null || _environmentState!=state || Time.realtimeSinceStartup - _environmentAt >= 1f)
+                string state = bm.CurState.ToString();
+                if (_environment == null || _environmentState != state || Time.realtimeSinceStartup - _environmentAt >= 1f)
                 {
                     using var ms = new MemoryStream();
                     using (var ew = new Utf8JsonWriter(ms))
                     {
                         ew.WriteStartObject();
-                        ew.WriteBoolean("queries_start_in_colliders",Physics2D.queriesStartInColliders);
-                        ew.WriteBoolean("queries_hit_triggers",Physics2D.queriesHitTriggers);
+                        ew.WriteBoolean("queries_start_in_colliders", Physics2D.queriesStartInColliders);
+                        ew.WriteBoolean("queries_hit_triggers", Physics2D.queriesHitTriggers);
                         ew.WriteStartArray("walls");
                         var cols = UnityEngine.Object.FindObjectsOfType<Collider2D>();
                         int mask = ColMgr.kLayerMaskAllBaseObstacles;
@@ -67,7 +69,7 @@ namespace BallxPitBridge
                     }
                     _environment = Encoding.UTF8.GetString(ms.ToArray());
                     _environmentAt = Time.realtimeSinceStartup;
-                    _environmentState=state;
+                    _environmentState = state;
                 }
                 w.WritePropertyName("environment"); w.WriteRawValue(_environment, true);
                 w.WriteNumber("physics_contract", 2);
@@ -81,12 +83,12 @@ namespace BallxPitBridge
                     w.WriteNumber("game_time", TimeMgr.I.GetTime());
                     w.WriteNumber("physics_time", TimeMgr.I.GetPhysicsTime());
                     w.WriteNumber("game_speed", TimeMgr.I.GetGameSpeed());
-                    w.WriteNumber("physics_step",TimeMgr.I.GetFixedDeltaTime());
+                    w.WriteNumber("physics_step", TimeMgr.I.GetFixedDeltaTime());
                 }
-                if(WorldTimeMgr.I!=null)
+                if (WorldTimeMgr.I != null)
                 {
-                    w.WriteNumber("world_tick_progress",WorldTimeMgr.I._timeProgress);
-                    w.WriteNumber("world_tick_interval",WorldTimeMgr.I.GetTimeThreshold());
+                    w.WriteNumber("world_tick_progress", WorldTimeMgr.I._timeProgress);
+                    w.WriteNumber("world_tick_interval", WorldTimeMgr.I.GetTimeThreshold());
                 }
             }
             catch { }
@@ -116,34 +118,38 @@ namespace BallxPitBridge
                     }
                     tw.WriteEndArray();
                 }
-                w.WritePropertyName("launch_team");w.WriteRawValue(Encoding.UTF8.GetString(ms.ToArray()), true);
+                w.WritePropertyName("launch_team"); w.WriteRawValue(Encoding.UTF8.GetString(ms.ToArray()), true);
             }
             catch (Exception e) { w.WriteString("team_error", e.GetType().Name); }
         }
 
         internal static void WriteBuilding(Utf8JsonWriter w, BuildingInst b)
         {
-            w.WriteStartArray("observed_pose");w.WriteNumberValue(b.X);w.WriteNumberValue(b.Y);
-            w.WriteNumberValue(b.Rotation);w.WriteEndArray();
-            try { w.WriteBoolean("is_resource",BuildingUtl.IsResource(b.Type));
-                  w.WriteNumber("resource_type",(int)BuildingUtl.GetResourceType(b.Type)); } catch { }
+            w.WriteStartArray("observed_pose"); w.WriteNumberValue(b.X); w.WriteNumberValue(b.Y);
+            w.WriteNumberValue(b.Rotation); w.WriteEndArray();
             try
             {
-                var col=b.Obj?.Col;
-                if (col!=null)
+                w.WriteBoolean("is_resource", BuildingUtl.IsResource(b.Type));
+                w.WriteNumber("resource_type", (int)BuildingUtl.GetResourceType(b.Type));
+            }
+            catch { }
+            try
+            {
+                var col = b.Obj?.Col;
+                if (col != null)
                 {
-                    bool active=col.enabled && col.gameObject.activeInHierarchy;
-                    int layer=1<<col.gameObject.layer;
-                    w.WriteBoolean("raycast_enabled",active && (ColMgr.kLayerMaskBounce & layer)!=0);
-                    w.WriteBoolean("pickup_enabled",active && (ColMgr.kLayerMaskPickup & layer)!=0);
+                    bool active = col.enabled && col.gameObject.activeInHierarchy;
+                    int layer = 1 << col.gameObject.layer;
+                    w.WriteBoolean("raycast_enabled", active && (ColMgr.kLayerMaskBounce & layer) != 0);
+                    w.WriteBoolean("pickup_enabled", active && (ColMgr.kLayerMaskPickup & layer) != 0);
                 }
             }
             catch { }
             try { w.WriteNumber("effect_value", b.GetStatBonusAmt()); } catch { }
             try
             {
-                int level=b.UpgradeLvl+(b.CurState.ToString()=="kUpgrading"?1:0);
-                w.WriteNumber("completion_effect_value",b.GetInfo().GetStatBonusAmt(level));
+                int level = b.UpgradeLvl + (b.CurState.ToString() == "kUpgrading" ? 1 : 0);
+                w.WriteNumber("completion_effect_value", b.GetInfo().GetStatBonusAmt(level));
             }
             catch { }
             try { w.WriteBoolean("housing_effect_active", BuildingUtl.HasHousingUpgrade(b.Type)); } catch { }
@@ -152,59 +158,60 @@ namespace BallxPitBridge
             try { w.WriteNumber("task_seconds", b.CurTaskSecs); w.WriteNumber("task_target_seconds", b.GetTaskTgtSecs()); } catch { }
             try
             {
-                w.WriteBoolean("task_active",b.HasActiveTask());
-                w.WriteBoolean("is_idle_harvester",BuildingUtl.IsIdleHarvester(b.Type));
-                w.WriteNumber("production_resource",(int)BuildingUtl.GetWorkstationResource(b.Type));
-                int level=b.UpgradeLvl+(b.CurState.ToString()=="kUpgrading"?1:0);
-                w.WriteNumber("completion_capacity",BuildingUtl.GetResourceCapacity(b.Type,level));
+                w.WriteBoolean("task_active", b.HasActiveTask());
+                w.WriteBoolean("is_idle_harvester", BuildingUtl.IsIdleHarvester(b.Type));
+                w.WriteNumber("production_resource", (int)BuildingUtl.GetWorkstationResource(b.Type));
+                int level = b.UpgradeLvl + (b.CurState.ToString() == "kUpgrading" ? 1 : 0);
+                w.WriteNumber("completion_capacity", BuildingUtl.GetResourceCapacity(b.Type, level));
             }
             catch { }
             try { w.WriteNumber("regen_bonus", b.GetSpeedImprovementAmtInRange()); } catch { }
-            try { WriteRange(w,b.GetInfo(),b.GetTileSize(),b.Rotation); }
-            catch (Exception e) { w.WriteNull("range_boxes");w.WriteString("range_error",e.GetType().Name); }
+            try { WriteRange(w, b.GetInfo(), b.GetTileSize(), b.Rotation); }
+            catch (Exception e) { w.WriteNull("range_boxes"); w.WriteString("range_error", e.GetType().Name); }
         }
 
-        internal static void WriteRange(Utf8JsonWriter w,BuildingInfo info,Vector2Int size,int rotation)
+        internal static void WriteRange(Utf8JsonWriter w, BuildingInfo info, Vector2Int size, int rotation)
         {
             try
             {
                 // BuildingUtl.IsInRange(0x6B6560)의 대상 영역. 상대 좌표라 이동 후보에도 재사용한다.
+                // 물리 충돌 상자와 효과 범위의 대상 상자는 다르다. 콜라이더 AABB로 대체하지 않는다.
                 using var ms = new MemoryStream();
                 using (var rw = new Utf8JsonWriter(ms))
                 {
                     rw.WriteStartArray();
                     string shape = info.ColType.ToString();
-                    if (shape == "kBox") RangeBox(rw, -size.x*.5f,-size.y*.5f,size.x*.5f,size.y*.5f);
+                    if (shape == "kBox") RangeBox(rw, -size.x * .5f, -size.y * .5f, size.x * .5f, size.y * .5f);
                     else if (shape == "kPoly")
                     {
                         var grid = info.InnerGrid.TryCast<Il2CppSystem.Array>();
                         if (grid == null) throw new InvalidOperationException("InnerGrid");
-                        for (int x=0; x<size.x; x++) for (int y=0; y<size.y; y++)
+                        for (int x = 0; x < size.x; x++) for (int y = 0; y < size.y; y++)
                         {
-                            int ix=x,iy=y;
-                            if (rotation==1) { ix=y; iy=size.x-1-x; }
-                            else if (rotation==2) { ix=size.x-1-x; iy=size.y-1-y; }
-                            else if (rotation==3) { ix=size.y-1-y; iy=x; }
-                            if (!grid.GetValue(ix,iy).Unbox<bool>()) continue;
-                            float cx=(x+.5f-size.x*.5f)*BaseGridMgr.kSpaceWidth;
-                            float cy=(size.y*.5f-y-.5f)*BaseGridMgr.kSpaceWidth;
-                            RangeBox(rw,cx-.3125f,cy-.3125f,cx+.3125f,cy+.3125f);
+                            int ix = x, iy = y;
+                            if (rotation == 1) { ix = y; iy = size.x - 1 - x; }
+                            else if (rotation == 2) { ix = size.x - 1 - x; iy = size.y - 1 - y; }
+                            else if (rotation == 3) { ix = size.y - 1 - y; iy = x; }
+                            if (!grid.GetValue(ix, iy).Unbox<bool>()) continue;
+                            float cx = (x + .5f - size.x * .5f) * BaseGridMgr.kSpaceWidth;
+                            float cy = (size.y * .5f - y - .5f) * BaseGridMgr.kSpaceWidth;
+                            RangeBox(rw, cx - .3125f, cy - .3125f, cx + .3125f, cy + .3125f);
                         }
                     }
-                    else if (shape == "kCircle") RangeBox(rw,0,0,0,0);
+                    else if (shape == "kCircle") RangeBox(rw, 0, 0, 0, 0);
                     else throw new InvalidOperationException("ColliderType");
                     rw.WriteEndArray();
                 }
-                w.WritePropertyName("range_boxes");w.WriteRawValue(Encoding.UTF8.GetString(ms.ToArray()),true);
-                w.WriteNumber("range_rotation",rotation);
+                w.WritePropertyName("range_boxes"); w.WriteRawValue(Encoding.UTF8.GetString(ms.ToArray()), true);
+                w.WriteNumber("range_rotation", rotation);
             }
-            catch (Exception e) { w.WriteNull("range_boxes");w.WriteString("range_error",e.GetType().Name); }
+            catch (Exception e) { w.WriteNull("range_boxes"); w.WriteString("range_error", e.GetType().Name); }
         }
 
-        static void RangeBox(Utf8JsonWriter w,float x0,float y0,float x1,float y1)
+        static void RangeBox(Utf8JsonWriter w, float x0, float y0, float x1, float y1)
         {
-            w.WriteStartArray();w.WriteNumberValue(x0);w.WriteNumberValue(y0);
-            w.WriteNumberValue(x1);w.WriteNumberValue(y1);w.WriteEndArray();
+            w.WriteStartArray(); w.WriteNumberValue(x0); w.WriteNumberValue(y0);
+            w.WriteNumberValue(x1); w.WriteNumberValue(y1); w.WriteEndArray();
         }
 
         static void Point(Utf8JsonWriter w, Vector3 p)
@@ -247,10 +254,10 @@ namespace BallxPitBridge
                     else if (box != null)
                     {
                         var o = box.offset; var h = box.size * .5f;
-                        Point(w, t.TransformPoint(new Vector3(o.x-h.x,o.y-h.y,0)));
-                        Point(w, t.TransformPoint(new Vector3(o.x+h.x,o.y-h.y,0)));
-                        Point(w, t.TransformPoint(new Vector3(o.x+h.x,o.y+h.y,0)));
-                        Point(w, t.TransformPoint(new Vector3(o.x-h.x,o.y+h.y,0)));
+                        Point(w, t.TransformPoint(new Vector3(o.x - h.x, o.y - h.y, 0)));
+                        Point(w, t.TransformPoint(new Vector3(o.x + h.x, o.y - h.y, 0)));
+                        Point(w, t.TransformPoint(new Vector3(o.x + h.x, o.y + h.y, 0)));
+                        Point(w, t.TransformPoint(new Vector3(o.x - h.x, o.y + h.y, 0)));
                     }
                     w.WriteEndArray();
                 }

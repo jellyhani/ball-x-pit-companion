@@ -3,6 +3,7 @@
 점수 계산은 Scorer.score 와 같은 값(합 순서만 달라 1e-9 안쪽). 담금질·마무리는 같은 규칙, 난수만 다르다.
 DLL 이 없으면 모든 함수가 None — layout_opt 는 파이썬으로 계산한다.
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -16,25 +17,78 @@ _I, _D, _U8 = ctypes.c_int, ctypes.c_double, ctypes.c_ubyte
 
 
 class _Model(ctypes.Structure):
-    _fields_ = [("gx0", _I), ("gy0", _I), ("gw", _I), ("gh", _I), ("tile", _P(_U8)),
-                ("ox", _D), ("oy", _D), ("size", _D), ("square", _I),
-                ("n", _I), ("pw", _P(_I)), ("ph", _P(_I)), ("movable", _P(_I)),
-                ("rel_off", _P(_I)), ("rel_cnt", _P(_I)), ("rel", _P(_I)), ("origin0", _P(_I)),
-                ("lane", _P(_D)), ("lane_idle", _P(_I)), ("lane_tile", _P(_D)), ("lane_w", _D), ("lane_tile_w", _D),
-                ("n_spots", _I), ("spots", _P(_I)), ("is_preset", _P(_I)), ("preset_w", _D), ("preset_clear", _D),
-                ("m", _I), ("eff_piece", _P(_I)), ("eff_rr", _P(_D)), ("eff_r2", _P(_D)), ("eff_mode", _P(_I)),
-                ("eff_group", _P(_I)), ("eff_off", _P(_I)), ("eff_cnt", _P(_I)), ("tgt", _P(_I)), ("tgt_val", _P(_D)),
-                ("harvest_cap", _I), ("n_groups", _I),
-                ("part_off", _P(_I)), ("part_cnt", _P(_I)), ("part_piece", _P(_I)), ("part_r", _P(_D)),
-                ("sz_off", _P(_I)), ("sz_cnt", _P(_I)), ("sz_org", _P(_I)),
-                ("range_off",_P(_I)),("range_cnt",_P(_I)),("range_boxes",_P(_D)),("range_pad",_D)]
+    _fields_ = [
+        ("gx0", _I),
+        ("gy0", _I),
+        ("gw", _I),
+        ("gh", _I),
+        ("tile", _P(_U8)),
+        ("ox", _D),
+        ("oy", _D),
+        ("size", _D),
+        ("square", _I),
+        ("n", _I),
+        ("pw", _P(_I)),
+        ("ph", _P(_I)),
+        ("movable", _P(_I)),
+        ("rel_off", _P(_I)),
+        ("rel_cnt", _P(_I)),
+        ("rel", _P(_I)),
+        ("origin0", _P(_I)),
+        ("lane", _P(_D)),
+        ("lane_idle", _P(_I)),
+        ("lane_tile", _P(_D)),
+        ("lane_w", _D),
+        ("lane_tile_w", _D),
+        ("n_spots", _I),
+        ("spots", _P(_I)),
+        ("is_preset", _P(_I)),
+        ("preset_w", _D),
+        ("preset_clear", _D),
+        ("m", _I),
+        ("eff_piece", _P(_I)),
+        ("eff_rr", _P(_D)),
+        ("eff_r2", _P(_D)),
+        ("eff_mode", _P(_I)),
+        ("eff_group", _P(_I)),
+        ("eff_off", _P(_I)),
+        ("eff_cnt", _P(_I)),
+        ("tgt", _P(_I)),
+        ("tgt_val", _P(_D)),
+        ("harvest_cap", _I),
+        ("n_groups", _I),
+        ("part_off", _P(_I)),
+        ("part_cnt", _P(_I)),
+        ("part_piece", _P(_I)),
+        ("part_r", _P(_D)),
+        ("sz_off", _P(_I)),
+        ("sz_cnt", _P(_I)),
+        ("sz_org", _P(_I)),
+        ("range_off", _P(_I)),
+        ("range_cnt", _P(_I)),
+        ("range_boxes", _P(_D)),
+        ("range_pad", _D),
+    ]
 
 
 class _Work(ctypes.Structure):
-    _fields_ = [("occ", _P(_I)), ("cx", _P(_D)), ("cy", _P(_D)), ("regen", _P(_D)), ("regen_set", _P(_U8)),
-                ("h1", _P(_D)), ("h2", _P(_D)), ("h_set", _P(_U8)), ("stamp", _P(_I)), ("tmp_ids", _P(_I)),
-                ("undo", _P(_I)), ("best_org", _P(_I)), ("cand", _P(_I)),
-                ("rng", ctypes.c_uint64), ("stamp_gen", _I)]
+    _fields_ = [
+        ("occ", _P(_I)),
+        ("cx", _P(_D)),
+        ("cy", _P(_D)),
+        ("regen", _P(_D)),
+        ("regen_set", _P(_U8)),
+        ("h1", _P(_D)),
+        ("h2", _P(_D)),
+        ("h_set", _P(_U8)),
+        ("stamp", _P(_I)),
+        ("tmp_ids", _P(_I)),
+        ("undo", _P(_I)),
+        ("best_org", _P(_I)),
+        ("cand", _P(_I)),
+        ("rng", ctypes.c_uint64),
+        ("stamp_gen", _I),
+    ]
 
 
 _TPS: Optional[float] = None
@@ -45,6 +99,7 @@ def _ticks_per_second(dll) -> float:
     global _TPS
     if _TPS is None:
         import time
+
         t0, k0 = time.perf_counter(), dll.bxp_ticks()
         time.sleep(0.05)
         t1, k1 = time.perf_counter(), dll.bxp_ticks()
@@ -62,8 +117,17 @@ def _lib():
         dll.bxp_layout_score.restype = _D
         dll.bxp_layout_score.argtypes = [_P(_Model), _P(_Work), _P(_I)]
         dll.bxp_layout_anneal.restype = _D
-        dll.bxp_layout_anneal.argtypes = [_P(_Model), _P(_Work), _P(_I), _D, _D, _D, ctypes.c_uint64, ctypes.c_uint64,
-                                          _P(_I)]
+        dll.bxp_layout_anneal.argtypes = [
+            _P(_Model),
+            _P(_Work),
+            _P(_I),
+            _D,
+            _D,
+            _D,
+            ctypes.c_uint64,
+            ctypes.c_uint64,
+            _P(_I),
+        ]
         dll.bxp_layout_polish.restype = _D
         dll.bxp_layout_polish.argtypes = [_P(_Model), _P(_Work), _P(_I), _D, ctypes.c_uint64]
         dll._layout_ready = True
@@ -75,6 +139,7 @@ class LayoutModel:
 
     def __init__(self, lay, scorer, origin0):
         from . import layout_opt as lo
+
         keep = self._keep = []
 
         def a(ctype, values):
@@ -102,13 +167,13 @@ class LayoutModel:
         M.n = len(ids)
         M.pw, M.ph = a(_I, [p.w for p in P]), a(_I, [p.h for p in P])
         M.movable = a(_I, [1 if p.movable else 0 for p in P])
-        ro,rc,boxes=[],[],[]
+        ro, rc, boxes = [], [], []
         for p in P:
-            ro.append(len(boxes)//4)
+            ro.append(len(boxes) // 4)
             rc.append(-1 if p.range_boxes is None else len(p.range_boxes))
             boxes.extend(v for box in (p.range_boxes or ()) for v in box)
-        M.range_off,M.range_cnt,M.range_boxes=a(_I,ro),a(_I,rc),a(_D,boxes)
-        M.range_pad=scorer.pad
+        M.range_off, M.range_cnt, M.range_boxes = a(_I, ro), a(_I, rc), a(_D, boxes)
+        M.range_pad = scorer.pad
         off, cnt, rel = [], [], []
         for p in P:
             off.append(len(rel) // 2)
@@ -154,7 +219,11 @@ class LayoutModel:
             ts = scorer.targets[kind]
             e_cnt.append(len(ts))
             for t in ts:
-                v = w * p.factor * (scorer.res_weight.get(kind, 1.0) * lay.pieces[t].cap if isinstance(kind, int) else 1.0)
+                v = (
+                    w
+                    * p.factor
+                    * (scorer.res_weight.get(kind, 1.0) * lay.pieces[t].cap if isinstance(kind, int) else 1.0)
+                )
                 if kind == "build" and lay.pieces[t].unfinished:
                     v *= lo.UNFINISHED_BUILD_W
                 if kind in lo.HUB_KINDS:
@@ -163,7 +232,12 @@ class LayoutModel:
                 val.append(v)
         M.m = len(e_piece)
         M.eff_piece, M.eff_rr, M.eff_r2 = a(_I, e_piece), a(_D, e_rr), a(_D, e_r2)
-        M.eff_mode, M.eff_group, M.eff_off, M.eff_cnt = a(_I, e_mode), a(_I, e_group), a(_I, e_off), a(_I, e_cnt)
+        M.eff_mode, M.eff_group, M.eff_off, M.eff_cnt = (
+            a(_I, e_mode),
+            a(_I, e_group),
+            a(_I, e_off),
+            a(_I, e_cnt),
+        )
         M.tgt, M.tgt_val = a(_I, tgt), a(_D, val)
         M.harvest_cap, M.n_groups = lo.HARVEST_CAP, max(1, len(groups))
         # 담금질 '관련 자리' 상대 (_near_spots 와 같은 목록)
@@ -185,7 +259,12 @@ class LayoutModel:
             for q, r in parts:
                 p_piece.append(q)
                 p_r.append(r)
-        M.part_off, M.part_cnt, M.part_piece, M.part_r = a(_I, p_off), a(_I, p_cnt), a(_I, p_piece), a(_D, p_r)
+        M.part_off, M.part_cnt, M.part_piece, M.part_r = (
+            a(_I, p_off),
+            a(_I, p_cnt),
+            a(_I, p_piece),
+            a(_D, p_r),
+        )
         # 크기별 가능한 자리 (담금질은 건물 크기 + 0~2 영역도 쓴다)
         sz_off, sz_cnt, sz_org = [0] * 1024, [0] * 1024, []
         sizes = {(p.w + dw, p.h + dh) for p in P if p.movable for dw in range(3) for dh in range(3)}
@@ -236,9 +315,17 @@ def anneal(lay, scorer, seconds: float, seed: int, t0: float, t1: float, origin0
     lm = LayoutModel(lay, scorer, origin0)
     org = lm.org(lay.origin)
     iters = _I(0)
-    best = dll.bxp_layout_anneal(ctypes.byref(lm.model), ctypes.byref(lm.work), org, cost, t0, math.log(t1 / t0),
-                                 int(seconds * _ticks_per_second(dll)), (seed & 0xFFFFFFFFFFFFFFFF) or 1,
-                                 ctypes.byref(iters))
+    best = dll.bxp_layout_anneal(
+        ctypes.byref(lm.model),
+        ctypes.byref(lm.work),
+        org,
+        cost,
+        t0,
+        math.log(t1 / t0),
+        int(seconds * _ticks_per_second(dll)),
+        (seed & 0xFFFFFFFFFFFFFFFF) or 1,
+        ctypes.byref(iters),
+    )
     return lm.to_dict(org), best, iters.value
 
 
@@ -249,6 +336,7 @@ def polish(lay, scorer, origin0: dict, seconds: float, cost: float):
         return None
     lm = LayoutModel(lay, scorer, origin0)
     org = lm.org(lay.origin)
-    cur = dll.bxp_layout_polish(ctypes.byref(lm.model), ctypes.byref(lm.work), org, cost,
-                                int(seconds * _ticks_per_second(dll)))
+    cur = dll.bxp_layout_polish(
+        ctypes.byref(lm.model), ctypes.byref(lm.work), org, cost, int(seconds * _ticks_per_second(dll))
+    )
     return lm.to_dict(org), cur

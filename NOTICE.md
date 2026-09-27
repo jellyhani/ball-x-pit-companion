@@ -8,6 +8,12 @@ Packaged builds also contain Python and third-party dependencies. Their license 
 inventory are included under `_internal/third_party/`. The inventory covers runtime and build dependencies;
 listing a build tool does not mean that its entire code is part of the executable.
 
+Each binary release must also provide its matching `dependency-sources.zip` asset. It contains
+the exact unmodified Qt Base, Qt SVG, Qt for Python/Shiboken, and pynput source archives.
+See [corresponding source access and maintainer instructions](docs/DEPENDENCY_SOURCES.md).
+The source manifest records official URLs and SHA-256 digests; library versions and bundled Qt
+modules are checked during packaging. License texts alone do not replace source obligations.
+
 Qt/PySide, Shiboken, and pynput are used without local source modifications. The onedir package keeps
 shared libraries as separate files, and pynput's Python modules remain replaceable source files.
 You may replace compatible library files or rebuild the application with modified versions using the
@@ -37,10 +43,21 @@ Use the versions recorded in `dependency-notices.json` when obtaining correspond
 | winrt-* (Windows Runtime projections) | MIT |
 | UnityPy (data extraction, also bundled in the packaged app) | MIT |
 
-## Facts referenced (no text or data copied)
+## Research references and community assessments
+
+Game mechanics and community assessments inform the project's own explanations and heuristic
+rules. Community rankings are opinions, not official game values or endorsements. Source
+references are retained in `data/community.json`, `src/engine/construction_policy.py`, and the
+[technical notes](docs/reference/README.ko.md#자료-출처). We do not claim ownership of the referenced
+articles, their original expression, or third-party datasets. The MIT grant for this project's
+original software does not relicense third-party material. Attribution alone does not grant
+permission to copy a source's protected content.
 
 - BALL x PIT Wiki (wiki.gg) — https://ballxpit.wiki.gg
 - Steam Community guides linked in README.md
 - StonedModder/BallxPitxApp research docs — https://github.com/StonedModder/BallxPitxApp
 
 BALL x PIT is a trademark of its respective owners. This project is unofficial and not affiliated with them.
+
+See [DISCLAIMER.md](DISCLAIMER.md) for the project's warranty/limitation notice and rights-concern
+reporting route, and [PRIVACY.md](PRIVACY.md) for local records and installation downloads.

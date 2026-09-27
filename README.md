@@ -6,6 +6,12 @@ The companion reads live game state through a BepInEx bridge. It does not play t
 
 **Early development:** recommendations and trajectories can be wrong. Layout suggestions are not proven optimal, and build ratings are not predictions of future DPS. The main tested environment is Windows 11, 1920×1080, Korean, Steam game version 1.301. Other languages and resolutions need more real-world testing.
 
+**Unofficial, provided as-is.** The game and its assets remain the property of their respective
+rights holders. This project does not promise error-free advice or protection from game/platform
+enforcement. Read the [project notice and disclaimer](DISCLAIMER.md), [privacy statement](PRIVACY.md),
+and [third-party notices](NOTICE.md). These notices do not limit rights that applicable law or
+open-source licenses do not allow us to exclude.
+
 ## Choose your language
 
 These 16 guides cover installation, everyday use, limitations, and bug reports. They are user guides, not full translations of every developer document. Translations have not all received native-speaker review.
@@ -90,4 +96,8 @@ Use [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues) when the 
 
 Some tests require locally extracted game data and are skipped without it. A green CI run does not prove live game behavior. See [contribution guidelines (Korean)](CONTRIBUTING.md), [technical notes (Korean)](docs/reference/README.ko.md), and the [maintenance loop](IMPROVEMENT_LOOP.md).
 
-Source: [MIT](LICENSE). Third-party components: [NOTICE.md](NOTICE.md).
+For code navigation, see the [architecture and reading guide](docs/ARCHITECTURE.md).
+Maintainers should follow the [release procedure](docs/RELEASING.md), including publishing the
+[corresponding dependency sources](docs/DEPENDENCY_SOURCES.md) beside each binary release.
+
+Original software: [MIT](LICENSE) · [Project notice](DISCLAIMER.md) · [Privacy](PRIVACY.md) · [Third-party notices](NOTICE.md).

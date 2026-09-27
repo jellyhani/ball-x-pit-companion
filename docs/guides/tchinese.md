@@ -32,4 +32,10 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 若浮層未顯示，請檢查顯示設定、遊戲視窗及連線狀態。在 [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues) 提供版本、語言、解析度、重現步驟、預期及實際結果。分享截圖或紀錄前請移除個人資訊，不要上傳存檔或擷取的遊戲素材。
 
+## 權利、責任與隱私
+
+本工具為非官方工具，按現狀提供。遊戲及第三方資料的權利歸各自權利人所有。本聲明不限制法律上不可排除的權利。
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

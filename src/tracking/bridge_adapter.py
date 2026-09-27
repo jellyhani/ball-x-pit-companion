@@ -8,32 +8,62 @@
 - 강화 선택창은 먼저 능력치 페이지(kViewStats)를 보여 준다. 이때는 카드 버튼이 없어 화면 위치가 없다.
 - 캐릭터는 CharBattleInst.Type, 함께 쓰는 캐릭터는 CombinedTypes.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Tuple
 
-from ..domain import (Card, CardLabel, ChoicePool, FrameInfo, FuserCombo, FuserEvo, FuserOptions, GameOverInfo,
-                      InventorySlot, Rect, RunProgress, ScreenKind, ScreenObservation)
+from ..domain import (
+    Card,
+    CardLabel,
+    ChoicePool,
+    FrameInfo,
+    FuserCombo,
+    FuserEvo,
+    FuserOptions,
+    GameOverInfo,
+    InventorySlot,
+    Rect,
+    RunProgress,
+    ScreenKind,
+    ScreenObservation,
+)
 from ..gamedata import GameData
 from ..i18n import tr
 
-IN_RUN_STATES = {"kPlaying", "kLevelUp", "kPaused", "kPickTreasure", "kFoundBlueprint", "kBonusBall",
-                 "kBonusPassive", "kFoundEgg", "kRevive", "kEnteringLvl"}
+IN_RUN_STATES = {
+    "kPlaying",
+    "kLevelUp",
+    "kPaused",
+    "kPickTreasure",
+    "kFoundBlueprint",
+    "kBonusBall",
+    "kBonusPassive",
+    "kFoundEgg",
+    "kRevive",
+    "kEnteringLvl",
+}
 
 
 def _effective(value):
-    if (not isinstance(value,dict) or value.get('scope')!='current_run_uncombined'
-            or type(value.get('level')) is not int or not 1<=value['level']<=64):
+    if (
+        not isinstance(value, dict)
+        or value.get("scope") != "current_run_uncombined"
+        or type(value.get("level")) is not int
+        or not 1 <= value["level"] <= 64
+    ):
         return None
-    out={'scope':value['scope'],'level':value['level']}
-    for name in ('before','after'):
-        row=value.get(name)
-        if row is None and name=='before':
+    out = {"scope": value["scope"], "level": value["level"]}
+    for name in ("before", "after"):
+        row = value.get(name)
+        if row is None and name == "before":
             continue
-        if not isinstance(row,dict) or not all(isinstance(k,str) and type(v) is int for k,v in row.items()):
+        if not isinstance(row, dict) or not all(
+            isinstance(k, str) and type(v) is int for k, v in row.items()
+        ):
             return None
-        out[name]=dict(row)
+        out[name] = dict(row)
     return out
 
 
@@ -46,17 +76,20 @@ class BridgeState:
     turn: Optional[int] = None
     level_name: str = ""
     unknown_types: Tuple[str, ...] = ()
-    max_ball_level: Optional[int] = None     # 최대 레벨 볼을 보고 알아낸 최대 레벨 (화면 기준)
+    max_ball_level: Optional[int] = None  # 최대 레벨 볼을 보고 알아낸 최대 레벨 (화면 기준)
     game_over: Optional[GameOverInfo] = None
-    damage: Dict[str, int] = field(default_factory=dict)   # 이번 런 항목별 피해 (볼: 게임 통계, 패시브: 추가 피해)
+    damage: Dict[str, int] = field(
+        default_factory=dict
+    )  # 이번 런 항목별 피해 (볼: 게임 통계, 패시브: 추가 피해)
     kills: Dict[str, int] = field(default_factory=dict)
-    plugin: str = ""                          # 플러그인 버전 (1.2.0 부터 보냄)
-    battle: Optional["BattleInfo"] = None     # 전투 상황 (1.4.0 부터)
+    plugin: str = ""  # 플러그인 버전 (1.2.0 부터 보냄)
+    battle: Optional["BattleInfo"] = None  # 전투 상황 (1.4.0 부터)
 
 
 @dataclass(frozen=True)
 class BattleInfo:
     """전투 상황 (게임 연동 1.4). 모르는 값은 None."""
+
     xp: Optional[float] = None
     xp_next: Optional[int] = None
     enemies: Optional[int] = None
@@ -68,7 +101,7 @@ class BattleInfo:
     stats: Dict[str, float] = field(default_factory=dict)
     char_stats: Tuple[int, ...] = ()
     effects: Tuple[Tuple[str, float], ...] = ()
-    dmg_by: Dict[str, Dict[str, int]] = field(default_factory=dict)    # 항목 → {bounce, status, other, aoe}
+    dmg_by: Dict[str, Dict[str, int]] = field(default_factory=dict)  # 항목 → {bounce, status, other, aoe}
     kills_total: Optional[int] = None
     treasures: Optional[int] = None
 
@@ -82,7 +115,7 @@ def _rect(v, size: Tuple[int, int] = (0, 0)) -> Optional[Rect]:
         return None
     x, y, w, h = (int(a) for a in v)
     if size[0] and (x < -2 or y < -2 or x + w > size[0] + 2 or y + h > size[1] + 2 or w <= 0 or h <= 0):
-        return None   # 창이 미끄러져 들어오는 중이면 화면 밖 좌표가 온다
+        return None  # 창이 미끄러져 들어오는 중이면 화면 밖 좌표가 온다
     return (x, y, w, h)
 
 
@@ -107,16 +140,20 @@ def _shown(lvl) -> Optional[int]:
     return lvl + 1 if isinstance(lvl, int) and lvl >= 0 else None
 
 
-def convert(snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_id: int = 0,
-            at: float = 0.0) -> BridgeState:
+def convert(
+    snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_id: int = 0, at: float = 0.0
+) -> BridgeState:
     size = (int(snap.get("screen_w") or 0), int(snap.get("screen_h") or 0))
     frame = FrameInfo(frame_id, at, origin, size, tr("게임 연동"))
     state = snap.get("game_state") or ""
     battle = snap.get("battle") if isinstance(snap.get("battle"), dict) else None
     lvl = snap.get("levelup") if isinstance(snap.get("levelup"), dict) else None
     ui = snap.get("ui") if isinstance(snap.get("ui"), dict) else {}
-    if lvl is not None and snap.get("game_state") not in (None, "kLevelUp") and not (
-            lvl.get("type") == "kFuser" and ui.get("screen") == "fuser"):
+    if (
+        lvl is not None
+        and snap.get("game_state") not in (None, "kLevelUp")
+        and not (lvl.get("type") == "kFuser" and ui.get("screen") == "fuser")
+    ):
         # 실제 게임 확인: 융합기가 필드에 떨어질 때 게임 상태는 kPlaying 인데 선택 UI 가 잠깐 kFuser 로 잡힌다.
         # 반대로 실제 융합 화면의 게임 상태는 kPickTreasure (2026-09-26 live_state 확인) — 이때는 플러그인이
         # 융합 UI 가 활성 오버레이일 때만 보내는 ui.screen == "fuser" 로 구별한다
@@ -143,8 +180,17 @@ def convert(snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_
         for e in balls_raw + passives_raw:
             # 퓨전 리액터에서 합쳐 넣은 볼(예: 산사태 안의 피뢰침) — 옛 플러그인(1.11 미만)은 이 필드가 없다
             combined = tuple(x for x in (item(t) for t in e.get("combined") or []) if x)
-            slots.append(InventorySlot(len(slots), (0, 0, 0, 0), True, item(e.get("type")), _shown(e.get("lvl")),
-                                       at_max=e.get("max"), combined=combined))
+            slots.append(
+                InventorySlot(
+                    len(slots),
+                    (0, 0, 0, 0),
+                    True,
+                    item(e.get("type")),
+                    _shown(e.get("lvl")),
+                    at_max=e.get("max"),
+                    combined=combined,
+                )
+            )
             if e.get("max") is True and _shown(e.get("lvl")):
                 max_level = max(max_level or 0, _shown(e.get("lvl")))
         inventory = tuple(slots)
@@ -174,14 +220,25 @@ def convert(snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_
                     if isinstance(v, (int, float)):
                         acc[k] = acc.get(k, 0) + int(v)
         binfo = BattleInfo(
-            xp=battle.get("xp"), xp_next=battle.get("xp_next"), enemies=battle.get("enemies"),
-            lowest_enemy_y=battle.get("lowest_enemy_y"), rows=battle.get("rows"),
-            boss_type=boss.get("type"), boss_hp=boss.get("hp"), boss_max=boss.get("max"),
+            xp=battle.get("xp"),
+            xp_next=battle.get("xp_next"),
+            enemies=battle.get("enemies"),
+            lowest_enemy_y=battle.get("lowest_enemy_y"),
+            rows=battle.get("rows"),
+            boss_type=boss.get("type"),
+            boss_hp=boss.get("hp"),
+            boss_max=boss.get("max"),
             stats={k: v for k, v in (battle.get("stats") or {}).items() if isinstance(v, (int, float))},
             char_stats=tuple(int(x) for x in battle.get("char_stats") or [] if isinstance(x, (int, float))),
-            effects=tuple((e.get("type", ""), float(e.get("left") or 0)) for e in battle.get("effects") or []
-                          if isinstance(e, dict)),
-            dmg_by=dmg_by, kills_total=battle.get("kills"), treasures=battle.get("treasures"))
+            effects=tuple(
+                (e.get("type", ""), float(e.get("left") or 0))
+                for e in battle.get("effects") or []
+                if isinstance(e, dict)
+            ),
+            dmg_by=dmg_by,
+            kills_total=battle.get("kills"),
+            treasures=battle.get("treasures"),
+        )
     if battle and isinstance(battle.get("baby_dmg"), (int, float)) and battle["baby_dmg"] > 0:
         # 실제 게임 확인: 베이비볼 피해는 볼별 통계와 따로 쌓인다 (런 종료 화면에도 따로 나옴)
         damage[data.ensure_runtime_item("baby", "kBabyBalls", "베이비볼")] = int(battle["baby_dmg"])
@@ -199,24 +256,54 @@ def convert(snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_
             nf = next((t for t in sorted(sched[1]) if t > turn), None)
     if battle:
         progress = RunProgress(
-            health=battle.get("health"), max_health=battle.get("max_health"), turn=battle.get("turn"),
-            final_boss_turn=battle.get("final_boss_turn") or None, level_name=battle.get("level", ""),
-            difficulty=battle.get("difficulty"), ng_plus=battle.get("ng_plus"), endless=battle.get("endless"),
-            max_balls=battle.get("max_balls"), max_passives=battle.get("max_passives"),
-            balls=len(balls_raw), passives=len(passives_raw),
+            health=battle.get("health"),
+            max_health=battle.get("max_health"),
+            turn=battle.get("turn"),
+            final_boss_turn=battle.get("final_boss_turn") or None,
+            level_name=battle.get("level", ""),
+            difficulty=battle.get("difficulty"),
+            ng_plus=battle.get("ng_plus"),
+            endless=battle.get("endless"),
+            max_balls=battle.get("max_balls"),
+            max_passives=battle.get("max_passives"),
+            balls=len(balls_raw),
+            passives=len(passives_raw),
             banished=tuple(x for x in (item(t) for t in battle.get("banished") or []) if x),
             endless_start_turn=battle.get("endless_start_turn") if battle.get("endless") else None,
-            revives_left=(battle["revives_max"] - battle.get("revives", 0)
-                          if isinstance(battle.get("revives_max"), int) else None),
-            next_boss_turn=nb, next_fuser_turn=nf,
+            revives_left=(
+                battle["revives_max"] - battle.get("revives", 0)
+                if isinstance(battle.get("revives_max"), int)
+                else None
+            ),
+            next_boss_turn=nb,
+            next_fuser_turn=nf,
         )
-    common = dict(frame=frame, inventory=inventory, character_id=character, gold=gold,
-                  extra_characters=extra_chars, banish_left=banish, progress=progress)
+    common = dict(
+        frame=frame,
+        inventory=inventory,
+        character_id=character,
+        gold=gold,
+        extra_characters=extra_chars,
+        banish_left=banish,
+        progress=progress,
+    )
 
     def result(obs: ScreenObservation) -> BridgeState:
-        return BridgeState(in_run, state, obs, battle.get("health") if battle else None,
-                           battle.get("turn") if battle else None, battle.get("level", "") if battle else "",
-                           tuple(unknown), max_level, game_over, damage, kills, str(snap.get("plugin") or ""), binfo)
+        return BridgeState(
+            in_run,
+            state,
+            obs,
+            battle.get("health") if battle else None,
+            battle.get("turn") if battle else None,
+            battle.get("level", "") if battle else "",
+            tuple(unknown),
+            max_level,
+            game_over,
+            damage,
+            kills,
+            str(snap.get("plugin") or ""),
+            binfo,
+        )
 
     if lvl is None:
         return result(ScreenObservation(ScreenKind.OTHER, **common))
@@ -227,16 +314,32 @@ def convert(snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_
         if fz:
             opts = FuserOptions(
                 options=tuple(fz.get("options") or ()),
-                evos=tuple(FuserEvo(item(e.get("type")), int(e.get("equip_idx", -1)),
-                                   e.get("evo_idx") if isinstance(e.get("evo_idx"), int) else None)
-                           for e in fz.get("evos") or []),
-                combos=tuple(FuserCombo(item(c.get("h1")), item(c.get("h2")), int(c.get("idx1", -1)),
-                                        int(c.get("idx2", -1)), c.get("ai_score"), c.get("bad"))
-                             for c in fz.get("combos") or []),
+                evos=tuple(
+                    FuserEvo(
+                        item(e.get("type")),
+                        int(e.get("equip_idx", -1)),
+                        e.get("evo_idx") if isinstance(e.get("evo_idx"), int) else None,
+                    )
+                    for e in fz.get("evos") or []
+                ),
+                combos=tuple(
+                    FuserCombo(
+                        item(c.get("h1")),
+                        item(c.get("h2")),
+                        int(c.get("idx1", -1)),
+                        int(c.get("idx2", -1)),
+                        c.get("ai_score"),
+                        c.get("bad"),
+                    )
+                    for c in fz.get("combos") or []
+                ),
                 free_upgrades=fz.get("free_upgrades"),
             )
-        return result(ScreenObservation(ScreenKind.FUSION, fuser=opts,
-                                        panel_rect=_rect(lvl.get("panel"), size), **common))
+        return result(
+            ScreenObservation(
+                ScreenKind.FUSION, fuser=opts, panel_rect=_rect(lvl.get("panel"), size), **common
+            )
+        )
 
     if lvl.get("type") != "kNormal" or not lvl.get("choices"):
         return result(ScreenObservation(ScreenKind.OTHER, **common))
@@ -265,24 +368,47 @@ def convert(snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_
             iid = data.ensure_runtime_item("pet", c["type"], c.get("name_loc") or "", c.get("desc_loc") or "")
         else:
             iid = item(c.get("type"))
-        effective=_effective(c.get('effective'))
+        effective = _effective(c.get("effective"))
         if is_new and effective is not None:
-            shown=effective['level']
-        cards.append(Card(index=i, position=names[i], rect=rect, icon_rect=rect, item_id=iid,
-                          label=CardLabel.NEW if is_new else CardLabel.UPGRADE, shown_level=shown,
-                          synergy=syn, ai_pick=c.get("ai_pick"),effective=effective))
+            shown = effective["level"]
+        cards.append(
+            Card(
+                index=i,
+                position=names[i],
+                rect=rect,
+                icon_rect=rect,
+                item_id=iid,
+                label=CardLabel.NEW if is_new else CardLabel.UPGRADE,
+                shown_level=shown,
+                synergy=syn,
+                ai_pick=c.get("ai_pick"),
+                effective=effective,
+            )
+        )
     pool = None
     pr = lvl.get("pool") if isinstance(lvl.get("pool"), dict) else None
     if pr and any(k in pr for k in ("new_balls", "ball_upgrades")):
+
         def ids(key):
             return tuple(x for x in (item(t) for t in pr.get(key) or []) if x)
-        pool = ChoicePool(ids("new_balls"), ids("ball_upgrades"), ids("new_passives"), ids("passive_upgrades"),
-                          ids("prev"), int(pr.get("num_choices") or len(cards) or 3))
+
+        pool = ChoicePool(
+            ids("new_balls"),
+            ids("ball_upgrades"),
+            ids("new_passives"),
+            ids("passive_upgrades"),
+            ids("prev"),
+            int(pr.get("num_choices") or len(cards) or 3),
+        )
     obs = ScreenObservation(
-        kind=ScreenKind.LEVEL_UP, cards=tuple(cards), pool=pool,
-        reroll_cost=lvl.get("reroll_cost"), free_rerolls=free if free else None,
+        kind=ScreenKind.LEVEL_UP,
+        cards=tuple(cards),
+        pool=pool,
+        reroll_cost=lvl.get("reroll_cost"),
+        free_rerolls=free if free else None,
         points_left=battle.get("level_ups_avail") if battle else None,
-        panel_rect=_rect(lvl.get("panel"), size), **common,
+        panel_rect=_rect(lvl.get("panel"), size),
+        **common,
     )
     return result(obs)
 
@@ -292,8 +418,10 @@ def catalog_schedules(catalog: dict) -> Dict[str, Tuple[Tuple[int, ...], Tuple[i
     out = {}
     for lv in catalog.get("levels") or []:
         if isinstance(lv, dict) and lv.get("type"):
-            out[lv["type"]] = (tuple(int(x) for x in lv.get("boss_turns") or [] if isinstance(x, (int, float))),
-                               tuple(int(x) for x in lv.get("fuser_turns") or [] if isinstance(x, (int, float))))
+            out[lv["type"]] = (
+                tuple(int(x) for x in lv.get("boss_turns") or [] if isinstance(x, (int, float))),
+                tuple(int(x) for x in lv.get("fuser_turns") or [] if isinstance(x, (int, float))),
+            )
     return out
 
 
@@ -312,8 +440,11 @@ def catalog_recipes(catalog: dict, data: GameData) -> List[Tuple[str, Tuple[str,
     return out
 
 
-def infer_pick(before: Optional[Tuple[InventorySlot, ...]], after: Optional[Tuple[InventorySlot, ...]],
-               cards: Tuple[Card, ...]) -> Optional[Card]:
+def infer_pick(
+    before: Optional[Tuple[InventorySlot, ...]],
+    after: Optional[Tuple[InventorySlot, ...]],
+    cards: Tuple[Card, ...],
+) -> Optional[Card]:
     """선택창 전후 보유 목록 차이로 실제로 고른 카드를 찾는다 (새 항목 추가 또는 레벨 상승)."""
     if before is None or after is None:
         return None

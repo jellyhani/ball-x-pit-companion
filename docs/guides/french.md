@@ -32,4 +32,10 @@ La passerelle lit uniquement : aucun patch Harmony, aucune modification de sauve
 
 Si la surcouche manque, vérifiez sa visibilité, la fenêtre du jeu et la connexion. Dans [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues), indiquez versions, langue, résolution, étapes et résultats attendu et observé. Retirez les données privées des captures et journaux ; ne joignez ni sauvegardes ni ressources extraites du jeu.
 
+## Droits, responsabilité et confidentialité
+
+Cet outil non officiel est fourni en l’état. Les droits sur le jeu et les contenus tiers appartiennent à leurs titulaires respectifs. Les droits légalement non excluables restent applicables.
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

@@ -32,4 +32,10 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 若叠加层不显示，请检查显示设置、游戏窗口和连接状态。在 [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues) 中提供版本、语言、分辨率、复现步骤、预期结果和实际结果。分享截图或日志前请移除个人信息，不要上传存档或提取的游戏素材。
 
+## 权利、责任与隐私
+
+本工具为非官方工具，按现状提供。游戏及第三方材料的权利归各自权利人所有。本声明不限制法律上不可排除的权利。
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

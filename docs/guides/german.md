@@ -32,4 +32,10 @@ Die Anbindung liest nur: keine Harmony-Patches, Spielstandänderungen oder Spiel
 
 Fehlt das Overlay, prüfe Sichtbarkeit, Spielfenster und Verbindung. Nenne unter [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues) Versionen, Sprache, Auflösung, Schritte sowie erwartetes und tatsächliches Ergebnis. Entferne private Angaben aus Bildern und Protokollen; lade keine Spielstände oder extrahierten Spielinhalte hoch.
 
+## Rechte, Verantwortung und Datenschutz
+
+Dieses inoffizielle Werkzeug wird ohne Gewähr bereitgestellt. Spiel- und Drittmaterialien gehören ihren jeweiligen Rechteinhabern. Gesetzlich nicht ausschließbare Rechte bleiben unberührt.
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

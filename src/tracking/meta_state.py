@@ -3,6 +3,7 @@
 - 자원 순서는 게임 ResourceType: 골드, 밀, 나무, 돌.
 - 볼·패시브 누적 기록은 게임 세이브의 HeroMetaStats / PassiveMetaStats (배열 위치 = 게임 내부 종류 번호).
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -16,7 +17,7 @@ RESOURCES = (tr("골드"), tr("밀"), tr("나무"), tr("돌"))
 
 @dataclass(frozen=True)
 class BuildingState:
-    type: str                 # 게임 내부 이름 (kExorcist)
+    type: str  # 게임 내부 이름 (kExorcist)
     level: int
     state: str
     can_upgrade: Optional[bool] = None
@@ -27,23 +28,31 @@ class BuildingState:
 class Blueprint:
     type: str
     slug: str
-    category: str             # kEconomy | kWarfare | kHousing
+    category: str  # kEconomy | kWarfare | kHousing
     cost: Tuple[int, ...] = ()
-    size: Optional[Tuple[int, int]] = None      # 타일 크기 (플러그인 1.9)
+    size: Optional[Tuple[int, int]] = None  # 타일 크기 (플러그인 1.9)
     can_build_more: Optional[bool] = None
     max_instances: Optional[int] = None
     range_boxes: Optional[tuple] = None
 
     def construction_data(self) -> dict:
-        return {"type":self.type,"size":self.size,"cost":self.cost,"can_build_more":self.can_build_more,
-                "max_instances":self.max_instances,"range_boxes":self.range_boxes,"range_rotation":0}
+        return {
+            "type": self.type,
+            "size": self.size,
+            "cost": self.cost,
+            "can_build_more": self.can_build_more,
+            "max_instances": self.max_instances,
+            "range_boxes": self.range_boxes,
+            "range_rotation": 0,
+        }
 
 
 @dataclass(frozen=True)
 class ItemRecord:
     """이 항목에 대한 내 누적 기록 (게임 세이브)."""
+
     obtained: int
-    completed: int            # 이 항목을 가진 채 레벨을 완료한 런 수
+    completed: int  # 이 항목을 가진 채 레벨을 완료한 런 수
     rejected: int = 0
     damage: Optional[int] = None
     launches: Optional[int] = None
@@ -62,30 +71,40 @@ class MetaState:
     resources: Tuple[int, ...] = ()
     buildings: List[BuildingState] = field(default_factory=list)
     blueprints: List[Blueprint] = field(default_factory=list)
-    build_options: Optional[List[Blueprint]] = None    # 1.14: 이미 지은 반복 건설형까지, None 은 옛 연동
-    records: Dict[str, ItemRecord] = field(default_factory=dict)       # 항목 ID → 누적 기록
+    build_options: Optional[List[Blueprint]] = None  # 1.14: 이미 지은 반복 건설형까지, None 은 옛 연동
+    records: Dict[str, ItemRecord] = field(default_factory=dict)  # 항목 ID → 누적 기록
     bonuses: Dict[str, object] = field(default_factory=dict)
-    chars: List[Tuple[str, int]] = field(default_factory=list)          # (캐릭터 ID, 레벨)
+    chars: List[Tuple[str, int]] = field(default_factory=list)  # (캐릭터 ID, 레벨)
     levels: List[dict] = field(default_factory=list)
     battles: Optional[int] = None
-    chars_raw: List[dict] = field(default_factory=list)     # 게임 연동 원본 (작업 상태·채집 강화)
-    discovery: Optional[Dict[str, dict]] = None    # 게임의 발견 횟수·현재 등장 가능 여부·융합 기록. None은 미수신.
+    chars_raw: List[dict] = field(default_factory=list)  # 게임 연동 원본 (작업 상태·채집 강화)
+    discovery: Optional[Dict[str, dict]] = (
+        None  # 게임의 발견 횟수·현재 등장 가능 여부·융합 기록. None은 미수신.
+    )
 
     def resource_text(self, cost: Tuple[int, ...]) -> str:
         return " · ".join(f"{RESOURCES[i]} {v}" for i, v in enumerate(cost) if v and i < len(RESOURCES))
 
     def affordable(self, cost: Tuple[int, ...]) -> bool:
-        return bool(cost) and all(i < len(self.resources) and self.resources[i] >= v for i, v in enumerate(cost))
+        return bool(cost) and all(
+            i < len(self.resources) and self.resources[i] >= v for i, v in enumerate(cost)
+        )
 
     def shortfall(self, cost: Tuple[int, ...]) -> Dict[str, int]:
-        return {RESOURCES[i]: v - (self.resources[i] if i < len(self.resources) else 0)
-                for i, v in enumerate(cost) if i < len(RESOURCES) and v > (self.resources[i] if i < len(self.resources) else 0)}
+        return {
+            RESOURCES[i]: v - (self.resources[i] if i < len(self.resources) else 0)
+            for i, v in enumerate(cost)
+            if i < len(RESOURCES) and v > (self.resources[i] if i < len(self.resources) else 0)
+        }
 
     def completion_rank(self, item_id: str, min_runs: int = 3) -> Optional[Tuple[int, int, float]]:
         """같은 종류(볼/패시브) 중 '가진 런의 레벨 완료율' 순위 (순위, 비교 수, 완료율). 표본이 적으면 None."""
         kind = item_id.split(":")[0] + ":"
-        rows = [(i, r.completion_rate) for i, r in self.records.items()
-                if i.startswith(kind) and r.obtained >= min_runs and r.completion_rate is not None]
+        rows = [
+            (i, r.completion_rate)
+            for i, r in self.records.items()
+            if i.startswith(kind) and r.obtained >= min_runs and r.completion_rate is not None
+        ]
         rates = dict(rows)
         if item_id not in rates or len(rows) < 5:
             return None
@@ -94,8 +113,11 @@ class MetaState:
 
     def damage_rank(self, item_id: str, min_runs: int = 3) -> Optional[Tuple[int, int]]:
         """내 기록에서 이 볼의 런당 평균 피해 순위 (순위, 비교한 볼 수). 표본이 적으면 None."""
-        rows = [(i, r.damage_per_run) for i, r in self.records.items()
-                if i.startswith("ball:") and r.obtained >= min_runs and r.damage_per_run is not None]
+        rows = [
+            (i, r.damage_per_run)
+            for i, r in self.records.items()
+            if i.startswith("ball:") and r.obtained >= min_runs and r.damage_per_run is not None
+        ]
         if item_id not in dict(rows) or len(rows) < 5:
             return None
         rows.sort(key=lambda t: -t[1])
@@ -103,12 +125,20 @@ class MetaState:
 
 
 def _ints(v) -> Tuple[int, ...]:
-    return tuple(int(x) for x in v) if isinstance(v, list) and all(isinstance(x, (int, float)) for x in v) else ()
+    return (
+        tuple(int(x) for x in v)
+        if isinstance(v, list) and all(isinstance(x, (int, float)) for x in v)
+        else ()
+    )
 
 
 def parse_meta(meta: dict, data: GameData) -> MetaState:
-    st = MetaState(resources=_ints(meta.get("resources")), battles=meta.get("battles"),
-                   bonuses=dict(meta.get("bonuses") or {}), levels=list(meta.get("levels") or []))
+    st = MetaState(
+        resources=_ints(meta.get("resources")),
+        battles=meta.get("battles"),
+        bonuses=dict(meta.get("bonuses") or {}),
+        levels=list(meta.get("levels") or []),
+    )
     if isinstance(meta.get("discovery"), dict):
         st.discovery = {}
         for enum_name, row in meta["discovery"].items():
@@ -117,33 +147,69 @@ def parse_meta(meta: dict, data: GameData) -> MetaState:
                 continue
             entry = dict(row)
             if isinstance(row.get("combos"), dict):
-                entry["combos"] = {partner: count for name, count in row["combos"].items()
-                                   if (partner := data.item_by_log_id(name)) and type(count) is int and count > 0}
+                entry["combos"] = {
+                    partner: count
+                    for name, count in row["combos"].items()
+                    if (partner := data.item_by_log_id(name)) and type(count) is int and count > 0
+                }
             st.discovery[iid] = entry
     for b in meta.get("buildings") or []:
-        st.buildings.append(BuildingState(b.get("type", ""), int(b.get("lvl") or 0), b.get("state", ""),
-                                          b.get("can_upgrade"), _ints(b.get("upgrade_cost"))))
+        st.buildings.append(
+            BuildingState(
+                b.get("type", ""),
+                int(b.get("lvl") or 0),
+                b.get("state", ""),
+                b.get("can_upgrade"),
+                _ints(b.get("upgrade_cost")),
+            )
+        )
     for b in meta.get("blueprints") or []:
-        size = (int(b["tw"]), int(b["th"])) if isinstance(b.get("tw"), int) and isinstance(b.get("th"), int) else None
-        st.blueprints.append(Blueprint(b.get("type", ""), b.get("slug", ""), b.get("cat", ""), _ints(b.get("cost")), size))
+        size = (
+            (int(b["tw"]), int(b["th"]))
+            if isinstance(b.get("tw"), int) and isinstance(b.get("th"), int)
+            else None
+        )
+        st.blueprints.append(
+            Blueprint(b.get("type", ""), b.get("slug", ""), b.get("cat", ""), _ints(b.get("cost")), size)
+        )
     if isinstance(meta.get("build_options"), list):
         st.build_options = []
         for b in meta["build_options"]:
             if not isinstance(b, dict) or b.get("can_build_more") is not True:
                 continue
-            size = (b["tw"], b["th"]) if all(isinstance(b.get(k), int) and b[k] > 0 for k in ("tw", "th")) else None
+            size = (
+                (b["tw"], b["th"])
+                if all(isinstance(b.get(k), int) and b[k] > 0 for k in ("tw", "th"))
+                else None
+            )
             from ..engine.game_range import boxes_from_row
-            limit=b.get('max_instances')
-            limit=limit if type(limit) is int and limit>=0 else None
-            st.build_options.append(Blueprint(b.get("type", ""), b.get("slug", ""), b.get("cat", ""),
-                                               _ints(b.get("cost")), size, True,limit,boxes_from_row(b)))
+
+            limit = b.get("max_instances")
+            limit = limit if type(limit) is int and limit >= 0 else None
+            st.build_options.append(
+                Blueprint(
+                    b.get("type", ""),
+                    b.get("slug", ""),
+                    b.get("cat", ""),
+                    _ints(b.get("cost")),
+                    size,
+                    True,
+                    limit,
+                    boxes_from_row(b),
+                )
+            )
     for key, kind in (("ball_stats", "ball"), ("passive_stats", "passive")):
         for enum_name, r in (meta.get(key) or {}).items():
             iid = data.item_by_log_id(enum_name)
             if not iid or not isinstance(r, dict):
                 continue
-            st.records[iid] = ItemRecord(int(r.get("obtained") or 0), int(r.get("completed") or 0),
-                                         int(r.get("rejected") or 0), r.get("damage"), r.get("launches"))
+            st.records[iid] = ItemRecord(
+                int(r.get("obtained") or 0),
+                int(r.get("completed") or 0),
+                int(r.get("rejected") or 0),
+                r.get("damage"),
+                r.get("launches"),
+            )
     st.chars_raw = [c for c in meta.get("chars") or [] if isinstance(c, dict)]
     for c in meta.get("chars") or []:
         name = c.get("type") or ""

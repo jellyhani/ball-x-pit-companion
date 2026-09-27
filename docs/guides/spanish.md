@@ -32,4 +32,10 @@ La conexión es de solo lectura: sin parches Harmony, cambios de partidas guarda
 
 Si no aparece la superposición, comprueba su visibilidad, la ventana y la conexión. En [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues), indica versiones, idioma, resolución, pasos y resultados esperado y real. Elimina información privada de imágenes y registros; no subas partidas guardadas ni recursos extraídos.
 
+## Derechos, responsabilidad y privacidad
+
+Esta herramienta no oficial se proporciona tal cual. Los derechos del juego y del material de terceros pertenecen a sus respectivos titulares. Los derechos que no puedan excluirse legalmente permanecen vigentes.
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

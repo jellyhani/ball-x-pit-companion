@@ -32,4 +32,10 @@ Połączenie tylko odczytuje dane: bez łatek Harmony, zmieniania zapisów czy s
 
 Jeśli nakładki nie widać, sprawdź widoczność, okno gry i połączenie. W [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues) podaj wersje, język, rozdzielczość, kroki oraz oczekiwany i rzeczywisty wynik. Usuń prywatne dane z obrazów i dzienników; nie przesyłaj zapisów ani wyodrębnionych zasobów gry.
 
+## Prawa, odpowiedzialność i prywatność
+
+To nieoficjalne narzędzie jest udostępniane w stanie, w jakim się znajduje. Prawa do gry i materiałów osób trzecich należą do odpowiednich właścicieli. Prawa, których nie można wyłączyć zgodnie z prawem, pozostają nienaruszone.
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

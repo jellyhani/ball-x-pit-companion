@@ -32,4 +32,10 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 
 오버레이가 안 보이면 표시 설정·게임 창·연동 상태를 확인하세요. [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues)에 게임/도우미 버전, 언어, 해상도, 재현 순서, 기대 결과와 실제 결과를 적어 주세요. 스크린샷·로그의 개인정보는 지우고, 세이브와 추출한 게임 자료는 올리지 마세요.
 
+## 권리·책임·개인정보 안내
+
+비공식 도구이며 있는 그대로 제공합니다. 게임과 제3자 자료의 권리는 각 권리자에게 있습니다. 법률상 배제할 수 없는 권리는 제한하지 않습니다.
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

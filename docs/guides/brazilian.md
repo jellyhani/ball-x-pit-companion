@@ -32,4 +32,10 @@ A conexão apenas lê dados: sem patches Harmony, alterações nos saves ou coma
 
 Se a sobreposição não aparecer, confira a visibilidade, a janela e a conexão. Em [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues), informe versões, idioma, resolução, passos e resultados esperado e real. Remova dados privados de imagens e registros; não envie saves nem recursos extraídos do jogo.
 
+## Direitos, responsabilidade e privacidade
+
+Esta ferramenta não oficial é fornecida no estado em que se encontra. Os direitos do jogo e dos materiais de terceiros pertencem aos respectivos titulares. Direitos que não possam ser excluídos por lei permanecem válidos.
+
+[Full notice / English · 한국어](../../DISCLAIMER.md) · [Privacy / English · 한국어](../../PRIVACY.md)
+
 [MIT](../../LICENSE) · [NOTICE](../../NOTICE.md)

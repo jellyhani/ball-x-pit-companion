@@ -24,7 +24,7 @@ namespace BallxPitBridge
     [BepInPlugin("dev.ballxpit.bridge", "BALL x PIT Bridge", Plugin.Version)]
     public class Plugin : BasePlugin
     {
-        public const string Version = "1.18.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
+        public const string Version = "1.18.1";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
         internal static ManualLogSource L;
 
         public override void Load()
@@ -517,13 +517,13 @@ namespace BallxPitBridge
         static void WriteInRange(Utf8JsonWriter w, BuildingInst b)
         {
             string key = b.Type.ToString();
-            if (!RangeTargets.TryGetValue(key,out var targets))
+            if (!RangeTargets.TryGetValue(key, out var targets))
             {
-                if (key!="kBrickHouse" && key!="kVeteranHut" && key!="kCaptainQuarters" && key!="kMansion") return;
-                targets=Array.Empty<string>();
+                if (key != "kBrickHouse" && key != "kVeteranHut" && key != "kCaptainQuarters" && key != "kMansion") return;
+                targets = Array.Empty<string>();
             }
-            if (_rangeSig != _colSig || Time.realtimeSinceStartup-_rangeAt>=1f)
-            { _rangeJson.Clear(); _rangeIdsJson.Clear(); _rangeSig = _colSig; _rangeAt=Time.realtimeSinceStartup; }
+            if (_rangeSig != _colSig || Time.realtimeSinceStartup - _rangeAt >= 1f)
+            { _rangeJson.Clear(); _rangeIdsJson.Clear(); _rangeSig = _colSig; _rangeAt = Time.realtimeSinceStartup; }
             if (!_rangeJson.TryGetValue(b.Id, out var js))
             {
                 using var ms = new MemoryStream();
@@ -547,23 +547,23 @@ namespace BallxPitBridge
             }
             w.WritePropertyName("in_range");
             w.WriteRawValue(js, true);
-            if (!_rangeIdsJson.TryGetValue(b.Id,out var observed))
+            if (!_rangeIdsJson.TryGetValue(b.Id, out var observed))
             {
-                using var ms=new MemoryStream();
-                using(var rw=new Utf8JsonWriter(ms))
+                using var ms = new MemoryStream();
+                using (var rw = new Utf8JsonWriter(ms))
                 {
                     rw.WriteStartArray();
-                    var all=MetaSaveData.I?.Buildings;
-                    if (all!=null) for(int i=0;i<all.Count;i++)
+                    var all = MetaSaveData.I?.Buildings;
+                    if (all != null) for (int i = 0; i < all.Count; i++)
                     {
-                        var target=all[i];
-                        if (target!=null && target.Id!=b.Id && b.IsInRange(target)) rw.WriteNumberValue(target.Id);
+                        var target = all[i];
+                        if (target != null && target.Id != b.Id && b.IsInRange(target)) rw.WriteNumberValue(target.Id);
                     }
                     rw.WriteEndArray();
                 }
-                observed=Encoding.UTF8.GetString(ms.ToArray());_rangeIdsJson[b.Id]=observed;
+                observed = Encoding.UTF8.GetString(ms.ToArray()); _rangeIdsJson[b.Id] = observed;
             }
-            w.WritePropertyName("in_range_ids");w.WriteRawValue(observed,true);
+            w.WritePropertyName("in_range_ids"); w.WriteRawValue(observed, true);
         }
 
         static void WriteBase(Utf8JsonWriter w)
@@ -1110,7 +1110,7 @@ namespace BallxPitBridge
                     if (btn != null)
                     {
                         w.WriteNumber("tgt_lvl", btn.TgtLvl);
-                        EffectiveProperties.Write(w,info,btn.TgtLvl,c.IsNew,c.EquipmentIdx);
+                        EffectiveProperties.Write(w, info, btn.TgtLvl, c.IsNew, c.EquipmentIdx);
                         WriteRect(w, "rect", btn.Xfm);
                     }
                     w.WriteEndObject();
@@ -1727,7 +1727,7 @@ namespace BallxPitBridge
                     w.WriteNumber("tw", info.TileSize.x);
                     w.WriteNumber("th", info.TileSize.y);
                     try { w.WriteNumber("max_instances", info.GetMaxBuildingInst()); } catch { }
-                    PhysicsSnapshot.WriteRange(w,info,info.TileSize,0);
+                    PhysicsSnapshot.WriteRange(w, info, info.TileSize, 0);
                     try { if (cost != null) w.WriteBoolean("affordable", cost.CanAfford()); } catch { }
                     w.WriteEndObject();
                 }
