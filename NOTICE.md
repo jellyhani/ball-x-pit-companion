@@ -1,7 +1,22 @@
 # Third-party notices
 
-This repository contains only original source code (MIT, see LICENSE) and one binary built from it
-(`vendor/bepinex/BallxPitBridge.dll`, source in `tools/bepinex/BallxPitBridge`).
+The original application code is MIT-licensed (see LICENSE). Two binaries are built from that code:
+`vendor/bepinex/BallxPitBridge.dll` (source in `tools/bepinex/BallxPitBridge`) and
+`src/engine/bxp_native.dll` (source in `native`). Third-party license texts are kept separately in `vendor/licenses`.
+
+Packaged builds also contain Python and third-party dependencies. Their license texts and a versioned
+inventory are included under `_internal/third_party/`. The inventory covers runtime and build dependencies;
+listing a build tool does not mean that its entire code is part of the executable.
+
+Qt/PySide, Shiboken, and pynput are used without local source modifications. The onedir package keeps
+shared libraries as separate files, and pynput's Python modules remain replaceable source files.
+You may replace compatible library files or rebuild the application with modified versions using the
+provided build recipe. The application imposes no additional restriction on debugging such modifications.
+
+Upstream source locations: [Qt](https://code.qt.io/cgit/qt/qtbase.git/),
+[PySide and Shiboken](https://code.qt.io/cgit/pyside/pyside-setup.git/),
+[pynput](https://github.com/moses-palmer/pynput), and [PyWinRT](https://github.com/pywinrt/pywinrt).
+Use the versions recorded in `dependency-notices.json` when obtaining corresponding sources.
 
 ## Not included — obtained on the user's PC at setup time
 
@@ -20,7 +35,7 @@ This repository contains only original source code (MIT, see LICENSE) and one bi
 | mss | MIT |
 | pynput | LGPL-3.0 |
 | winrt-* (Windows Runtime projections) | MIT |
-| UnityPy (setup only) | MIT |
+| UnityPy (data extraction, also bundled in the packaged app) | MIT |
 
 ## Facts referenced (no text or data copied)
 

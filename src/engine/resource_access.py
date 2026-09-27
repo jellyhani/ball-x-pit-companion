@@ -11,6 +11,7 @@ from .layout_opt import in_range
 from .layout_city import PRODUCERS
 from .layout_guide import preserves_guide
 from ..i18n import tr
+from .game_range import row_in_range
 
 
 @dataclass
@@ -44,7 +45,7 @@ class ResourceAccess:
             if not all(type(n) is int and n >= 0 for n in counted.values()):
                 continue
             nearby = [r for r in buildings if lo.TILE_RES.get(r.get("type")) == kind and
-                      in_range(r["x"] - b["x"], r["y"] - b["y"], b.get("range", 0) + pad)]
+                      row_in_range(b,r,pad)]
             if len(nearby) == sum(counted.values()):
                 self.producers.add(b["id"])
 
@@ -56,7 +57,7 @@ class ResourceAccess:
         key = tuple(sorted((b["id"], b.get("x"), b.get("y"), b.get("rot"), b.get("state")) for b in rows))
         if key in self.cache:
             return self.cache[key]
-        world = hs.world_from_geo(geo, .03)
+        world = hs.world_from_geo(geo, 0.0)
         if not isinstance(world, hs.World):
             return None
         from .sim_jobs import full_tiles
@@ -83,7 +84,7 @@ class ResourceAccess:
             kind = PRODUCERS[b["type"]]
             for target, typ in resources.items():
                 r = buildings[target]
-                if lo.TILE_RES[typ] == kind and in_range(r["x"]-b["x"], r["y"]-b["y"], b.get("range", 0)+self.pad):
+                if lo.TILE_RES[typ] == kind and row_in_range(b,r,self.pad):
                     automatic.add(target)
         report = AccessReport(resources, collected, automatic)
         self.cache[key] = report

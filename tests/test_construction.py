@@ -59,6 +59,27 @@ class ConstructionCatalogTest(unittest.TestCase):
 
 
 class TileConstructionTest(unittest.TestCase):
+    def test_purchase_count_respects_game_instance_limit(self):
+        limited=dict(option('kDenseWheat'),max_instances=1,range_boxes=[[-.5,-.5,.5,.5]])
+        result=lo.suggest_tiles(empty_farm(),build_options=[limited],resources=(10000,1000,0,0))
+        self.assertEqual(result[0][4],1)
+        limited['max_instances']=0
+        self.assertEqual(lo.suggest_tiles(empty_farm(),build_options=[limited]),[])
+
+    def test_meta_preserves_instance_limit_and_shape(self):
+        meta=parse_meta({'build_options':[dict(type='kDenseWheat',tw=1,th=1,can_build_more=True,
+                                              max_instances=3,range_boxes=[[-.5,-.5,.5,.5]])]},game_data())
+        data=meta.build_options[0].construction_data()
+        self.assertEqual(data['max_instances'],3)
+        self.assertEqual(data['range_boxes'],((-.5,-.5,.5,.5),))
+
+    def test_game_range_disagreement_defers_layout(self):
+        base=empty_farm();base['range_contract']={'mismatches':[[1,2,True,False]]}
+        plan,angles=sim_jobs.job_layout(base,[],1,[])
+        self.assertTrue(plan.calculation_deferred)
+        self.assertFalse(plan.swaps)
+        self.assertEqual(angles,{})
+
     def test_dense_wheat_uses_game_size_cost_and_budget(self):
         base = empty_farm()
         original = copy.deepcopy(base)

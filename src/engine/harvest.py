@@ -5,7 +5,7 @@
   1) 필요한 자원: 곧 지을·올릴 건물의 부족분, 없으면 보유량이 가장 적은 자원.
   2) 조준: 채집 기록이 3번 이상이면 그 자원이 가장 많이 나온 조준 각도(기록 기반).
      기록이 부족하면 그 자원 건물(남은 자원 가중) 쪽으로 — 튕김 때문에 정확하지 않다고 밝힌다.
-작업자: 캐릭터의 채집 강화 이름(kFasterStone 등)과 생산 건물 종류를 맞춘다. 효과 크기는 확인하지 못했다.
+작업자: 현재 자동 생산 건물은 레벨별 주기다. 구형 생산 시설에만 적용되는 캐릭터 속도 강화와 구분한다.
 """
 from __future__ import annotations
 
@@ -272,14 +272,15 @@ class WorkerAdvice:
 
 
 # 게임 1.301 SetUpActiveWorkers(0x45D090): 일반 생산 건물 배정자도 발사에 참가한다.
-# GetTaskTgtSecs(0x4640A0)는 담당 캐릭터의 생산 전용 강화만 작업 주기에 반영한다.
-BUILDING_UPGRADE = {"kFarmSpeed": "kIdleFarm", "kLumberyardSpeed": "kIdleLumberyard",
-                    "kStoneMineSpeed": "kIdleStoneMine", "kExtraGoldMined": "kGoldMine"}
+# GetTaskTgtSecs(0x4640A0)의 생산 강화 분기는 구형 kFarm/kLumberyard/kStoneMine이다.
+# kIdle*는 GetHarvestTime(0x6B56A0): 건물 레벨만 반영한다. 비슷한 이름으로 같은 효과라 추정하지 않는다.
+BUILDING_UPGRADE = {"kFarmSpeed":"kFarm","kLumberyardSpeed":"kLumberyard",
+                    "kStoneMineSpeed":"kStoneMine","kExtraGoldMined":"kGoldMine"}
 SKIP_WORK = EXCLUDED_BUILDINGS
 
 
 def production_bonus(c: dict, building: str) -> float:
-    """게임의 생산 전용 효과. 원값이 없으면 확인된 GetBonusAmt의 레벨×20 규칙을 사용한다."""
+    """게임에서 이 건물의 작업 주기에 적용되는 효과만 비교한다."""
     key = next((k for k, t in BUILDING_UPGRADE.items() if t == building), None)
     if key is None or building == "kGoldMine":
         return 0.

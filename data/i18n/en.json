@@ -1074,5 +1074,16 @@
   "게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다.": "Direct game verdict unavailable — this is a prediction calculated from game rules.",
   "생산 전용 강화 +{bonus:g}% — 일반 생산 배정 후에도 발사에 참가": "Production bonus +{bonus:g}% — still joins harvest launches when assigned",
   "빈 생산 건물 가동 — 일반 생산 배정 후에도 발사에 참가": "Activate empty producer — assigned workers still join harvest launches",
-  "생산 전용 강화 {before:g}% → {after:g}% — 발사 참가 인원 유지": "Production bonus {before:g}% → {after:g}% — launch team size unchanged"
+  "생산 전용 강화 {before:g}% → {after:g}% — 발사 참가 인원 유지": "Production bonus {before:g}% → {after:g}% — launch team size unchanged",
+  "현재 능력치 반영: {effect}": "Current stats: {effect}",
+  "기본 수치: {effect}": "Base values: {effect}",
+  "게임 자료를 준비하고 있습니다…": "Preparing game data…",
+  "게임 설치를 찾지 못했습니다. Steam 설치를 확인해 주세요.": "Game installation not found. Please check your Steam installation.",
+  "게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.": "Game text is ready. Icons are unavailable.",
+  "게임 자료를 준비했습니다.": "Game data is ready.",
+  "게임 자료 준비 중 오류가 발생했습니다. 진단 로그를 확인해 주세요.": "An error occurred while preparing game data. Please check the diagnostic log.",
+  "물리 정보가 불완전해 궤적 계산을 보류합니다.": "Trajectory calculation is paused because physics data is incomplete.",
+  "건물 효과 정보 부족: {buildings}": "Building effect data missing: {buildings}",
+  "현재 게임 정보가 부족해 배치 추천을 보류합니다.": "Layout advice is paused because current game data is incomplete.",
+  "게임의 대상별 범위 판정 대조: {checked}건 · 불일치 {mismatches}건": "Game range checks by target: {checked} · Mismatches: {mismatches}"
 }

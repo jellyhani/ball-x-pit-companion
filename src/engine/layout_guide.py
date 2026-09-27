@@ -37,7 +37,7 @@ def hub_groups(pieces: dict, scorer) -> List[Tuple[object, List[int]]]:
 
 def covered_members(grid: Grid, pieces: dict, origin: Dict[int, Cell], groups, pad: float) -> dict:
     """효과별로 실제 포함된 대상 집합. 총합이 같아도 다른 효과를 잃는 후보를 구별한다."""
-    from .layout_opt import in_range
+    from .layout_opt import target_in_range
     out = {}
     for h, members in groups:
         q = pieces[h.id]
@@ -46,7 +46,7 @@ def covered_members(grid: Grid, pieces: dict, origin: Dict[int, Cell], groups, p
         for m in members:
             p = pieces[m]
             x, y = grid.center(*origin[m], p.w, p.h)
-            if in_range(x - hx, y - hy, q.range + pad):
+            if target_in_range(x-hx,y-hy,q.range+pad,p,pad):
                 out[h.id].add(m)
     return out
 
@@ -119,9 +119,9 @@ class _State:
         return self.grid.center(o[0], o[1], q.w, q.h)
 
     def near(self, h: int, i: int, o: Cell, k: Optional[int] = None) -> bool:
-        from .layout_opt import in_range
+        from .layout_opt import target_in_range
         (hx, hy), (x, y) = self.center(h, self.org[h]), self.center(i, o, k)
-        return in_range(x - hx, y - hy, self.pieces[h].range + self.pad)
+        return target_in_range(x-hx,y-hy,self.pieces[h].range+self.pad,self.shape(i,k),self.pad)
 
     def blockers(self, i: int, o: Cell, k: Optional[int] = None) -> Optional[Set[int]]:
         out = set()
@@ -293,7 +293,8 @@ def repair(grid: Grid, pieces: dict, origin0: Dict[int, Cell], groups, pad: floa
                         out += 1
                         continue
                     x, y = st.center(m, st.org[m])
-                    out += not in_range(x - hx, y - hy, h.range + pad) or (brick and bool(st.lane)
+                    from .layout_opt import target_in_range
+                    out += not target_in_range(x-hx,y-hy,h.range+pad,st.shape(m),pad) or (brick and bool(st.lane)
                                                                           and st.front(m, st.org[m]) <= 0)
                 scored.append(((out + len(bl - set(members)) + (o != st.org[hid]),
                                 -st.front(hid, o) if brick else 0.0, _dist(origin0[hid], o)), o))
@@ -389,7 +390,8 @@ def satisfied(grid: Grid, pieces: dict, origin: Dict[int, Cell], groups, pad: fl
         for m in members:
             p = pieces[m]
             x, y = grid.center(*origin[m], p.w, p.h)
-            if not in_range(x - hx, y - hy, h.range + pad):
+            from .layout_opt import target_in_range
+            if not target_in_range(x-hx,y-hy,h.range+pad,p,pad):
                 continue
             if brick and lane and sum(lane.get((origin[m][0] + dx, origin[m][1] + dy), 0.0) for dx, dy in p.rel) <= 0:
                 continue

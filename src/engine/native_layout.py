@@ -26,7 +26,8 @@ class _Model(ctypes.Structure):
                 ("eff_group", _P(_I)), ("eff_off", _P(_I)), ("eff_cnt", _P(_I)), ("tgt", _P(_I)), ("tgt_val", _P(_D)),
                 ("harvest_cap", _I), ("n_groups", _I),
                 ("part_off", _P(_I)), ("part_cnt", _P(_I)), ("part_piece", _P(_I)), ("part_r", _P(_D)),
-                ("sz_off", _P(_I)), ("sz_cnt", _P(_I)), ("sz_org", _P(_I))]
+                ("sz_off", _P(_I)), ("sz_cnt", _P(_I)), ("sz_org", _P(_I)),
+                ("range_off",_P(_I)),("range_cnt",_P(_I)),("range_boxes",_P(_D)),("range_pad",_D)]
 
 
 class _Work(ctypes.Structure):
@@ -101,6 +102,13 @@ class LayoutModel:
         M.n = len(ids)
         M.pw, M.ph = a(_I, [p.w for p in P]), a(_I, [p.h for p in P])
         M.movable = a(_I, [1 if p.movable else 0 for p in P])
+        ro,rc,boxes=[],[],[]
+        for p in P:
+            ro.append(len(boxes)//4)
+            rc.append(-1 if p.range_boxes is None else len(p.range_boxes))
+            boxes.extend(v for box in (p.range_boxes or ()) for v in box)
+        M.range_off,M.range_cnt,M.range_boxes=a(_I,ro),a(_I,rc),a(_D,boxes)
+        M.range_pad=scorer.pad
         off, cnt, rel = [], [], []
         for p in P:
             off.append(len(rel) // 2)

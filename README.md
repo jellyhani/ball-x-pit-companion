@@ -27,9 +27,11 @@ These 16 guides cover installation, everyday use, limitations, and bug reports. 
 | Base planning | Move sequences that check entrance space, existing production, construction access, and resource access |
 | Building and worker advice | Suggestions based on available buildings, costs, resources, and the chosen guide policy |
 
-Workers assigned to farms, lumberyards, or quarries still participate in harvest launches. Assignment advice compares production-specific bonuses and vacant jobs; it does not remove strong harvesters from those jobs merely because they have good launch upgrades.
+Workers assigned to farms, lumberyards, or quarries still participate in harvest launches. The current automatic producers use building-level production intervals; legacy farm/lumberyard/quarry speed upgrades do not improve those intervals. Assignment advice fills vacant jobs and uses a character bonus only for the old building types to which the game actually applies it.
 
 Community tiers are opinions. Game values, community advice, and model estimates are different inputs. See the [detailed technical notes and sources (Korean)](docs/reference/README.ko.md#자료-출처).
+
+The [game-data contract audit (Korean)](docs/reference/GAME_DATA_CONTRACT.ko.md) maps game getters to calculations and lists effects that still need live validation.
 
 ## Install
 
@@ -68,7 +70,9 @@ If the overlay is missing, check its visibility, game window state, and bridge s
 - Setup downloads dependencies and BepInEx. The read-only bridge uses a local named pipe and no Harmony patches.
 - Hotkeys and recent left-click coordinates are observed to identify choices; the app does not record typed text.
 - Game updates may break the bridge. Physics approximations, heuristic scores, and unverified effects can affect advice.
-- Harvest paths include unopened base chunks as solid walls, even with building-piercing upgrades. Their rectangular model uses the purchased chunk map and dimensions; distant reflections remain approximate.
+- Bridge 1.18.0 supplies live static walls, collider normals, pickup/raycast roles, roads, worker order and building effects. Older inputs reconstruct unopened chunk walls. Unsupported geometry holds the calculation instead of assuming an empty space.
+- The harvest model includes resource depletion, regeneration and automatic production, but frame ordering, future completion changes and random effects remain approximate or explicitly unmodeled. Automatic producer income is separate from worker harvest totals. Cached angle recommendations can use a task timer up to ten seconds old; they are not exact forecasts.
+- Current building range membership is checked against the game's own target-by-target verdicts. A disagreement holds layout suggestions and writes a local diagnostic; passing unit tests alone does not prove the bridge matches a live game scene.
 - The game's direct launch verdict takes priority with bridge 1.17.0 or newer. With an older bridge, complete current aiming geometry can use the game-rule model, clearly labeled as a prediction. Blocked launches and incomplete inputs still hide the paths.
 - Layout planning reserves the entrance's front row and central passage, moves blockers independently of the score-improvement threshold, and checks candidate launch angles against the game's first-contact rule. Verify the proposed placement in game after moving.
 - Unofficial fan project; not affiliated with the developer or publisher. Compatibility with every game policy or leaderboard rule has not been established.

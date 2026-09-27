@@ -90,16 +90,14 @@ class TrTest(unittest.TestCase):
         import re
         root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         keys = {}
-        for base, _, files in os.walk(os.path.join(root, "src")):
-            for f in files:
-                if f.endswith(".py"):
-                    path = os.path.join(base, f)
-                    with open(path, encoding="utf-8") as fh:
-                        tree = ast.parse(fh.read())
-                    for n in ast.walk(tree):
-                        if (isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "tr"
-                                and n.args and isinstance(n.args[0], ast.Constant)):
-                            keys.setdefault(n.args[0].value, f)
+        from pathlib import Path
+        paths=list((Path(root)/'src').rglob('*.py'))+[Path(root)/'main.py',Path(root)/'tools/setup_data.py']
+        for path in paths:
+            tree=ast.parse(path.read_text(encoding='utf-8'))
+            for n in ast.walk(tree):
+                if (isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=='tr'
+                        and n.args and isinstance(n.args[0],ast.Constant)):
+                    keys.setdefault(n.args[0].value,path.name)
         for code in i18n.SUPPORTED:
             with open(os.path.join(i18n.DATA_DIR, f"{code}.json"), encoding="utf-8") as fh:
                 table = json.load(fh)

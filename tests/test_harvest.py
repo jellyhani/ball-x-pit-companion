@@ -105,25 +105,28 @@ class WorkerAdviceTest(unittest.TestCase):
         out = advise_workers(None, chars, ["kIdleStoneMine"], _Names())
         self.assertEqual(out,[])
 
-    def test_larger_actual_production_bonus_wins_even_if_both_have_specialty(self):
-        from src.engine.harvest import advise_workers
+    def test_idle_farm_does_not_inherit_legacy_farm_speed_branch(self):
+        from src.engine.harvest import advise_workers,production_bonus
         chars=[{'type':'kA','state':'kWorking','work':'kIdleFarm','harvest':{'kFarmSpeed':1},'harvest_bonus':{'kFarmSpeed':20}},
                {'type':'kB','state':'kIdle','harvest':{'kFarmSpeed':2},'harvest_bonus':{'kFarmSpeed':40}},
                {'type':'kC','state':'kInBattle','harvest':{'kFarmSpeed':9}}]
         out=advise_workers(None,chars,['kIdleFarm'],_Names())
-        self.assertEqual([(a.char_id,a.replace) for a in out],[('char:b','char:a')])
+        self.assertEqual(out,[])
+        self.assertEqual(production_bonus(chars[1],'kIdleFarm'),0)
+        self.assertEqual(production_bonus(chars[1],'kFarm'),40)
 
     def test_unavailable_characters_are_not_assigned(self):
         from src.engine.harvest import advise_workers
         chars=[{'type':'kInfluencer','state':'kIdle'},{'type':'kA','state':'kRecovering'},{'type':'kB','state':'kInBattle'}]
         self.assertEqual(advise_workers(None,chars,['kIdleFarm'],_Names()),[])
 
-    def test_building_upgrade_wins_the_slot(self):
+    def test_idle_farm_vacancy_does_not_claim_unapplied_speed_bonus(self):
         from src.engine.harvest import advise_workers
         chars = [{"type": "kWeak", "state": "kIdle"},
                  {"type": "kFarmer", "state": "kIdle", "harvest": {"kFarmSpeed": 1, "kFasterWheat": 1}}]
         out = advise_workers(None, chars, ["kIdleFarm"], _Names())
-        self.assertEqual([(a.building, a.char_id) for a in out], [("kIdleFarm", "char:farmer")])
+        self.assertEqual([(a.building, a.char_id) for a in out], [("kIdleFarm", "char:weak")])
+        self.assertNotIn('생산 전용 강화',out[0].reason)
 
     def test_working_chars_are_not_launched(self):
         from src.engine import harvest_sim as hs

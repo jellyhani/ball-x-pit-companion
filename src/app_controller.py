@@ -370,6 +370,8 @@ class AppController(QObject):
         if isinstance(snap.get("cost_ms"), (int, float)):
             self._plugin_cost = float(snap["cost_ms"])          # 플러그인 1.7: 게임 프레임에서 읽기에 쓴 시간
         t0 = time.perf_counter()
+        self._trace_identity = {'game_version':snap.get('game_version',''),
+                                'plugin_version':snap.get('plugin',''),'sequence':snap.get('seq')}
         try:
             self._on_base(snap.get("base") if isinstance(snap.get("base"), dict) else None)
         except Exception:                                   # noqa: BLE001 — 기지 화면 오류가 선택창·융합 처리를 막지 않게
@@ -847,6 +849,19 @@ class AppController(QObject):
             if not hasattr(self, "_col_cache"):
                 self._col_cache = {}
             base = fill_missing_colliders(base, self._col_cache)   # 재배치 중 집어 든 건물의 모양 (게임이 빼고 보냄)
+            from .tracking.game_contract import range_signature, validate_ranges
+            contract_key=range_signature(base)
+            if contract_key!=getattr(self,'_range_contract_key',None):
+                self._range_contract_key=contract_key
+                self._range_contract=validate_ranges(base)
+                if self._range_contract['mismatches']:
+                    log.warning('게임 범위 판정 불일치: %s',self._range_contract)
+                    try:
+                        with open(os.path.join(self.dump_dir,'range_contract_failure.json'),'w',encoding='utf-8') as f:
+                            json.dump({'report':self._range_contract,'base':base},f,ensure_ascii=False)
+                    except OSError:
+                        log.exception('범위 판정 진단 저장 실패')
+            base=dict(base,range_contract=self._range_contract)
         state = base.get("state", "") if base else ""
         res = list(self.meta.resources) if self.meta else []
         if state != self._base_state:
@@ -887,14 +902,21 @@ class AppController(QObject):
             geo_ = base.get("geo") or {}
             if state == "kBounceWorkers" and geo_.get("workers"):
                 # 채집 궤적 검증용: 날아가는 작업자 위치를 0.2초마다 남긴다 (harvest_traces.jsonl)
-                self._trace.append({"t": round(time.monotonic(), 2), "w": geo_["workers"], "aim": pl[2:4]})
+                from .tracking.harvest_contract import observation
+                self._trace.append(observation(geo_,round(time.monotonic(), 4),pl[2:4]))
+            if state == 'kAimWorkers':
+                from .tracking.harvest_contract import capture
+                from .engine.harvest_sim import team_from_base
+                team=team_from_base(base,self.meta.chars_raw if self.meta else [],getattr(self,'_team_order',None))
+                self._trace_input=capture(base,team,res,**getattr(self,'_trace_identity',{}))
         if state == "kAimWorkers" and self._base_state_prev_for_trace != "kAimWorkers":
             self._trace = []
             self._trace_start_buildings = base.get("buildings") if base else None   # 채집 전 자원 (채집량 검증용)
         if state == "kHarvestSummary" and self._trace:
             try:
                 with open(os.path.join(self.dump_dir, "harvest_traces.jsonl"), "a", encoding="utf-8") as f:
-                    f.write(json.dumps({"at": time.time(), "geo": {k: v for k, v in (base.get("geo") or {}).items()
+                    f.write(json.dumps({"schema":2,"input":getattr(self,'_trace_input',None),
+                                        "at": time.time(), "geo": {k: v for k, v in (base.get("geo") or {}).items()
                                                                     if k != "workers"},
                                         "buildings": base.get("buildings"),
                                         "buildings_before": getattr(self, "_trace_start_buildings", None),
@@ -1072,7 +1094,7 @@ class AppController(QObject):
             return
         if not force and time.monotonic() < getattr(self, "_layout_retry_at", 0):
             return
-        team = hs.team_from_chars(self.meta.chars_raw, getattr(self, "_team_order", None))
+        team = hs.team_from_base(base, self.meta.chars_raw, getattr(self, "_team_order", None))
         snap = json.loads(json.dumps(AppController._layout_input(self, base)))
         # 원정 중 live_state에는 기지가 없다. 마지막 계산 입력은 진단용으로 따로 보존한다.
         try:
@@ -1116,7 +1138,7 @@ class AppController(QObject):
         options = self.meta.build_options if self.meta.build_options is not None else self.meta.blueprints
         need, _ = need_resource(self.meta, self._shortfalls())
         from .engine import harvest_sim as hs
-        team = hs.team_from_chars(self.meta.chars_raw, getattr(self, "_team_order", None))
+        team = hs.team_from_base(base, self.meta.chars_raw, getattr(self, "_team_order", None))
         duration = hs.initial_harvest_duration(base, team, self._harvest_dur)
         return layout_signature(base, (self.meta.chars_raw, getattr(self, "_team_order", None)),
                                 [b.construction_data() for b in options],
@@ -1271,10 +1293,11 @@ class AppController(QObject):
             return [(blocked, (255, 159, 10, 255))]
         geo_ = base.get("geo") or {}
         h = self._homography(geo_.get("proj"))
-        if not geo_.get("colliders") or h is None or self.meta is None:
+        if (not isinstance(geo_.get("colliders"),list) or h is None or self.meta is None
+                or not all(k in geo_ for k in ('left','right','bottom','top','launcher'))):
             self.base_overlay.set_paths([], [])
             return []
-        team = hs.team_from_chars(self.meta.chars_raw, getattr(self, "_team_order", None))
+        team = hs.team_from_base(base, self.meta.chars_raw, getattr(self, "_team_order", None))
         if not team:
             self.base_overlay.set_paths([], [])
             return []
@@ -1297,6 +1320,7 @@ class AppController(QObject):
             self._sim_req["sweep"] = key
             self.sim.submit("sweep", key, sim_jobs.job_sweep, geo_, blds, team, dur, need, targets, lo, hi)
         lines = []
+        quality_notes=set(hs.model_limitations(team,blds))
         self._stuck_text = ""
         if "launch_allowed" not in base:
             lines.append((tr("게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다."), (255, 190, 110, 255)))
@@ -1310,10 +1334,17 @@ class AppController(QObject):
             got = self._sim_res.get("now")
             if got and got[1] and got[0] == (ang, key):
                 r = got[1]
-                now_path = screen_path(r)
-                lines.append((tr("지금 조준 {v0:.0f}°: {v1}", v0=r['angle'], v1=self._yield_text(r)), (255, 255, 255, 230)))
+                quality_notes.update(r.get('model_limitations',()))
+                if not r.get('error'):
+                    now_path = screen_path(r)
+                    lines.append((tr("지금 조준 {v0:.0f}°: {v1}", v0=r['angle'], v1=self._yield_text(r)), (255, 255, 255, 230)))
         best_path: list = []
         got = self._sim_res.get("sweep")
+        if got and got[1] and got[0]==key:
+            quality_notes.update(got[1].get('model_limitations',()))
+            if got[1].get('error'):
+                self.base_overlay.set_paths([],[])
+                return [(tr("물리 정보가 불완전해 궤적 계산을 보류합니다."),(255,159,10,255))]
         if got and got[1] and got[0] == key and got[1].get("top"):
             top, reach = got[1]["top"], got[1].get("reach") or {}
             # 어떤 각도로도 닿지 않는 미완성 건물: 배치도의 '길 열기'로 안내
@@ -1347,9 +1378,13 @@ class AppController(QObject):
             lines.append((tr("추천 각도 범위 {lo:.0f}°~{hi:.0f}° (추정) — 마우스를 좌우 끝까지 밀면 게임 한계를 배웁니다", lo=lo, hi=hi),
                           (140, 140, 150, 255)))
         from .engine.harvest_sim import model_limitations
-        if model_limitations(team, blds):
+        if quality_notes:
             lines.append((tr("게임 강화 값을 반영한 예상입니다. 실제 채집 경로·수확량은 다를 수 있습니다."),
                           (255, 190, 110, 255)))
+        missing=sorted({n.split(':',1)[1] for n in quality_notes if n.startswith(('missing_building_effect:','missing_housing_activation:'))})
+        if missing:
+            names=', '.join(self.data.building_name(name) for name in missing)
+            lines.append((tr("건물 효과 정보 부족: {buildings}",buildings=names),(255,190,110,255)))
         lines.append((tr("흰색: 현재 조준 · 파랑: 추천 · 점: 예상 반사 · Shift: 길게 보기"), (170, 180, 195, 255)))
         lines.append((tr("첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다."), (140, 140, 150, 255)))
         self.base_overlay.set_paths(now_path, best_path)

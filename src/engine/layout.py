@@ -33,7 +33,7 @@ EFFECTS: Dict[str, Tuple[int, float, str]] = {
     "kHovel": (STONE, 0.6, tr("근처 바위에서 주기적으로 채집")),
 }
 TILE_TYPES = {"kWheatField": WHEAT, "kDenseWheat": WHEAT, "kForest": WOOD, "kGrandTree": WOOD,
-              "kBoulder": STONE, "kGraniteSlab": STONE, "kStonePile": STONE}
+              "kBoulder": STONE, "kGraniteSlab": STONE}
 
 
 @dataclass
@@ -116,6 +116,7 @@ class LayoutPlan:
     unresolved_moves: Tuple[int, ...] = ()                    # 목표를 보류한 건물 id
     evaluated_base: dict = field(default_factory=dict)        # 이동·길 열기를 모두 반영한 단일 계산 기준
     model_limitations: List[str] = field(default_factory=list) # 물리 계산이 아직 재현하지 못하는 게임 효과
+    calculation_deferred: bool = False
     resource_access_checked: bool = False
     resource_unreachable_before: Tuple[int, ...] = ()
     resource_unreachable_after: Tuple[int, ...] = ()

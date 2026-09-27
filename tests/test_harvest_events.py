@@ -78,14 +78,16 @@ class HarvestEventTest(unittest.TestCase):
             for name, _, _, counts in self.run_case([box(1, 3)], building, [hs.Worker(1, 1, 1, 0, 5, 0)], .6):
                 self.assertEqual(counts, expected, (name, kind))
 
-    def test_construction_tiles_block_even_when_storage_is_empty(self):
+    def test_construction_state_does_not_erase_game_reported_harvestable_stock(self):
         for kind in ("kDenseWheat", "kWheatField", "kForest", "kBoulder"):
             for state in ("kScaffold", "kUpgrading"):
                 building = {1: dict(id=1, type=kind, res=4, can_harvest=True, state=state)}
                 for name, total, _, counts in self.run_case(
                         [box(1, 3)], building, [hs.Worker(1, 1, 1, 0, 5, 0)], .6):
-                    self.assertEqual(counts, {1: 1}, (name, kind, state))
-                    self.assertEqual(total, [0, 0, 0, 0], (name, kind, state))
+                    resource=1 if kind in hs.WHEAT_TYPES else 2 if kind=='kForest' else 3
+                    expected=[0,0,0,0];expected[resource]=1
+                    self.assertEqual(total,expected,(name,kind,state))
+                    self.assertEqual(counts,{} if resource==1 else {1:1},(name,kind,state))
 
     def test_missing_collision_for_one_worker_does_not_end_other_workers(self):
         workers = [hs.Worker(-10, 1, -1, 0, 5, 0), hs.Worker(1, 1, 1, 0, 5, 0)]

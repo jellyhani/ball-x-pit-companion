@@ -11,15 +11,21 @@ def digest(value):
 def physical_base(base, *, full=False):
     """화면 좌표·투영·날아가는 작업자 관측은 빼고, 모양·상태·범위·속도는 그대로 비교한다."""
     geo = base.get("geo") or {}
-    geometry = {k: v for k, v in geo.items() if k not in ("proj", "workers", "launcher_source")}
+    geometry = {k: v for k, v in geo.items() if k not in (
+        "proj", "workers", "launcher_source", "game_time", "physics_time", "physics_step", "environment_age", "world_tick_progress")}
     buildings = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
     if full:
         from .sim_jobs import full_tiles
         buildings = full_tiles(buildings)
     fields = {"id", "type", "x", "y", "tw", "th", "rot", "lvl", "range", "cap", "state", "worker",
-              "res", "can_harvest", "held", "stat", "in_range", "upg_pts", "upg_tgt", "upgrade_pct"}
-    # task는 자동생산 진행률이다. 계산에서 사용하지 않는 매 프레임 변화로 완료 결과를 계속 버리지 않는다.
+              "res", "can_harvest", "held", "stat", "in_range", "upg_pts", "upg_tgt", "upgrade_pct",
+              "range_boxes","range_rotation","effect_value","completion_effect_value","housing_effect_active","hit_limit","hits_this_harvest",
+              "is_resource","resource_type","raycast_enabled","pickup_enabled","observed_pose","in_range_ids"}
+    fields.update(('task_target_seconds','task_active','is_idle_harvester','production_resource','completion_capacity'))
+    # 초 단위 진행은 10초 묶음에서 갱신한다. 매 초 바뀌는 입력으로 장시간 탐색을 영원히 버리지 않는다.
     rows = [{k: v for k, v in b.items() if k in fields} for _, b in sorted(buildings.items())]
+    for row,(_,b) in zip(rows,sorted(buildings.items())):
+        if not full and 'task_seconds' in b:row['task_bucket']=int(b['task_seconds'])//10
     return {"geo": geometry, "buildings": rows}
 
 

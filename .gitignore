@@ -28,3 +28,9 @@ dist/
 
 # 이 PC 전용 Claude 메모
 CLAUDE.local.md
+
+# 공개 대상이 아닌 자격 증명과 로컬 인수인계
+.env
+.env.*
+!.env.example
+/*_HANDOFF.md

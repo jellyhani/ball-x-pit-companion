@@ -20,10 +20,12 @@ from .i18n import tr
 REPO_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 # 게임에서 추출한 자료(아이콘·초상화·게임 문구)는 저작권이 게임에 있으므로 배포하지 않고, 설치할 때 사용자의 게임
 # 파일에서 이 폴더로 추출한다 (tools/setup_data.py). 여기에 없으면 저장소 data/ (개발용)를 쓴다.
-USER_DATA_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion", "gamedata")
+USER_DATA_DIR = os.environ.get('BXP_DATA_DIR') or os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion", "gamedata")
 
 
 def resolve_data_dir() -> str:
+    if os.environ.get('BXP_DATA_DIR'):
+        return USER_DATA_DIR
     if os.path.exists(os.path.join(USER_DATA_DIR, "game_text_ko.json")):
         return USER_DATA_DIR
     return REPO_DATA_DIR

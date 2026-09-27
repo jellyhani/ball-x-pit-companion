@@ -3,6 +3,8 @@ import ctypes, json, os, subprocess, sys, threading, time, uuid
 from pathlib import Path
 from ctypes import wintypes as wt
 root=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(root))
+from src.services.mod_installer import PLUGIN_VERSION
 exe=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else root/'dist/BallxPitCompanion/BallxPitCompanion.exe'
 name='bxp-smoke-'+uuid.uuid4().hex
 profile=root/'build'/name
@@ -12,6 +14,10 @@ env=dict(os.environ)
 env.pop('BXP_NO_NATIVE',None)
 for key in ('USERNAME','LOGNAME','USER','LNAME'):env[key]=name
 env['BXP_APP_DIR']=str(profile);env['BXP_CATALOG_FILE']=str(profile/'catalog.json')
+env['BXP_DATA_DIR']=str(profile/'gamedata')
+(profile/'gamedata').mkdir()
+(profile/'gamedata/game_text_ko.json').write_text(json.dumps({
+ 'source':{'language':'synthetic','steam_build_id':'synthetic'},'items':{},'characters':{},'buildings':{},'ui':{}}),encoding='utf-8')
 meta={'v':1,'plugin':'1.15.0','meta':{'resources':[1000,100,100,100],'build_options':[],'blueprints':[],
  'buildings':[{'type':'kIdleFarm','lvl':0,'state':'kNormal'},{'type':'kDenseWheat','lvl':0,'state':'kNormal'}],
  'chars':[{'type':'kDefault','lvl':3,'state':'kWorking','work':'kIdleFarm','work_id':1,'harvest':{}},
@@ -24,6 +30,16 @@ snap={'v':1,'plugin':'1.15.0','seq':1,'game_version':'synthetic-smoke','screen_w
  'worker_speed':5,'worker_speed_mult':1,'harvest_len':1,'player_y':.1,'colliders':[
  {'id':1,'shape':'box','pts':[[2,2],[4,2],[4,4],[2,4]]},
  {'id':2,'shape':'box','pts':[[3,4],[4,4],[4,5],[3,5]]}]}}}
+meta['plugin']=snap['plugin']=PLUGIN_VERSION
+snap['base']['geo'].update(physics_contract=2,ball_time_dist=.3,game_time=1.,physics_time=1.,game_speed=1.,
+                          world_tick_interval=1.,world_tick_progress=.2,
+                          environment={'walls':[{'shape':'edge','paths':[[[0,0],[8,0],[8,8],[0,8],[0,0]]]}],
+                                       'roads':[],'road_speed_mult':1.,'queries_start_in_colliders':False,'queries_hit_triggers':False})
+for row in snap['base']['buildings']:
+ row['observed_pose']=[row['x'],row['y'],row['rot']]
+ row['range_boxes']=[[-row['tw']/2,-row['th']/2,row['tw']/2,row['th']/2]]
+ row['range_rotation']=0
+snap['base']['buildings'][0]['in_range_ids']=[2]
 k=ctypes.WinDLL('kernel32',use_last_error=True)
 k.CreateNamedPipeW.argtypes=[wt.LPCWSTR,wt.DWORD,wt.DWORD,wt.DWORD,wt.DWORD,wt.DWORD,wt.DWORD,ctypes.c_void_p];k.CreateNamedPipeW.restype=wt.HANDLE
 k.ConnectNamedPipe.argtypes=[wt.HANDLE,ctypes.c_void_p];k.ConnectNamedPipe.restype=wt.BOOL

@@ -32,7 +32,7 @@ from ..i18n import tr
 
 WHEAT_T = {"kWheatField", "kDenseWheat"}
 WOOD_T = {"kForest", "kGrandTree"}
-STONE_T = {"kBoulder", "kGraniteSlab", "kStonePile"}
+STONE_T = {"kBoulder", "kGraniteSlab"}
 TILE_RES = {**{t: 1 for t in WHEAT_T}, **{t: 2 for t in WOOD_T}, **{t: 3 for t in STONE_T}}
 # 능력치 보너스 건물 12개 (대위 막사 대상 — Steam 가이드 '100% Utilization': '12개 능력치 건물을 모두 범위 안에').
 # +1 능력치 6개(병영·의료원·영사관·총대장간·사택·구두장이의 집) + 무한 강화 6개. 성장률(스케일링)만 올리는 연금술 공방·
@@ -176,6 +176,7 @@ class Piece:
     factor: float = 1.0       # 효과가 켜진 정도 (강화 전·일꾼 없음 → 0.5)
     cap: float = 1.0          # 자원 타일 용량 (고급 타일 3~4, 강화하면 늘어남 — 게임 값 cap)
     unfinished: bool = False  # 공사 중·강화 공사 중 (강철 요새 건설 점수 대상)
+    range_boxes: Optional[tuple] = None  # 게임 IsInRange의 대상 영역. None은 구형 중심 근사.
 
 
 def rotated(p: Piece, k: int) -> Piece:
@@ -186,7 +187,9 @@ def rotated(p: Piece, k: int) -> Piece:
     for _ in range(k):
         rel = frozenset((y, w - 1 - x) for x, y in rel)       # (x, y 위쪽) → 시계 방향 90°
         w, h = h, w
-    return p if k == 0 else Piece(p.id, p.type, w, h, rel, p.movable, p.range, p.factor, p.cap, p.unfinished)
+    from .game_range import rotate_boxes
+    return p if k == 0 else Piece(p.id, p.type, w, h, rel, p.movable, p.range, p.factor, p.cap, p.unfinished,
+                                  rotate_boxes(p.range_boxes,k))
 
 
 @dataclass
@@ -294,7 +297,9 @@ def pieces_from_base(base: dict, grid: Grid, housing: Set[str], fixed: Sequence[
         unfinished = info.get("state") in UNFINISHED_STATES and is_recommended_building(b.type)
         movable = b.type not in FIXED_TYPES and i not in fixed
         cap = float(info.get("cap") or TILE_CAPACITY.get(b.type, 1)) if b.type in TILE_RES else 1.0
-        pieces[i] = Piece(i, b.type, w, h, frozenset(rel), movable, rng_, factor, max(1.0, cap), unfinished)
+        from .game_range import boxes_from_row
+        pieces[i] = Piece(i, b.type, w, h, frozenset(rel), movable, rng_, factor, max(1.0, cap), unfinished,
+                          boxes_from_row(info))
         origin[i] = (round((b.x - w * grid.size / 2 - grid.ox) / grid.size),
                      round((b.y - h * grid.size / 2 - grid.oy) / grid.size))
     return pieces, origin
@@ -309,6 +314,14 @@ def in_range(dx: float, dy: float, r: float, r2: Optional[float] = None) -> bool
     if RANGE_SHAPE == "square":
         return abs(dx) <= r + 1e-6 and abs(dy) <= r + 1e-6
     return dx * dx + dy * dy <= (r2 if r2 is not None else r * r) + 1e-6
+
+
+def target_in_range(dx,dy,r,target,pad=0.):
+    """게임 대상 영역이 있으면 대상 크기·회전을 반영하고 임의 범위 여유는 더하지 않는다."""
+    if target.range_boxes is not None:
+        from .game_range import overlaps
+        return overlaps(dx,dy,r-pad,target.range_boxes)
+    return in_range(dx,dy,r)
 
 
 # 발사대 앞 채집 구역: 치여도 얻는 게 없는 건물(능력치·거처 등)은 뒤나 구석으로 (커뮤니티: 발사대 앞은 자원 타일·금광,
@@ -369,8 +382,9 @@ def preserves_production(base: dict, candidate: dict, pad: float = 0.0) -> bool:
     raw_after = {b["id"]: b for b in candidate.get("buildings") or [] if "id" in b}
 
     def coverage(building, all_buildings, raw, kind):
+        from .game_range import row_in_range
         targets = [b for b in all_buildings.values() if TILE_RES.get(b.type) == kind and
-                   in_range(b.x - building.x, b.y - building.y, building.range + pad)]
+                   row_in_range(raw[building.id],raw[b.id],pad)]
         capacity = sum(max(1, float(raw.get(b.id, {}).get("cap") or 1)) for b in targets)
         return len(targets), capacity
 
@@ -414,7 +428,7 @@ def _repair_unused_producer_tiles(base: dict, grid: Grid, pieces: Dict[int, Piec
                 or not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in counted.values())):
             continue
         x, y = lay.center(i)
-        actual = sum(in_range(lay.center(j)[0] - x, lay.center(j)[1] - y, p.range + pad)
+        actual = sum(target_in_range(lay.center(j)[0]-x,lay.center(j)[1]-y,p.range+pad,q,pad)
                      for j, q in pieces.items() if TILE_RES.get(q.type) == PRODUCERS[p.type])
         if actual == sum(counted.values()):
             receivers.append(i)
@@ -426,7 +440,7 @@ def _repair_unused_producer_tiles(base: dict, grid: Grid, pieces: Dict[int, Piec
         def unused(j):
             tx, ty = lay.center(j)
             return not any(EFFECTS[e.type][0] == kind and
-                           in_range(tx - lay.center(e.id)[0], ty - lay.center(e.id)[1], e.range + pad)
+                           target_in_range(tx-lay.center(e.id)[0],ty-lay.center(e.id)[1],e.range+pad,pieces[j],pad)
                            for e in effects)
 
         donors = [j for j, q in pieces.items() if TILE_RES.get(q.type) == kind
@@ -440,7 +454,7 @@ def _repair_unused_producer_tiles(base: dict, grid: Grid, pieces: Dict[int, Piec
             spots = []
             for at in grid.tiles:
                 tx, ty = grid.center(*at, q.w, q.h)
-                if not in_range(tx - x, ty - y, p.range + pad):
+                if not target_in_range(tx-x,ty-y,p.range+pad,q,pad):
                     continue
                 cells = {(at[0] + dx, at[1] + dy) for dx, dy in q.rel}
                 if cells <= grid.tiles and not cells & entrance and not cells & lay.occ.keys():
@@ -545,7 +559,7 @@ class Scorer:
                 if t == e:
                     continue
                 tx, ty = ctr[t]
-                if not in_range(tx - ex, ty - ey, rr, r2):
+                if not target_in_range(tx-ex,ty-ey,rr,lay.pieces[t],self.pad):
                     continue
                 n += 1
                 if mode == "harvest" and n > HARVEST_CAP:
@@ -756,7 +770,7 @@ def canonicalize(pieces: Dict[int, Piece], origin0: Dict[int, Tuple[int, int]],
     groups: Dict[tuple, List[int]] = {}
     for i, p in pieces.items():
         if i in final:
-            groups.setdefault((p.type, p.w, p.h, p.rel, p.factor, p.movable, p.range, p.cap, p.unfinished), []).append(i)
+            groups.setdefault((p.type,p.w,p.h,p.rel,p.factor,p.movable,p.range,p.cap,p.unfinished,p.range_boxes), []).append(i)
     out = dict(final)
     for ids in groups.values():
         if len(ids) < 2:
@@ -907,7 +921,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         sp = shaped_of(turn)
         if not pin:
             return sp
-        return {i: (Piece(p.id, p.type, p.w, p.h, p.rel, False, p.range, p.factor, p.cap, p.unfinished)
+        return {i: (Piece(p.id, p.type, p.w, p.h, p.rel, False, p.range, p.factor, p.cap, p.unfinished,p.range_boxes)
                     if i in pin else p) for i, p in sp.items()}
 
     def add_cand(orig: Dict[int, Tuple[int, int]], turn: Dict[int, int]):
@@ -938,8 +952,8 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             p = sp[i]
             x, y = grid.center(*orig[i], p.w, p.h)
             kind = PRODUCERS[p.type]
-            out[i] = sum(in_range(grid.center(*orig[t], sp[t].w, sp[t].h)[0] - x,
-                                  grid.center(*orig[t], sp[t].w, sp[t].h)[1] - y, p.range + pad)
+            out[i] = sum(target_in_range(grid.center(*orig[t], sp[t].w, sp[t].h)[0] - x,
+                                  grid.center(*orig[t], sp[t].w, sp[t].h)[1] - y, p.range + pad,sp[t],pad)
                          for t in producer_targets[kind] if t != i)
         return out
 
@@ -960,7 +974,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             production_pin.add(i)
             x, y = lay0.center(i)
             production_pin.update(t for t in producer_targets[PRODUCERS[pieces[i].type]]
-                                  if in_range(lay0.center(t)[0] - x, lay0.center(t)[1] - y, pieces[i].range + pad))
+                                  if target_in_range(lay0.center(t)[0]-x,lay0.center(t)[1]-y,pieces[i].range+pad,pieces[t],pad))
         # 가동 중 생산 구역을 보존하는 시작점. 뒤에서 탈락시키기만 하면 모든 탐색이 밀밭을 빼는 데 낭비된다.
         starts[0] = (origin0, {}, production_pin)
 
@@ -987,8 +1001,8 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
                 if not cells <= grid.tiles or cells & entrance or any(lay0.occ.get(c) not in (None, i) for c in cells):
                     continue
                 x, y = grid.center(*at, p.w, p.h)
-                covered = sum(in_range(grid.center(*origin0[t], pieces[t].w, pieces[t].h)[0] - x,
-                                       grid.center(*origin0[t], pieces[t].w, pieces[t].h)[1] - y, p.range + pad)
+                covered = sum(target_in_range(grid.center(*origin0[t], pieces[t].w, pieces[t].h)[0] - x,
+                                       grid.center(*origin0[t], pieces[t].w, pieces[t].h)[1] - y, p.range + pad,pieces[t],pad)
                               for t in producer_targets[kind] if t != i)
                 if covered < producer0[i] + 2:
                     continue
@@ -1017,7 +1031,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
             targets = scorer.targets[eff[0]]
             def reached(at):
                 x, y = grid.center(*at, p.w, p.h)
-                return sum(in_range(lay0.center(t)[0] - x, lay0.center(t)[1] - y, p.range + pad) for t in targets)
+                return sum(target_in_range(lay0.center(t)[0]-x,lay0.center(t)[1]-y,p.range+pad,pieces[t],pad) for t in targets)
             n0 = reached(origin0[i])
             if n0 != sum(count.values()):
                 continue
@@ -1197,7 +1211,7 @@ def optimize(base: dict, harvest_eval: Optional[Callable[[dict], List[int]]] = N
         gained = 0
         for i, (kind, n0) in house_counts.items():
             x, y = lay.center(i)
-            n1 = sum(in_range(lay.center(t)[0] - x, lay.center(t)[1] - y, sp[i].range + pad)
+            n1 = sum(target_in_range(lay.center(t)[0]-x,lay.center(t)[1]-y,sp[i].range+pad,sp[t],pad)
                      for t in scorer.targets[kind])
             if n1 < n0:
                 return 0
@@ -1354,8 +1368,10 @@ def calibrate_range(base: dict) -> Tuple[float, int, int]:
             if not eff or not isinstance(eff[0], int):
                 continue
             game = sum(v for v in b["in_range"].values() if isinstance(v, int))
+            from .game_range import row_in_range
+            by_id={row['id']:row for row in base.get('buildings',[]) if 'id' in row}
             mine = sum(1 for t in blds.values() if t.type in RANGE_TARGETS[eff[0]] and t.id != e.id
-                       and in_range(t.x - e.x, t.y - e.y, e.range + pad))
+                       and row_in_range(b,by_id[t.id],pad))
             n += 1
             ok += int(game == mine)
         if best is None or ok > best[1]:
@@ -1391,6 +1407,8 @@ def suggest_builds(base: dict, blueprints: Sequence[dict], res_weight: Optional[
             continue
         seen.add(t)
         existing = [b for b in raw.values() if b.get("type") == t]
+        if type(bp.get('max_instances')) is int and len(existing)>=bp['max_instances']:
+            continue
         if any(b.get("state") in UNFINISHED_STATES for b in existing):
             continue
         if EFFECTS[t][3] == "worker" and any(not isinstance(b.get("worker"), int) or b["worker"] < 0 for b in existing):
@@ -1421,8 +1439,8 @@ def suggest_builds(base: dict, blueprints: Sequence[dict], res_weight: Optional[
             s, d = scorer.score(Layout(grid, pcs, o))
             if best is None or s > best[0]:
                 x, y = grid.center(c, r, w, h)
-                covered = sum(in_range(grid.center(*origin[j], pieces[j].w, pieces[j].h)[0] - x,
-                                       grid.center(*origin[j], pieces[j].w, pieces[j].h)[1] - y, p.range + pad)
+                covered = sum(target_in_range(grid.center(*origin[j], pieces[j].w, pieces[j].h)[0] - x,
+                                       grid.center(*origin[j], pieces[j].w, pieces[j].h)[1] - y, p.range + pad,pieces[j],pad)
                               for j in scorer.targets[EFFECTS[t][0]] if j in origin)
                 best = (s, (c, r), covered)
         if best is None:
@@ -1446,6 +1464,7 @@ def suggest_tiles(base: dict, res_weight: Optional[Dict[int, float]] = None, pad
     내부 점수는 빈자리 선택용이며 새 타일의 생산량 예측으로 표시하지 않는다.
     돌려주는 값: [(종류, 첫 자리 중심, 크기, 배치 우선순위, 놓을 개수, 0)]."""
     from .construction_policy import is_recommended_building, preferred_tile_types
+    from .game_range import boxes_from_row
     grid = grid_from_geo(base.get("geo") or {})
     if grid is None:
         return []
@@ -1463,8 +1482,8 @@ def suggest_tiles(base: dict, res_weight: Optional[Dict[int, float]] = None, pad
         if not all(isinstance(v, int) and v >= 0 for v in counted.values()):
             continue
         x, y = grid.center(*origin[i], p.w, p.h)
-        actual = sum(in_range(grid.center(*origin[j], q.w, q.h)[0] - x,
-                              grid.center(*origin[j], q.w, q.h)[1] - y, p.range + pad)
+        actual = sum(target_in_range(grid.center(*origin[j], q.w, q.h)[0] - x,
+                              grid.center(*origin[j], q.w, q.h)[1] - y, p.range + pad,q,pad)
                      for j, q in pieces.items() if TILE_RES.get(q.type) == eff[0])
         if actual == sum(counted.values()):
             sources[i] = (eff[0], x, y, p.range + pad)
@@ -1488,12 +1507,14 @@ def suggest_tiles(base: dict, res_weight: Optional[Dict[int, float]] = None, pad
             continue
         s0 = Scorer(pcs, stats, housing, res_weight, pad).score(Layout(grid, pcs, o))[0]
         total, first, n = 0.0, None, 0
-        for k in range(max_each):
+        limit=option.get('max_instances')
+        available_count=max_each if type(limit) is not int else max(0,min(max_each,limit-sum(b.get('type')==t for b in raw.values())))
+        for k in range(available_count):
             if remaining is not None and any(i >= len(remaining) or remaining[i] < v for i, v in enumerate(cost)):
                 break
             nid = min([-100] + list(pcs)) - 1
             pcs[nid] = Piece(nid, t, size[0], size[1], frozenset((dx, dy) for dx in range(size[0]) for dy in range(size[1])),
-                             True, 0.0, 1.0, 1.0)
+                             True, 0.0, 1.0, 1.0,range_boxes=boxes_from_row(option))
             scorer = Scorer(pcs, stats, housing, res_weight, pad)
             occ = Layout(grid, {i: pcs[i] for i in o}, o).occ
             best = None
@@ -1502,7 +1523,7 @@ def suggest_tiles(base: dict, res_weight: Optional[Dict[int, float]] = None, pad
                 if any(x not in grid.tiles or x in occ or x in protected for x in cells):
                     continue
                 tx, ty = grid.center(c, r, size[0], size[1])
-                if not any(kind == TILE_RES[t] and in_range(tx - x, ty - y, radius)
+                if not any(kind == TILE_RES[t] and target_in_range(tx-x,ty-y,radius,pcs[nid],pad)
                            for kind, x, y, radius in sources.values()):
                     continue
                 o2 = dict(o)
@@ -1543,7 +1564,7 @@ def activation_gains(base: dict, res_weight: Optional[Dict[int, float]] = None, 
         if p.type not in EFFECTS or p.factor >= 1.0:
             continue
         pcs = dict(pieces)
-        pcs[i] = Piece(p.id, p.type, p.w, p.h, p.rel, p.movable, p.range, 1.0, p.cap, p.unfinished)
+        pcs[i] = Piece(p.id,p.type,p.w,p.h,p.rel,p.movable,p.range,1.0,p.cap,p.unfinished,p.range_boxes)
         s1 = Scorer(pcs, stats, housing, res_weight, pad).score(Layout(grid, pcs, origin))[0]
         if s1 - s0 > 0.05:
             ch = house_characters().get(_slug(p.type))
@@ -1597,8 +1618,8 @@ def suggest_demolish(base: dict, res_weight: Optional[Dict[int, float]] = None, 
         x, y = grid.center(*origin[i], p.w, p.h)
         resource = EFFECTS[p.type][0]
         if any(TILE_RES.get(q.type) == resource and
-               in_range(grid.center(*origin[j], q.w, q.h)[0] - x,
-                        grid.center(*origin[j], q.w, q.h)[1] - y, p.range + pad)
+               target_in_range(grid.center(*origin[j], q.w, q.h)[0] - x,
+                        grid.center(*origin[j], q.w, q.h)[1] - y, p.range + pad,q,pad)
                for j, q in pieces.items()):
             continue
         pcs = {k: v for k, v in pieces.items() if k != i}

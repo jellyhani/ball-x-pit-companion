@@ -18,8 +18,8 @@ class ChunkWallsTest(unittest.TestCase):
         result=sim_jobs.job_now(geo(),{},team,90,20)
         path=visible_path(result['path'],extended=True)
         self.assertGreater(len(path),4)
-        self.assertAlmostEqual(path[1][1],9.97)
-        self.assertTrue(all(y<=9.97+1e-8 for x,y in path))
+        self.assertAlmostEqual(path[1][1],10.0)  # 게임은 점 Raycast로 벽 표면에 닿는다.
+        self.assertTrue(all(y<=10.0+1e-8 for x,y in path))
         self.assertEqual(result['total'],[0,0,0,0])
         self.assertEqual(result['build_hits'],0)
 

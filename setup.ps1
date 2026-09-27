@@ -21,5 +21,6 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
 & .venv\Scripts\python.exe main.py --ensure-mod
+if ($LASTEXITCODE -ne 0) { Write-Host 'Bridge installation failed.'; exit 1 }
 Write-Host ''
 Write-Host 'Done. Start the helper with run_overlay.bat (or play.bat to also launch the game).'

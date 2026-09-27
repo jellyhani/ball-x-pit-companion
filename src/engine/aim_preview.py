@@ -11,7 +11,19 @@ def worker_preview(workers):
 
     반사 뒤 나가는 방향까지 보이도록 다음 점 하나를 포함한다. 계산 종료점 밖으로 연장하지 않는다.
     """
-    return [(x, y) for x, y, _ in workers[0].path[:MAX_REFLECTIONS + 2]] if workers else []
+    if not workers:
+        return []
+    # 도로 경계의 속도 변화는 시간 재생에 필요하지만 반사 횟수를 차지하지 않는다.
+    points=[]
+    for x,y,_ in workers[0].path:
+        while len(points)>=2:
+            ax,ay=points[-2];bx,by=points[-1]
+            ux,uy=bx-ax,by-ay;vx,vy=x-bx,y-by
+            if abs(ux*vy-uy*vx)>1e-8 or ux*vx+uy*vy<0:
+                break
+            points.pop()
+        points.append((x,y))
+    return points[:MAX_REFLECTIONS+2]
 
 
 def visible_path(path, length="normal", *, recommended=False, extended=False):

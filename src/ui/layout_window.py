@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import math
 from typing import Dict, List, Optional
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
@@ -43,7 +44,10 @@ class MapCanvas(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         p.fillRect(self.rect(), QColor(30, 30, 32))
         g = self.geo
-        if not g or not self.blds:
+        bounds=[g.get(k) for k in ('left','right','bottom','top')]
+        valid=(all(type(v) in (int,float) and math.isfinite(v) for v in bounds)
+               and bounds[0]<bounds[1] and bounds[2]<bounds[3])
+        if not valid or not self.blds:
             p.setPen(tk.qcolor(tk.TEXT_2))
             p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, tr("기지 화면에서 게임 연동 1.6 정보를 받으면 지도가 나옵니다"))
             return
@@ -201,7 +205,9 @@ class LayoutWindow(QWidget):
         self.steps.clear()
         if plan:
             pct = (plan.score_after / plan.score_before - 1) * 100 if plan.score_before else 0.0
-            if not getattr(plan, "movement_complete", True):
+            if getattr(plan,'calculation_deferred',False):
+                self.steps.add(row(tr("현재 게임 정보가 부족해 배치 추천을 보류합니다.")))
+            elif not getattr(plan, "movement_complete", True):
                 self.steps.add(row(tr("안전한 이동 순서를 만들지 못했습니다. 배치도를 다시 계산해 주세요.")))
             else:
                 self.steps.add(row(tr("옮기기 {v0}번", v0=len(plan.swaps)), value_label(tr("범위 효과 {pct:+.0f}%", pct=pct)),
@@ -234,7 +240,7 @@ class LayoutWindow(QWidget):
         elif plan is None:
             self.steps.add(row(tr("계산 중이거나 기지 정보 없음")))
         self.builds.clear()
-        if plan and getattr(plan, "construction_pending", False):
+        if plan and getattr(plan, "construction_pending", False) and not getattr(plan,'calculation_deferred',False):
             self.builds.add(row(tr("재배치 완료 후 건설 위치를 다시 계산합니다.")))
         for t, _c, _sz, gain, n, *rest in (getattr(plan, "builds", None) or []) if plan else []:
             moved = rest[0] if rest else 0
@@ -266,7 +272,11 @@ class LayoutWindow(QWidget):
         if plan is not None and not dem:
             self.demolish.add(row(tr("철거 후보 없음")))
         cal = getattr(plan, "calibration", (0.0, 0, 0)) if plan else (0.0, 0, 0)
-        if cal[2]:
+        contract=base.get('range_contract') or {}
+        if contract.get('checked'):
+            self.effects_note.setText(tr("게임의 대상별 범위 판정 대조: {checked}건 · 불일치 {mismatches}건",
+                                         checked=contract['checked'],mismatches=len(contract.get('mismatches',[]))))
+        elif cal[2]:
             self.effects_note.setText(tr("범위 판정 검증: 게임이 센 '범위 안 자원 타일 수'와 {v0}/{v1}개 건물 일치 (범위 여유 {v2:.2f})", v0=cal[1], v1=cal[2], v2=cal[0]))
         else:
             self.effects_note.setText(tr("범위 판정: 건물 중심 사이 거리 ≤ 게임 범위 값 (추정) — 플러그인 1.9부터 게임 값과 비교해 맞춥니다"))

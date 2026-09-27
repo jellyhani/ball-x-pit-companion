@@ -18,6 +18,9 @@ def enclosed():
     ring=((5.5,6.5),(6.5,5.5),(7.5,6.5),(6.5,7.5),(5.5,5.5),(5.5,7.5),(7.5,5.5),(7.5,7.5))
     rows += [building(i,'kHome',x,y) for i,(x,y) in enumerate(ring,2)]
     b=base_of(rows,8,8,True)
+    # base_of의 0.98칸 모양에는 실제 0.02칸 틈이 있다. 밀폐 장면은 경계를 맞붙인다.
+    for col in b['geo']['colliders']:
+        col['pts']=[[round(x),round(y)] for x,y in col['pts']]
     b['geo'].update(right=8.,top=8.,launcher=[1.5,.5])
     return b
 
@@ -48,8 +51,10 @@ class ResourceAccessTest(unittest.TestCase):
         funcs=[hs.simulate_team_py]+([hs.simulate_team] if native.lib() else [])
         for fn in funcs:
             counts,got={},{}
-            total,_=fn(world,b,[hs.Worker(1,1,1,0,5,0,{'kPierceWood':1})],.8,counts=counts,collected=got)
-            self.assertEqual(counts,{})
+            total,workers=fn(world,b,[hs.Worker(1,1,1,0,5,0,{'kPierceWood':1})],.8,counts=counts,collected=got)
+            # MoveBalls는 WorkerHitBuilding을 관통 분기보다 먼저 호출한다. 접촉과 반사를 구분한다.
+            self.assertEqual(counts,{1:1})
+            self.assertEqual(workers[0].dx,1.)
             self.assertEqual(got,{1:1})
             self.assertEqual(total[2],1)
         self.assertEqual(b[1]['res'],7)
@@ -112,7 +117,8 @@ class ResourceAccessTest(unittest.TestCase):
     def test_resource_repair_is_not_lost_to_two_percent_effect_threshold(self):
         b=enclosed()
         with patch.object(lo,'optimize',return_value=unchanged_plan(b)):
-            plan,_=sim_jobs.job_layout(b,TEAM,4,[],seconds=.01,aim_limits=(20,160))
+            # 여기서는 복구 채택 기준을 검사한다. 정확히 접한 모서리를 지나는 45도 광선은 제외한다.
+            plan,_=sim_jobs.job_layout(b,TEAM,4,[],seconds=.01,aim_limits=(30,40))
         self.assertTrue(plan.resource_access_checked)
         self.assertEqual(plan.resource_unreachable_before,(1,))
         self.assertEqual(plan.resource_unreachable_after,())
@@ -126,6 +132,8 @@ class ResourceAccessTest(unittest.TestCase):
         rows=[building(1,'kGrandTree',1.5,1.5,cap=7,res=7,can_harvest=True)]
         rows += [building(2+y*3+x,'kHome',x+.5,y+.5) for x in range(3) for y in range(3) if (x,y)!=(1,1)]
         b=base_of(rows,3,3);b['geo'].update(right=3.,top=3.,launcher=[1.5,-1.])
+        for col in b['geo']['colliders']:
+            col['pts']=[[round(x),round(y)] for x,y in col['pts']]
         with patch.object(lo,'optimize',return_value=unchanged_plan(b)):
             plan,_=sim_jobs.job_layout(b,TEAM,4,[],seconds=.01,aim_limits=(20,160))
         self.assertEqual(plan.swaps,[])

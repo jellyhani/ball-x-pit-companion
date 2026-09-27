@@ -26,8 +26,8 @@ class AimPreviewTest(unittest.TestCase):
         result = sim_jobs.job_now(geo, blds, team, 0, 16)
         self.assertEqual(result["total"][1], 6)
         self.assertGreater(len(result["path"]), 4)
-        self.assertAlmostEqual(result["path"][1][0], 9.97)
-        self.assertAlmostEqual(result["path"][2][0], .03)
+        self.assertAlmostEqual(result["path"][1][0], 10.0)
+        self.assertAlmostEqual(result["path"][2][0], 0.0)
         # 짧게 표시해도 밀밭 여섯 개를 지나 첫 벽 반사 이후까지 보인다.
         self.assertEqual(visible_path(result["path"], "short"), result["path"][:3])
 
@@ -55,9 +55,18 @@ class AimPreviewTest(unittest.TestCase):
 
     def test_missing_geometry_clears_old_preview(self):
         ctx, base = aiming()
-        base["geo"]["colliders"] = []
+        base["geo"].pop("colliders")
         self.assertEqual(AppController._harvest_sim(ctx, base, 1, []), [])
         ctx.base_overlay.set_paths.assert_called_with([], [])
+
+    def test_empty_building_list_is_valid_geometry_and_errors_do_not_spin_as_calculating(self):
+        ctx,base=aiming();base['geo']['colliders']=[]
+        AppController._harvest_sim(ctx,base,1,[])
+        self.assertEqual(ctx.sim.submit.call_count,2)
+        ctx._sim_res['sweep']=(ctx._sim_req['sweep'],{'error':'geometry_unavailable'})
+        lines=AppController._harvest_sim(ctx,base,1,[])
+        self.assertIn('물리 정보가 불완전',lines[0][0])
+        ctx.base_overlay.set_paths.assert_called_with([],[])
 
     def test_shift_repeat_and_two_keys_release(self):
         watcher = InputWatcher()

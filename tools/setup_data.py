@@ -17,6 +17,7 @@ from typing import Callable, Optional, Tuple
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
+from src.i18n import tr
 
 
 def extract(game_dir: Optional[str] = None, say: Callable[[str], None] = print) -> Tuple[bool, str]:
@@ -28,7 +29,7 @@ def extract(game_dir: Optional[str] = None, say: Callable[[str], None] = print) 
     argv = ["setup"] + ([game_dir] if game_dir else [])
     try:
         if egt.main(argv) != 0:
-            return False, "게임 폴더를 찾지 못했습니다. Steam 판 BALL x PIT 이 설치돼 있는지 확인하세요."
+            return False,tr("게임 설치를 찾지 못했습니다. Steam 설치를 확인해 주세요.")
     except SystemExit as e:                      # 게임 버전이 바뀌어 번역 표 구조가 다를 때
         return False, str(e)
     gd.DATA_DIR = gd.resolve_data_dir()          # 이후에 불러오는 모듈이 새 자료 폴더를 쓰게
@@ -36,15 +37,15 @@ def extract(game_dir: Optional[str] = None, say: Callable[[str], None] = print) 
         import UnityPy  # noqa: F401
         from tools import extract_icons as ei
     except ImportError:
-        return True, "게임 문구 추출 완료 (UnityPy 가 없어 아이콘은 건너뜀 — 게임 연동만 쓰면 없어도 됨)"
+        return True,tr("게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.")
     ei.OUT_DIR = out
     try:
         if ei.main(argv) != 0:
-            return True, "게임 문구 추출 완료, 아이콘 추출 실패 (게임 연동 기능은 그대로 사용 가능)"
+            return True,tr("게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.")
     except Exception as e:                       # noqa: BLE001 — 아이콘은 예비 경로라 실패해도 계속
         say(f"아이콘 추출 실패: {e}")
-        return True, "게임 문구 추출 완료, 아이콘 추출 실패 (게임 연동 기능은 그대로 사용 가능)"
-    return True, "게임 자료 추출 완료"
+        return True,tr("게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.")
+    return True,tr("게임 자료를 준비했습니다.")
 
 
 def main(argv) -> int:

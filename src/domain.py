@@ -91,6 +91,7 @@ class Card:
     guess_id: Optional[str] = None    # 확신이 부족할 때의 최선 후보 (진단용, 추천에는 쓰지 않음)
     synergy: Tuple[str, ...] = ()     # 게임이 시너지로 판정한 보유 볼 (게임 연동에서만)
     ai_pick: Optional[bool] = None    # 게임 자동 선택 AI가 고르는 항목인지 (게임 연동에서만)
+    effective: Optional[dict] = field(default=None,hash=False)  # 현재 런 getter 수치. 원본 카탈로그와 구분.
 
     @property
     def recognized(self) -> bool:

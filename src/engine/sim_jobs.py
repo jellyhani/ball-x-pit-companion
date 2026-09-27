@@ -19,9 +19,9 @@ from ..i18n import tr
 def job_now(geo: dict, blds: Dict[int, dict], team: Sequence[dict], angle: float, dur: float,
             targets: Optional[Dict[int, int]] = None) -> dict:
     """지금 조준의 예상: 팀 채집량, 첫 작업자의 초기 경로(월드 좌표), 미완성 건물 타격."""
-    world = hs.world_from_geo(geo, 0.03)
+    world = hs.world_from_geo(geo, 0.0)
     if world is None:
-        return {}
+        return {'error':'geometry_unavailable','model_limitations':['geometry_unavailable']}
     counts: Dict[int, int] = {}
     points: Dict[int, int] = {}
     total, ws = hs.run_angle(world, blds, team, angle, dur, counts, points)
@@ -29,21 +29,22 @@ def job_now(geo: dict, blds: Dict[int, dict], team: Sequence[dict], angle: float
     per = {b: min(counts.get(b, 0), cap) for b, cap in targets.items() if counts.get(b)}
     per_points = {b: min(points.get(b, 0), cap) for b, cap in targets.items() if points.get(b)}
     return {"angle": angle, "total": total, "path": worker_preview(ws),
+            "automatic_gain":list(world.automatic_gain),
             "build_hits": sum(per.values()), "per_building": per,
             "build_points": sum(per_points.values()),
             "per_building_points": per_points,
-            "model_limitations": hs.model_limitations(team, blds)}
+            "model_limitations": sorted(set(hs.model_limitations(team,blds))|world.model_notes)}
 
 
 def job_sweep(geo: dict, blds: Dict[int, dict], team: Sequence[dict], dur: float, need: int,
               targets: Optional[Dict[int, int]] = None, lo: float = 12.0, hi: float = 168.0) -> dict:
     """각도 탐색 결과 상위 5개(top, 1위는 첫 작업자의 초기 경로 포함)와 미완성 건물별 최대 타격 수(reach — 0 이면
     어떤 각도로도 닿지 않음)."""
-    world = hs.world_from_geo(geo, 0.03)
+    world = hs.world_from_geo(geo, 0.0)
     if world is None:
-        return {}
+        return {'error':'geometry_unavailable','model_limitations':['geometry_unavailable']}
     limits = (lo, hi)
-    if native.lib() is not None:
+    if native.lib() is not None and not hs.needs_dynamic_simulation(blds):
         # 네이티브 계산(각도 하나 약 1ms)이면 1° 간격 전부 — 좁은 틈으로만 닿는 각도도 놓치지 않는다
         ranked = hs.rank_angles(world, blds, team, dur, need, targets, angles=allowed_angles(geo, _angle_grid(limits, 1)))
     else:
@@ -73,7 +74,10 @@ def job_sweep(geo: dict, blds: Dict[int, dict], team: Sequence[dict], dur: float
                     "build_points": getattr(r, "build_points", None),
                     "per_building_points": getattr(r, "per_building_points", {}),
                     "score": score, "path": worker_preview(ws)})
-    return {"top": out, "reach": reach, "model_limitations": hs.model_limitations(team, blds)}
+    notes=set(hs.model_limitations(team,blds))
+    for result in ranked:
+        notes.update(getattr(result,'model_notes',()))
+    return {"top":out,"reach":reach,"model_limitations":sorted(notes)}
 
 
 def gold_mine_spot(base: dict, blds: Dict[int, dict], team: Sequence[dict], dur: float, need: int, bp: dict):
@@ -84,7 +88,7 @@ def gold_mine_spot(base: dict, blds: Dict[int, dict], team: Sequence[dict], dur:
     from .layout import grid_from_geo
     geo = base.get("geo") or {}
     grid = grid_from_geo(geo)
-    world = hs.world_from_geo(geo, 0.03)
+    world = hs.world_from_geo(geo, 0.0)
     if grid is None or world is None:
         return None
     w, h = bp.get("size") or (2, 2)
@@ -114,7 +118,7 @@ def gold_mine_spot(base: dict, blds: Dict[int, dict], team: Sequence[dict], dur:
         g2 = dict(geo)
         g2["colliders"] = list(geo.get("colliders") or []) + [
             {"id": -7, "shape": "box", "pts": [[cx - hw, cy - hh], [cx + hw, cy - hh], [cx + hw, cy + hh], [cx - hw, cy + hh]]}]
-        w2 = hs.world_from_geo(g2, 0.03)
+        w2 = hs.world_from_geo(g2, 0.0)
         b2 = dict(blds)
         b2[-7] = {"id": -7, "type": "kGoldMine", "res": 0}
         top = 0
@@ -141,7 +145,9 @@ def full_tiles(blds: Dict[int, dict]) -> Dict[int, dict]:
         held = [0, 0, 0, 0]
         held[TILE_RES[b["type"]]] = capacity
         # res뿐 아니라 held도 같은 '가득 찬 상태'로 맞춘다. 자동 생산의 저장량 변화로 배치 결과가 버려지면 안 된다.
-        out[i] = dict(b, res=capacity, held=held, can_harvest=True)
+        out[i] = dict(b, res=capacity, held=held, can_harvest=True,
+                      raycast_enabled=TILE_RES[b['type']]!=1,pickup_enabled=TILE_RES[b['type']]==1)
+        if 'task_active' in b:out[i]['task_active']=False
     return out
 
 
@@ -177,39 +183,35 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
     from . import layout_opt as lo
     from .layout import LayoutPlan, Move, buildings_from_base, grid_from_geo, plan_access, shape_masks, suggest_new
     from .resource_access import ResourceAccess
+    if (any('range_boxes' in b and b['range_boxes'] is None for b in snap.get('buildings',[]))
+            or (snap.get('range_contract') or {}).get('mismatches')):
+        # 새 브리지의 명시적인 읽기 실패를 구형 중심 근사로 덮지 않는다.
+        plan=LayoutPlan(0.,0.,calculation_deferred=True,construction_pending=True,
+                        model_limitations=['missing_range_geometry'],
+                        final={b['id']:(b['x'],b['y']) for b in snap.get('buildings',[]) if all(k in b for k in ('id','x','y'))})
+        return plan,{}
     targets = targets or {}
     blds = full_tiles({b["id"]: b for b in snap.get("buildings") or [] if "id" in b})
     limitations = hs.model_limitations(team, blds)
     res_weight = {r: (1.5 if r == need else 1.0) for r in (1, 2, 3)}
 
-    mines = [i for i, b in blds.items() if b.get("type") == "kGoldMine"]
-    monks = [i for i, b in blds.items() if b.get("type") == "kMonastery"]
     lo.set_char_levels(char_levels or {})
 
     def hv(geo):
-        """추천 각도의 채집 발사 예상 [골드, 밀, 나무, 돌]. 골드 = 금광 튕김 수 × 1.5 (튕길 때 1~2, 광마다 최대 100번 — 위키)."""
-        w = hs.world_from_geo(geo, 0.03)
+        """시간순 시뮬레이션의 작업자 수확량. 건물 효과를 결과에 재차 곱하지 않는다."""
+        w = hs.world_from_geo(geo, 0.0)
         if not w:
             return [0, 0, 0, 0]
         angles = allowed_angles(geo, HV_ANGLES(aim_limits))
         if not angles:
             return [0, 0, 0, 0]
         a, total = hs.best_angles(w, blds, team, dur, need, angles=angles)[0]
-        if mines or monks:
-            counts: Dict[int, int] = {}
-            hs.run_angle(w, blds, team, a, dur, counts)
-            total = list(total)
-            total[0] += int(sum(min(counts.get(m, 0), 100) for m in mines) * 1.5)
-            # 수도원: 튕길 때마다 채집 시간 +0.07초 (채집당 최대 100번 — 위키) → 늘어난 시간만큼 자원도 늘어난다고 봄
-            extra = 0.07 * sum(min(counts.get(m, 0), 100) for m in monks)
-            if extra:
-                total = [total[0]] + [round(v * (1 + extra / max(dur, 1.0))) for v in total[1:]]
         return total
 
     def reach(geo):
         if not targets:
             return {}
-        w = hs.world_from_geo(geo, 0.03)
+        w = hs.world_from_geo(geo, 0.0)
         out: Dict[int, int] = {}
         if w:
             for r in hs.rank_angles(w, blds, team, dur, need, targets, angles=allowed_angles(geo, REACH_ANGLES(aim_limits))):
@@ -262,7 +264,7 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
     elif source == "unavailable":
         plan.notes.append(tr("실제 채집 발사 위치를 아직 확인하지 못해 경로 검사를 보류했습니다."))
     final_state = plan.evaluated_base
-    world = hs.world_from_geo(final_state.get("geo") or {}, 0.03)
+    world = hs.world_from_geo(final_state.get("geo") or {}, 0.0)
     final_blds = full_tiles({b["id"]: b for b in final_state.get("buildings") or [] if "id" in b})
     sweeps = {}
     if world and team:

@@ -27,9 +27,11 @@ namespace {
 
 const double EPS = 1e-6;
 const double SPEED_UP = 0.2;
+const double MAX_SPEED = 100.0;
 
 enum { K_CIRCLE = 0, K_BOX = 1, K_POLY = 2, K_WALL = 3 }; // 미개방 구역은 관통되지 않는 벽
-enum { F_WHEAT = 1, F_TILE = 2, F_BUILD = 4 };       // 건물 성질
+inline bool is_wall(int kind) { return kind == K_WALL || (kind & 8); }
+enum { F_WHEAT = 1, F_TILE = 2, F_BUILD = 4, F_RESOURCE = 8, F_NO_RAY = 16 }; // 자원 종류와 질의 계층을 구분
 enum { U_PIERCE_BUILDINGS = 1, U_PIERCE_STONE = 2, U_PIERCE_WOOD = 4 };   // 작업자 채집 강화
 
 inline double fabs_(double x) { return x < 0 ? -x : x; }
@@ -78,11 +80,14 @@ struct Geo {
     const double* bb;      // 경계 상자 4개씩 (파이썬이 계산해 넘김 — Shape.bb 와 같은 값)
 };
 
+bool inside_shape(const Geo& g, int i, double x, double y, double r);
+
 bool hit_shape(const Geo& g, int i, double ox, double oy, double dx, double dy, double r,
                double& t, double& nx, double& ny) {
     const double* bb = g.bb + 4 * i;
     if (misses_box(bb, ox, oy, dx, dy, r + 1e-3)) return false;
-    if (g.kind[i] == K_CIRCLE) {
+    if (inside_shape(g,i,ox,oy,r)) return false; // 게임 QueriesStartInColliders=false
+    if ((g.kind[i] & 7) == K_CIRCLE) {
         double cx = g.circ[3 * i], cy = g.circ[3 * i + 1];
         double R = g.circ[3 * i + 2] + r;
         double fx = ox - cx, fy = oy - cy;
@@ -95,17 +100,33 @@ bool hit_shape(const Geo& g, int i, double ox, double oy, double dx, double dy, 
         t = tt; nx = ox + dx * tt - cx; ny = oy + dy * tt - cy;
         return true;
     }
-    double box[8];
     const double* p = g.pts + 2 * g.pt_off[i];
     int n = g.pt_cnt[i];
-    if ((g.kind[i] == K_BOX || g.kind[i] == K_WALL) && r > 0) {
+    if (((g.kind[i] & 7) == K_BOX || g.kind[i] == K_WALL) && r > 0) {
         double x0 = bb[0], y0 = bb[1], x1 = bb[2], y1 = bb[3];
-        box[0] = x0 - r; box[1] = y0 - r; box[2] = x1 + r; box[3] = y0 - r;
-        box[4] = x1 + r; box[5] = y1 + r; box[6] = x0 - r; box[7] = y1 + r;
-        p = box; n = 4;
+        double edges[4][4]={{x0,y0-r,x1,y0-r},{x1+r,y0,x1+r,y1},
+                            {x1,y1+r,x0,y1+r},{x0-r,y1,x0-r,y0}};
+        bool have=false;
+        for(int j=0;j<4;j++) {
+            double ht,hx,hy;const double* a=edges[j];
+            if(ray_segment(ox,oy,dx,dy,a[0],a[1],a[2],a[3],ht,hx,hy)&&(!have||ht<t)) {
+                have=true;t=ht;nx=hx;ny=hy;
+            }
+        }
+        double corners[4][4]={{x0,y0,-1,-1},{x1,y0,1,-1},{x1,y1,1,1},{x0,y1,-1,1}};
+        for(int j=0;j<4;j++) {
+            const double* a=corners[j];double fx=ox-a[0],fy=oy-a[1];
+            double b=fx*dx+fy*dy,disc=b*b-(fx*fx+fy*fy-r*r);
+            if(disc<0)continue;
+            double ht=-b-sqrt_(disc),hx=ox+dx*ht-a[0],hy=oy+dy*ht-a[1];
+            if(ht>EPS&&a[2]*hx>=-EPS&&a[3]*hy>=-EPS&&(!have||ht<t)) {
+                have=true;t=ht;nx=hx;ny=hy;
+            }
+        }
+        return have;
     }
     bool have = false;
-    for (int k = 0; k < n; k++) {
+    for (int k = 0; k < n - ((g.kind[i] & 7) == 4 ? 1 : 0); k++) {
         int j = (k + 1) % n;
         double ht, hx, hy;
         if (ray_segment(ox, oy, dx, dy, p[2 * k], p[2 * k + 1], p[2 * j], p[2 * j + 1], ht, hx, hy) &&
@@ -117,12 +138,17 @@ bool hit_shape(const Geo& g, int i, double ox, double oy, double dx, double dy, 
 }
 
 bool inside_shape(const Geo& g, int i, double x, double y, double r) {
-    if (g.kind[i] == K_CIRCLE) {
+    if ((g.kind[i] & 7) == 4) return false;
+    if ((g.kind[i] & 7) == K_CIRCLE) {
         double dx = x - g.circ[3 * i], dy = y - g.circ[3 * i + 1], rr = g.circ[3 * i + 2] + r;
         return dx * dx + dy * dy < rr * rr;
     }
-    if (g.kind[i] == K_BOX || g.kind[i] == K_WALL) {
+    if ((g.kind[i] & 7) == K_BOX || g.kind[i] == K_WALL) {
         const double* bb = g.bb + 4 * i;
+        if(r>0) {
+            double dx=max_(max_(bb[0]-x,0.),x-bb[2]),dy=max_(max_(bb[1]-y,0.),y-bb[3]);
+            return dx*dx+dy*dy<=r*r;
+        }
         return bb[0] - r < x && x < bb[2] + r && bb[1] - r < y && y < bb[3] + r;
     }
     const double* p = g.pts + 2 * g.pt_off[i];
@@ -137,7 +163,7 @@ bool inside_shape(const Geo& g, int i, double x, double y, double r) {
 
 }  // namespace
 
-BXP_API int bxp_version() { return 5; }
+BXP_API int bxp_version() { return 9; }
 
 // 여러 작업자를 시간 순서로 함께 돌린다 (harvest_sim.simulate_team 과 같음).
 //   world: left, right, bottom, top, radius
@@ -156,7 +182,9 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
                               double* out_path, int path_cap, double* event_values, int* event_kinds,
                               const int* build_bonus, int* out_build_points,
                               const int* harvest_amount, const int* clock_bonus, const double* pickup_radius,
-                              int* clock_counts, int* out_collected) {
+                              int* clock_counts, int* out_collected,
+                              int n_roads, const double* roads, double road_mult,
+                              int n_slots,int* touching,int* just_bounced) {
     const double left = world[0], right = world[1], bottom = world[2], top = world[3], r = world[4];
     Geo g{kind, pt_off, pt_cnt, pts, circ, bb};
     int npath = 0;
@@ -169,14 +197,22 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
     for (int i = 0; i < n_workers; i++) path_point(i);
     const double walls[4][4] = {{left + r, -1e3, left + r, 1e3}, {right - r, -1e3, right - r, 1e3},
                                 {-1e3, top - r, 1e3, top - r}, {-1e3, bottom + r, 1e3, bottom + r}};
+    auto moving_speed = [&](const double* w) {
+        double x = w[0] + w[2] * 1e-7, y = w[1] + w[3] * 1e-7;
+        for (int i = 0; i < n_roads; i++) {
+            const double* box = roads + i * 4;
+            if (box[0] <= x && x < box[2] && box[1] <= y && y < box[3]) return w[4] * road_mult;
+        }
+        return w[4];
+    };
     auto blocks = [&](int sl, int wi) {
         const int f = flags[sl], wu = ups[wi];
-        if ((f & F_WHEAT) || (wu & U_PIERCE_BUILDINGS)) return false;
+        if ((f & F_WHEAT) || ((wu & U_PIERCE_BUILDINGS) && !(f & F_RESOURCE))) return false;
         if (f & F_TILE) {
             if (res[sl] <= 0) return false;
-            int k = rtype[sl];
-            if ((k == 3 && (wu & U_PIERCE_STONE)) || (k == 2 && (wu & U_PIERCE_WOOD))) return false;
         }
+        int k = rtype[sl];
+        if ((f & F_RESOURCE) && ((k == 3 && (wu & U_PIERCE_STONE)) || (k == 2 && (wu & U_PIERCE_WOOD)))) return false;
         return true;
     };
     // 사건 값: 시각, 거리, 법선 x/y. 종류: 충돌 모양(-2 없음/-1 벽), 반사 여부.
@@ -189,7 +225,7 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
         bool have = false;
         double bt = 0, bnx = 0, bny = 0;
         int bshape = -1, solid = 1;
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < (world[5] ? 4 : 0); i++) {
             const double* a = walls[i];
             bool inside = (i == 0) ? w[0] >= a[0] - 1e-6 : (i == 1) ? w[0] <= a[0] + 1e-6
                         : (i == 2) ? w[1] <= a[1] + 1e-6 : w[1] >= a[1] - 1e-6;
@@ -202,17 +238,40 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
             }
         }
         for (int i = 0; i < n_shapes; i++) {
-            bool blocking = kind[i] == K_WALL || blocks(slot[i], wi);
-            double pickup_r = !blocking && (flags[slot[i]] & F_TILE) ? pickup_radius[wi] : r;
-            if (!blocking && res[slot[i]] <= 0) continue;
-            if (!blocking && inside_shape(g, i, w[0], w[1], pickup_r)) continue;
+            if (!is_wall(kind[i]) && (flags[slot[i]] & F_NO_RAY)) continue;
+            bool blocking = is_wall(kind[i]) || blocks(slot[i], wi);
+            bool pickup = (flags[slot[i]] & F_WHEAT) != 0;
+            double pickup_r = pickup ? pickup_radius[wi] : r;
+            int ci=wi*n_slots+slot[i];
+            if (!blocking && (flags[slot[i]] & F_TILE) && res[slot[i]] <= 0) { touching[ci]=0; continue; }
+            bool inside=inside_shape(g,i,w[0],w[1],pickup_r);
             double t, nx, ny;
-            if (hit_shape(g, i, w[0], w[1], w[2], w[3], pickup_r, t, nx, ny) && (!have || t < bt)) {
+            bool hit=false;
+            if (pickup && inside) {
+                if (touching[ci] && !just_bounced[wi]) continue;
+                t=0; nx=-w[2]; ny=-w[3]; hit=true;
+            } else {
+                if (!inside) touching[ci]=0;
+                if (!blocking && inside) continue;
+                hit=hit_shape(g,i,w[0],w[1],w[2],w[3],pickup_r,t,nx,ny);
+            }
+            if (hit && (!have || t < bt)) {
                 have = true; bt = t; bnx = nx; bny = ny; bshape = i; solid = blocking ? 1 : 0;
             }
         }
-        if (!have || w[5] + bt / w[4] >= duration) return;
-        e[0] = w[5] + bt / w[4]; e[1] = bt; e[2] = bnx; e[3] = bny;
+        for (int i = 0; i < n_roads; i++) {
+            const double* b = roads + 4 * i;
+            double edges[4][4] = {{b[0],b[1],b[2],b[1]}, {b[2],b[1],b[2],b[3]},
+                                 {b[2],b[3],b[0],b[3]}, {b[0],b[3],b[0],b[1]}};
+            for (int j = 0; j < 4; j++) {
+                double t, nx, ny; const double* a = edges[j];
+                if (ray_segment(w[0],w[1],w[2],w[3],a[0],a[1],a[2],a[3],t,nx,ny) && (!have || t < bt)) {
+                    have = true; bt = t; bnx = nx; bny = ny; bshape = -3; solid = 0;
+                }
+            }
+        }
+        if (!have || w[5] + bt / moving_speed(w) >= duration) return;
+        e[0] = w[5] + bt / moving_speed(w); e[1] = bt; e[2] = bnx; e[3] = bny;
         ek[0] = bshape; ek[1] = solid;
     };
     for (int i = 0; i < n_workers; i++) next_event(i);
@@ -224,7 +283,7 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
             for (int i = 0; i < n_workers; i++) {
                 double* q = wk + 6 * i;
                 if (q[5] >= duration) continue;
-                double distance = (duration - q[5]) * q[4];
+                double distance = (duration - q[5]) * moving_speed(q);
                 q[0] = q[0] + q[2] * distance; q[1] = q[1] + q[3] * distance; q[5] = duration;
                 path_point(i);
             }
@@ -236,8 +295,9 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
         int shape = event_kinds[2 * wi], solid = event_kinds[2 * wi + 1];
         w[0] = w[0] + w[2] * distance; w[1] = w[1] + w[3] * distance; w[5] = when;
         bool changed = false;
-        if (shape >= 0 && kind[shape] != K_WALL) {
+        if (shape >= 0 && !is_wall(kind[shape])) {
             int sl = slot[shape], n = res[sl], kd = rtype[sl];
+            if (flags[sl] & F_WHEAT) { touching[wi*n_slots+sl]=1; just_bounced[wi]=0; }
             changed = n > 0;
             if (n > 0 && kd >= 0) {
                 const int idx = 4 * wi + kd;
@@ -250,14 +310,21 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
                     clock_counts[idx]++;
                 }
             }
-            if (solid) out_counts[sl] += 1;
-            if (solid && (flags[sl] & F_BUILD)) out_build_points[sl] += 1 + build_bonus[wi];
+            if (!(flags[sl] & F_WHEAT)) out_counts[sl] += 1;
+            if ((flags[sl] & F_BUILD) && !(flags[sl] & F_WHEAT)) out_build_points[sl] += 1 + build_bonus[wi];
         }
         if (solid) {
             path_point(wi);
-            if (fabs_(nx) >= fabs_(ny)) w[2] = -w[2]; else w[3] = -w[3];
-            w[4] += SPEED_UP;
-        }
+            const double norm2 = nx * nx + ny * ny;
+            if (norm2 > 0) {
+                double scale = 2.0 * (w[2] * nx + w[3] * ny) / norm2;
+                double rx = w[2] - scale * nx, ry = w[3] - scale * ny;
+                double len = sqrt_(rx * rx + ry * ry);
+                if (len > 0) { w[2] = rx / len; w[3] = ry / len; }
+            }
+            w[4] = min_(MAX_SPEED, w[4] + SPEED_UP);
+            just_bounced[wi]=1;
+        } else if (shape == -3) path_point(wi);
         w[0] = w[0] + w[2] * 1e-4; w[1] = w[1] + w[3] * 1e-4;
         if (changed) {
             // 자원이 바뀐 시각까지 동료를 진행한 뒤 그 이후 사건을 새로 계산한다.
@@ -267,10 +334,10 @@ BXP_API int bxp_simulate_team(const double* world, int n_shapes, const int* kind
                 int* old_kind = event_kinds + 2 * j;
                 int target = old_kind[0];
                 bool simultaneous = j != wi && target != -2 && old[0] == when;
-                bool blocking = simultaneous && (target < 0 || kind[target] == K_WALL || blocks(slot[target], j));
-                bool keep = simultaneous && (blocking || res[slot[target]] > 0);
+                bool blocking = simultaneous && (target == -1 || (target >= 0 && (is_wall(kind[target]) || blocks(slot[target], j))));
+                bool keep = simultaneous && (target == -3 || blocking || (target >= 0 && (!(flags[slot[target]] & F_TILE) || res[slot[target]] > 0)));
                 if (j != wi && q[5] < when) {
-                    double d = (when - q[5]) * q[4];
+                    double d = (when - q[5]) * moving_speed(q);
                     q[0] = q[0] + q[2] * d; q[1] = q[1] + q[3] * d; q[5] = when;
                 }
                 if (keep) { old[1] = 0; old_kind[1] = blocking ? 1 : 0; }
@@ -324,6 +391,7 @@ struct Model {
     const int* part_off; const int* part_cnt; const int* part_piece; const double* part_r;
     // 크기 (w, h) 별 가능한 왼쪽 아래 자리: key = w * 32 + h
     const int* sz_off; const int* sz_cnt; const int* sz_org;
+    const int* range_off; const int* range_cnt; const double* range_boxes; double range_pad;
 };
 
 struct Work {
@@ -382,6 +450,16 @@ inline bool in_range(const Model& M, double dx, double dy, double r, double r2) 
     return dx * dx + dy * dy <= r2 + 1e-6;
 }
 
+inline bool target_in_range(const Model& M,int target,double dx,double dy,double radius) {
+    if (M.range_cnt[target] < 0) return in_range(M,dx,dy,radius,radius*radius);
+    double r = radius - M.range_pad;
+    for (int k=0;k<M.range_cnt[target];k++) {
+        const double* b = M.range_boxes+4*(M.range_off[target]+k);
+        if (dx+b[0]<=r && dx+b[2]>=-r && dy+b[1]<=r && dy+b[3]>=-r) return true;
+    }
+    return false;
+}
+
 inline double center_x(const Model& M, int c0, int w) { return M.ox + (c0 + w / 2.0) * M.size; }
 inline double center_y(const Model& M, int r0, int h) { return M.oy + (r0 + h / 2.0) * M.size; }
 
@@ -413,7 +491,7 @@ double score(const Model& M, Work& W, const int* org) {
         for (int k = M.eff_off[e]; k < M.eff_off[e] + M.eff_cnt[e]; k++) {
             int t = M.tgt[k];
             if (t == p) continue;
-            if (!in_range(M, W.cx[t] - ex, W.cy[t] - ey, rr, r2)) continue;
+            if (!target_in_range(M,t,W.cx[t]-ex,W.cy[t]-ey,rr)) continue;
             cnt++;
             if (mode == M_HARVEST && cnt > M.harvest_cap) continue;
             double v = M.tgt_val[k];

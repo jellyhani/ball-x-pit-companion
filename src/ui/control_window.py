@@ -176,7 +176,8 @@ class ControlWindow(QWidget):
         self.data = data
         self.run = run
         self.settings = settings
-        self.setWindowTitle(tr("BALL x PIT 도우미"))
+        from ..version import APP_VERSION
+        self.setWindowTitle(f'{tr("BALL x PIT 도우미")} {APP_VERSION}')
         self.resize(780, 660)
         self._owned_ids: List[str] = []
         self._history: List[RunRecord] = []

@@ -22,6 +22,21 @@ IN_RUN_STATES = {"kPlaying", "kLevelUp", "kPaused", "kPickTreasure", "kFoundBlue
                  "kBonusPassive", "kFoundEgg", "kRevive", "kEnteringLvl"}
 
 
+def _effective(value):
+    if (not isinstance(value,dict) or value.get('scope')!='current_run_uncombined'
+            or type(value.get('level')) is not int or not 1<=value['level']<=64):
+        return None
+    out={'scope':value['scope'],'level':value['level']}
+    for name in ('before','after'):
+        row=value.get(name)
+        if row is None and name=='before':
+            continue
+        if not isinstance(row,dict) or not all(isinstance(k,str) and type(v) is int for k,v in row.items()):
+            return None
+        out[name]=dict(row)
+    return out
+
+
 @dataclass(frozen=True)
 class BridgeState:
     in_run: bool
@@ -250,9 +265,12 @@ def convert(snap: dict, data: GameData, origin: Tuple[int, int] = (0, 0), frame_
             iid = data.ensure_runtime_item("pet", c["type"], c.get("name_loc") or "", c.get("desc_loc") or "")
         else:
             iid = item(c.get("type"))
+        effective=_effective(c.get('effective'))
+        if is_new and effective is not None:
+            shown=effective['level']
         cards.append(Card(index=i, position=names[i], rect=rect, icon_rect=rect, item_id=iid,
                           label=CardLabel.NEW if is_new else CardLabel.UPGRADE, shown_level=shown,
-                          synergy=syn, ai_pick=c.get("ai_pick")))
+                          synergy=syn, ai_pick=c.get("ai_pick"),effective=effective))
     pool = None
     pr = lvl.get("pool") if isinstance(lvl.get("pool"), dict) else None
     if pr and any(k in pr for k in ("new_balls", "ball_upgrades")):

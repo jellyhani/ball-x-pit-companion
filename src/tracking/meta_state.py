@@ -31,9 +31,12 @@ class Blueprint:
     cost: Tuple[int, ...] = ()
     size: Optional[Tuple[int, int]] = None      # 타일 크기 (플러그인 1.9)
     can_build_more: Optional[bool] = None
+    max_instances: Optional[int] = None
+    range_boxes: Optional[tuple] = None
 
     def construction_data(self) -> dict:
-        return {"type": self.type, "size": self.size, "cost": self.cost, "can_build_more": self.can_build_more}
+        return {"type":self.type,"size":self.size,"cost":self.cost,"can_build_more":self.can_build_more,
+                "max_instances":self.max_instances,"range_boxes":self.range_boxes,"range_rotation":0}
 
 
 @dataclass(frozen=True)
@@ -129,8 +132,11 @@ def parse_meta(meta: dict, data: GameData) -> MetaState:
             if not isinstance(b, dict) or b.get("can_build_more") is not True:
                 continue
             size = (b["tw"], b["th"]) if all(isinstance(b.get(k), int) and b[k] > 0 for k in ("tw", "th")) else None
+            from ..engine.game_range import boxes_from_row
+            limit=b.get('max_instances')
+            limit=limit if type(limit) is int and limit>=0 else None
             st.build_options.append(Blueprint(b.get("type", ""), b.get("slug", ""), b.get("cat", ""),
-                                               _ints(b.get("cost")), size, True))
+                                               _ints(b.get("cost")), size, True,limit,boxes_from_row(b)))
     for key, kind in (("ball_stats", "ball"), ("passive_stats", "passive")):
         for enum_name, r in (meta.get(key) or {}).items():
             iid = data.item_by_log_id(enum_name)

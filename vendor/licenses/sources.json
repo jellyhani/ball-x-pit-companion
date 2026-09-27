@@ -1,0 +1,17 @@
+[
+  {
+    "file": "GPL-3.0-only.txt",
+    "source": "https://raw.githubusercontent.com/qt/qtbase/dev/LICENSES/GPL-3.0-only.txt",
+    "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903"
+  },
+  {
+    "file": "LGPL-3.0-only.txt",
+    "source": "https://raw.githubusercontent.com/qt/qtbase/dev/LICENSES/LGPL-3.0-only.txt",
+    "sha256": "da7eabb7bafdf7d3ae5e9f223aa5bdc1eece45ac569dc21b3b037520b4464768"
+  },
+  {
+    "file": "PyWinRT-MIT.txt",
+    "source": "https://raw.githubusercontent.com/pywinrt/pywinrt/main/LICENSE",
+    "sha256": "6e898069e8b3c6d8d23dc70ac7067cc2b7c9db14c36df873026758db82c0891d"
+  }
+]

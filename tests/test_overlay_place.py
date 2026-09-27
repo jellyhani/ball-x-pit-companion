@@ -10,6 +10,20 @@ from src.ui import geometry as geo
 app = QApplication.instance() or QApplication(sys.argv)
 
 
+class IncompleteMapTest(unittest.TestCase):
+    def test_partial_and_zero_bounds_can_render_without_exception(self):
+        from src.ui.layout_window import MapCanvas
+        from src.engine.layout import Bld
+        canvas=MapCanvas()
+        try:
+            for bounds in ({'left':0},{'left':0,'right':0,'bottom':0,'top':1},
+                           {'left':0,'right':float('nan'),'bottom':0,'top':1}):
+                canvas.set_state(bounds,{1:Bld(1,'kIdleFarm',3,3,2,2,0,2)},[],{})
+                self.assertFalse(canvas.grab().isNull())
+        finally:
+            canvas.close()
+
+
 class LevelUpSpotTest(unittest.TestCase):
     GAME = QRect(0, 0, 1920, 1080)
     CARDS = [QRect(30, 570, 270, 360), QRect(330, 570, 270, 360), QRect(630, 570, 270, 360)]   # 실제 기록

@@ -9,6 +9,7 @@ import sys
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
+from src.i18n import tr
 
 
 def install_crash_logging(log: logging.Logger, log_path: str):
@@ -60,15 +61,20 @@ def first_run_setup(app) -> bool:
     if gd.has_game_text():
         return True
     from PySide6.QtWidgets import QLabel, QMessageBox
-    splash = QLabel("BALL x PIT 도우미: 게임 파일에서 자료를 준비하는 중… (처음 한 번, 10초 안팎)")
+    splash = QLabel(tr("게임 자료를 준비하고 있습니다…"))
     splash.setStyleSheet("padding: 18px; font-size: 14px;")
     splash.show()
     app.processEvents()
     from tools.setup_data import extract
-    ok, msg = extract(say=lambda m: None)
-    splash.close()
+    try:
+        ok, msg = extract(say=lambda m: logging.getLogger('setup').info('%s',m))
+    except Exception:
+        logging.getLogger('setup').exception('첫 실행 게임 자료 준비 실패')
+        ok,msg=False,tr("게임 자료 준비 중 오류가 발생했습니다. 진단 로그를 확인해 주세요.")
+    finally:
+        splash.close()
     if not ok:
-        QMessageBox.warning(None, "BALL x PIT 도우미", "게임 자료를 준비하지 못했습니다.\n" + msg)
+        QMessageBox.warning(None,tr("BALL x PIT 도우미"),msg)
     return ok
 
 
@@ -82,7 +88,7 @@ def main() -> int:
         return 0 if ok else 1
     QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
     app = QApplication(sys.argv)
-    app.setApplicationName("BALL x PIT 도우미")
+    app.setApplicationName(tr("BALL x PIT 도우미"))
     app.setQuitOnLastWindowClosed(False)
 
     from src.services.app_runtime import InstanceServer, send_command, setup_logging
@@ -94,11 +100,13 @@ def main() -> int:
     if send_command("show"):
         return 0   # 이미 실행 중: 기존 인스턴스가 창을 연다
 
-    if not first_run_setup(app):
-        return 1
     log_path = setup_logging()
     log = logging.getLogger("main")
     install_crash_logging(log, log_path)
+    from src.version import build_info
+    log.info('도우미 빌드: %s',build_info())
+    if not first_run_setup(app):
+        return 1
     server = InstanceServer()
     if not server.listen():
         log.error("단일 실행 채널을 열지 못했습니다")

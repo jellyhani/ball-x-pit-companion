@@ -5,6 +5,11 @@ import os
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(SPECPATH)))
+from tools.build_metadata import write_metadata
+from tools.package_notices import collect_notices
+metadata_dir = write_metadata()
+
 # 빌드 도구의 PATH에 들어온 Poppler/libheif DLL이 Qt의 Windows 시스템 DLL 대신 묶이지 않게 한다.
 # 이 프로세스의 검색 경로만 제한하며 사용자 환경 변수나 시스템 설치는 변경하지 않는다.
 if sys.platform == "win32":
@@ -24,7 +29,9 @@ datas = [
     ("vendor/bepinex/BallxPitBridge.dll", "vendor/bepinex"),       # our bridge plugin (BepInEx is downloaded)
     ("LICENSE", "."),
     ("NOTICE.md", "."),
+    (str(metadata_dir / "build-info.json"), "."),
 ]
+datas += collect_notices()
 binaries = []
 hiddenimports = collect_submodules("winrt") + [
     "tools.setup_data", "tools.extract_game_text", "tools.extract_icons", "src.engine.sim_jobs",
@@ -58,5 +65,5 @@ a.binaries = [x for x in a.binaries if Path(x[0]).name.lower() != "icuuc.dll"
 a.datas = [x for x in a.datas if not any(d in x[0] or d in x[1] for d in _DROP)]
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="BallxPitCompanion", console=False,
-          version=None, icon=None)
+          version=str(metadata_dir / "windows-version.txt"), icon=None)
 coll = COLLECT(exe, a.binaries, a.datas, name="BallxPitCompanion")

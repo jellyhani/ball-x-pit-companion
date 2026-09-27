@@ -15,9 +15,9 @@ log = logging.getLogger(__name__)
 _DLL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bxp_native.dll")
 _lib = None
 
-F_WHEAT, F_TILE, F_BUILD = 1, 2, 4
+F_WHEAT, F_TILE, F_BUILD, F_RESOURCE, F_NO_RAY = 1, 2, 4, 8, 16
 U_PIERCE_BUILDINGS, U_PIERCE_STONE, U_PIERCE_WOOD = 1, 2, 4
-KIND = {"circle": 0, "box": 1, "poly": 2, "wall": 3}
+KIND = {"circle": 0, "box": 1, "poly": 2, "wall": 3, "edge": 4}
 
 
 def lib():
@@ -30,14 +30,14 @@ def lib():
         return None
     try:
         dll = ctypes.CDLL(_DLL)
-        if dll.bxp_version() != 5:
+        if dll.bxp_version() != 9:
             return None
         P = ctypes.POINTER
         d, i = ctypes.c_double, ctypes.c_int
         dll.bxp_simulate_team.restype = i
         dll.bxp_simulate_team.argtypes = [P(d), i, P(i), P(i), P(i), P(i), P(i), P(d), P(d), P(d), P(i), P(i), P(i),
                                           i, P(d), P(i), d, i, P(i), P(i), P(i), P(d), i, P(d), P(i),
-                                          P(i), P(i), P(i), P(i), P(d), P(i), P(i)]
+                                          P(i), P(i), P(i), P(i), P(d), P(i), P(i), i, P(d), d, i, P(i), P(i)]
         _lib = dll
         log.info("네이티브 계산 모듈 사용 (%s)", _DLL)
     except (OSError, AttributeError) as e:
@@ -54,11 +54,12 @@ class PackedWorld:
     """기지 모양을 DLL 에 넘길 배열로 (World 마다 한 번)."""
 
     def __init__(self, world):
-        self.world = _arr(ctypes.c_double, [world.left, world.right, world.bottom, world.top, world.radius])
+        self.world = _arr(ctypes.c_double, [world.left, world.right, world.bottom, world.top, world.radius, float(world.use_bounds)])
+        self.roads = _arr(ctypes.c_double, [v for box in world.roads for v in box])
         shapes = world.shapes
         self.n = len(shapes)
         self.bids = [s.bid for s in shapes]
-        self.kind = _arr(ctypes.c_int, [KIND[s.kind] for s in shapes])
+        self.kind = _arr(ctypes.c_int, [KIND[s.kind] | (8 if s.environment else 0) for s in shapes])
         self.bid = _arr(ctypes.c_int, self.bids)
         off, cnt, pts, circ, bb = [], [], [], [], []
         for s in shapes:
@@ -118,6 +119,8 @@ def simulate_team(world, buildings: Dict[int, dict], workers: list, duration: fl
     clocks = _arr(ctypes.c_int, [v for _, clock, _ in effects for v in clock])
     radii = _arr(ctypes.c_double, [radius for _, _, radius in effects])
     clock_counts = (ctypes.c_int * max(1, 4 * nw))()
+    touching=_arr(ctypes.c_int,[int(bid in w.touching) for w in workers for bid in pw.slot_ids])
+    bounced=_arr(ctypes.c_int,[int(w.just_bounced) for w in workers])
     cap = max_events + nw + 8
     path = (ctypes.c_double * (4 * cap))()
     # 다음 사건의 시각·거리·법선과 충돌 대상을 작업자별로 저장한다.
@@ -126,13 +129,16 @@ def simulate_team(world, buildings: Dict[int, dict], workers: list, duration: fl
     n = dll.bxp_simulate_team(pw.world, pw.n, pw.kind, pw.slot, pw.bid, pw.pt_off, pw.pt_cnt, pw.pts, pw.circ, pw.bb,
                               flags, rtype, res, nw, wk, ups, float(duration), int(max_events),
                               total, gain, cnt, path, cap, event_values, event_kinds, build_bonus, points,
-                              amounts, clocks, radii, clock_counts, harvested)
+                              amounts, clocks, radii, clock_counts, harvested, len(world.roads), pw.roads, world.road_speed_mult,
+                              ns,touching,bounced)
     if n < 0:
         return None
     for i, w in enumerate(workers):
         w.x, w.y, w.dx, w.dy, w.speed, w.t = wk[6 * i:6 * i + 6]
         w.gain = list(gain[4 * i:4 * i + 4])
         w.path = []
+        w.touching={bid for j,bid in enumerate(pw.slot_ids) if touching[i*ns+j]}
+        w.just_bounced=bool(bounced[i])
     for k in range(n):
         wi = int(path[4 * k])
         workers[wi].path.append((path[4 * k + 1], path[4 * k + 2], path[4 * k + 3]))

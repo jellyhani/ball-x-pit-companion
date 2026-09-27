@@ -26,6 +26,8 @@ class ControllerFlowTest(unittest.TestCase):
         from src.tracking.snapshot_log import SnapshotLog
         self.tmp = tempfile.mkdtemp()
         self.c = AppController(app)
+        from src.services.game_window import GameWindow
+        self.c.window = GameWindow(0, 0, (0, 0), (1920, 1080), 96, False, False)
         self.c.dump_dir = self.tmp                     # 사용자 폴더의 live_state.json 을 덮어쓰지 않게
         self.c.snapshots = SnapshotLog(os.path.join(self.tmp, "snap"))
         self.c.draws = DrawStats(os.path.join(self.tmp, "draws.jsonl"))

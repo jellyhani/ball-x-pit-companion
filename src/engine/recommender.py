@@ -305,7 +305,7 @@ class Recommender:
             after = card.shown_level or (owned.level + 1 if owned and owned.level else None)
             before = after - 1 if after else (owned.level if owned else None)
         else:
-            before, after = None, 1
+            before, after = None, card.shown_level or 1
         action = f"{'upgrade' if upgrade else 'new'}_{kind}"
         ev = ActionEval(card, action, before, after)
 
@@ -357,24 +357,36 @@ class Recommender:
                 ev.reasons.append(Reason("archetype", tr("덱 계열({text})과 같은 {v0} 계열", text=arch.text, v0=AXIS_LABEL[shared[0]]),
                                          3 if upgrade else 4, tr("{v0} 계열", v0=AXIS_LABEL[shared[0]])))
         elif kind == "passive":
-            pe = passive_effect(self.data.level_props.get(item_id), ev.level_before if upgrade else None, ev.level_after)
+            pe = passive_effect(self._effect_rows(ev,item_id), ev.level_before if upgrade else None, ev.level_after)
             if pe is not None and any(AXIS_PASSIVE_ROLE.get(a) == pe.role for a in arch.top):
                 ev.reasons.append(Reason("archetype_passive", tr("덱 계열({text})을 키우는 패시브 ({text2})", text=arch.text, text2=pe.text), 3,
                                          tr("계열 강화")))
 
     def _ball_effect(self, ev: ActionEval, item_id: str, upgrade: bool):
         """볼 강화로 바뀌는 게임 수치 (피해 범위·지속·중첩·연쇄 수)."""
-        ev.effect = ball_effect(self.data.level_props.get(item_id), ev.level_before if upgrade else None,
+        ev.effect = ball_effect(self._effect_rows(ev,item_id), ev.level_before if upgrade else None,
                                 ev.level_after)
+        ev.effect = self._effect_label(ev,ev.effect)
+
+    def _effect_label(self,ev,text):
+        if not text:
+            return text
+        from .current_effects import is_current
+        return (tr("현재 능력치 반영: {effect}",effect=text) if is_current(ev.card,ev.level_before,ev.level_after)
+                else tr("기본 수치: {effect}",effect=text))
+
+    def _effect_rows(self,ev,item_id):
+        from .current_effects import level_rows
+        return level_rows(self.data.level_props.get(item_id),ev.card,ev.level_before,ev.level_after)
 
     def _passive_effect(self, ev: ActionEval, item_id: str, upgrade: bool, run: RunState,
                         p: Optional[RunProgress]):
         """패시브(아래 줄)의 실제 효과: 게임 레벨별 수치로 이번 선택이 무엇을 얼마나 바꾸는지, 상황에 맞는 역할인지."""
         d = self.data
-        pe = passive_effect(d.level_props.get(item_id), ev.level_before if upgrade else None, ev.level_after)
+        pe = passive_effect(self._effect_rows(ev,item_id), ev.level_before if upgrade else None, ev.level_after)
         if pe is None:
             return
-        ev.effect = pe.text
+        ev.effect = self._effect_label(ev,pe.text)
         if upgrade and pe.gain is not None:
             if pe.gain <= 0.05:
                 ev.warnings.append(Reason("passive_gain_small", tr("이번 강화로 주 효과가 거의 늘지 않음 ({text})", text=pe.text), -4,
@@ -509,7 +521,7 @@ class Recommender:
                 keys.append("direct")
             keys.append("upgrade_ball" if upgrade else "new_ball")
         elif kind == "passive":
-            props = self.data.level_props.get(item_id) or []
+            props = self._effect_rows(ev,item_id) or []
             pe = passive_effect(props, ev.level_before if upgrade else None, ev.level_after)
             if pe is not None:
                 keys.append({"power": "power", "aoe": "aoe", "defense": "defense", "baby": "baby",

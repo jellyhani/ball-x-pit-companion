@@ -24,7 +24,7 @@ namespace BallxPitBridge
     [BepInPlugin("dev.ballxpit.bridge", "BALL x PIT Bridge", Plugin.Version)]
     public class Plugin : BasePlugin
     {
-        public const string Version = "1.17.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
+        public const string Version = "1.18.0";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
         internal static ManualLogSource L;
 
         public override void Load()
@@ -447,8 +447,8 @@ namespace BallxPitBridge
                     w.WriteStartArray("player");
                     if (ToScreen(pos, out var sx, out var sy)) { w.WriteNumberValue((int)sx); w.WriteNumberValue((int)sy); }
                     else { w.WriteNumberValue(-1); w.WriteNumberValue(-1); }
-                    w.WriteNumberValue(Math.Round(pos.x, 2));
-                    w.WriteNumberValue(Math.Round(pos.y, 2));
+                    w.WriteNumberValue(pos.x);
+                    w.WriteNumberValue(pos.y);
                     w.WriteEndArray();
                 }
             }
@@ -505,18 +505,25 @@ namespace BallxPitBridge
             { "kIdleLumberyard", new[] { "kForest", "kGrandTree" } },
             { "kCozyHome", new[] { "kForest", "kGrandTree" } },
             { "kCampground", new[] { "kForest", "kGrandTree" } },
-            { "kIdleStoneMine", new[] { "kBoulder", "kGraniteSlab", "kStonePile" } },
-            { "kHovel", new[] { "kBoulder", "kGraniteSlab", "kStonePile" } },
-            { "kRockyHill", new[] { "kBoulder", "kGraniteSlab", "kStonePile" } },
+            { "kIdleStoneMine", new[] { "kBoulder", "kGraniteSlab" } },
+            { "kHovel", new[] { "kBoulder", "kGraniteSlab" } },
+            { "kRockyHill", new[] { "kBoulder", "kGraniteSlab" } },
         };
         static readonly Dictionary<int, string> _rangeJson = new Dictionary<int, string>();
+        static readonly Dictionary<int, string> _rangeIdsJson = new Dictionary<int, string>();
         static long _rangeSig = long.MinValue;
+        static float _rangeAt = -10f;
 
         static void WriteInRange(Utf8JsonWriter w, BuildingInst b)
         {
             string key = b.Type.ToString();
-            if (!RangeTargets.TryGetValue(key, out var targets)) return;
-            if (_rangeSig != _colSig) { _rangeJson.Clear(); _rangeSig = _colSig; }
+            if (!RangeTargets.TryGetValue(key,out var targets))
+            {
+                if (key!="kBrickHouse" && key!="kVeteranHut" && key!="kCaptainQuarters" && key!="kMansion") return;
+                targets=Array.Empty<string>();
+            }
+            if (_rangeSig != _colSig || Time.realtimeSinceStartup-_rangeAt>=1f)
+            { _rangeJson.Clear(); _rangeIdsJson.Clear(); _rangeSig = _colSig; _rangeAt=Time.realtimeSinceStartup; }
             if (!_rangeJson.TryGetValue(b.Id, out var js))
             {
                 using var ms = new MemoryStream();
@@ -540,6 +547,23 @@ namespace BallxPitBridge
             }
             w.WritePropertyName("in_range");
             w.WriteRawValue(js, true);
+            if (!_rangeIdsJson.TryGetValue(b.Id,out var observed))
+            {
+                using var ms=new MemoryStream();
+                using(var rw=new Utf8JsonWriter(ms))
+                {
+                    rw.WriteStartArray();
+                    var all=MetaSaveData.I?.Buildings;
+                    if (all!=null) for(int i=0;i<all.Count;i++)
+                    {
+                        var target=all[i];
+                        if (target!=null && target.Id!=b.Id && b.IsInRange(target)) rw.WriteNumberValue(target.Id);
+                    }
+                    rw.WriteEndArray();
+                }
+                observed=Encoding.UTF8.GetString(ms.ToArray());_rangeIdsJson[b.Id]=observed;
+            }
+            w.WritePropertyName("in_range_ids");w.WriteRawValue(observed,true);
         }
 
         static void WriteBase(Utf8JsonWriter w)
@@ -564,8 +588,8 @@ namespace BallxPitBridge
                     var direction = preview.GetAimDir();
                     w.WriteBoolean("launch_allowed", allowed);
                     w.WriteStartArray("launch_aim");
-                    w.WriteNumberValue(Math.Round(direction.x, 3));
-                    w.WriteNumberValue(Math.Round(direction.y, 3));
+                    w.WriteNumberValue(direction.x);
+                    w.WriteNumberValue(direction.y);
                     w.WriteEndArray();
                 }
             }
@@ -612,8 +636,8 @@ namespace BallxPitBridge
                     if (ToScreen(bp.transform.position, out var sx, out var sy)) { w.WriteNumberValue((int)sx); w.WriteNumberValue((int)sy); }
                     else { w.WriteNumberValue(-1); w.WriteNumberValue(-1); }
                     var aim = bp.GetAimDir();
-                    w.WriteNumberValue(Math.Round(aim.x, 3));
-                    w.WriteNumberValue(Math.Round(aim.y, 3));
+                    w.WriteNumberValue(aim.x);
+                    w.WriteNumberValue(aim.y);
                     w.WriteEndArray();
                 }
             }
@@ -630,8 +654,8 @@ namespace BallxPitBridge
                     w.WriteNumber("id", b.Id);
                     w.WriteString("type", b.Type.ToString());
                     w.WriteNumber("lvl", b.UpgradeLvl);
-                    w.WriteNumber("x", Math.Round(b.X, 2));
-                    w.WriteNumber("y", Math.Round(b.Y, 2));
+                    w.WriteNumber("x", b.X);
+                    w.WriteNumber("y", b.Y);
                     try
                     {
                         if (b.Obj != null && ToScreen(b.Obj.transform.position, out var sx, out var sy))
@@ -651,9 +675,10 @@ namespace BallxPitBridge
                     // 미완성(공사장 kScaffold·강화 공사 kUpgrading): 작업자가 맞힐 때마다 UpgradePts 가 쌓여 목표에 닿으면 완성
                     try { w.WriteString("state", b.CurState.ToString()); } catch { }
                     try { w.WriteNumber("upg_pts", b.UpgradePts); w.WriteNumber("upg_tgt", b.GetUpgradeTgt()); } catch { }
-                    try { w.WriteNumber("range", Math.Round(b.GetRange(), 2)); } catch { }
+                    try { w.WriteNumber("range", b.GetRange()); } catch { }
                     try { WriteInRange(w, b); } catch { }
                     w.WriteNumber("rot", b.Rotation);
+                    PhysicsSnapshot.WriteBuilding(w, b);
                     try
                     {
                         var info = b.GetInfo();
@@ -675,8 +700,8 @@ namespace BallxPitBridge
         static void Pt(Utf8JsonWriter w, Vector3 v)
         {
             w.WriteStartArray();
-            w.WriteNumberValue(Math.Round(v.x, 3));
-            w.WriteNumberValue(Math.Round(v.y, 3));
+            w.WriteNumberValue(v.x);
+            w.WriteNumberValue(v.y);
             w.WriteEndArray();
         }
 
@@ -687,19 +712,20 @@ namespace BallxPitBridge
             var g = BaseGridMgr.I;
             if (g == null) return;
             w.WriteStartObject("geo");
+            PhysicsSnapshot.Write(w, g, bm, m);
             try
             {
-                w.WriteNumber("left", Math.Round(g.LeftBorderX, 3));
-                w.WriteNumber("right", Math.Round(g.RightBorderX, 3));
-                w.WriteNumber("top", Math.Round(g.TopBorderY, 3));
-                w.WriteNumber("bottom", Math.Round(g.BottomBorderY, 3));
-                w.WriteNumber("player_y", Math.Round(g.PlayerY, 3));
-                w.WriteNumber("space_w", Math.Round(BaseGridMgr.kSpaceWidth, 4));
-                w.WriteNumber("space_h", Math.Round(BaseGridMgr.kSpaceHeight, 4));
+                w.WriteNumber("left", g.LeftBorderX);
+                w.WriteNumber("right", g.RightBorderX);
+                w.WriteNumber("top", g.TopBorderY);
+                w.WriteNumber("bottom", g.BottomBorderY);
+                w.WriteNumber("player_y", g.PlayerY);
+                w.WriteNumber("space_w", BaseGridMgr.kSpaceWidth);
+                w.WriteNumber("space_h", BaseGridMgr.kSpaceHeight);
                 w.WriteNumber("chunk_w", BaseGridMgr.kChunkWidth);
                 w.WriteNumber("chunk_h", BaseGridMgr.kChunkHeight);
-                w.WriteNumber("chunk_world_w", Math.Round(BaseGridMgr.kChunkWorldWidth, 3));
-                w.WriteNumber("chunk_world_h", Math.Round(BaseGridMgr.kChunkWorldHeight, 3));
+                w.WriteNumber("chunk_world_w", BaseGridMgr.kChunkWorldWidth);
+                w.WriteNumber("chunk_world_h", BaseGridMgr.kChunkWorldHeight);
                 w.WriteNumber("chunk_cols", BaseGridMgr.kChunkCols);
                 w.WriteNumber("chunk_rows", BaseGridMgr.kChunkRows);
             }
@@ -737,11 +763,11 @@ namespace BallxPitBridge
                 var bmgr = BuildingMgr.I;
                 if (bmgr != null)
                 {
-                    w.WriteNumber("worker_speed", Math.Round(bmgr.WorkerMoveSpeed, 3));
-                    w.WriteNumber("worker_speed_mult", Math.Round(bmgr.WorkerMoveSpeedMult, 3));
-                    w.WriteNumber("harvest_len", Math.Round(bmgr.HarvestLength, 3));
+                    w.WriteNumber("worker_speed", bmgr.WorkerMoveSpeed);
+                    w.WriteNumber("worker_speed_mult", bmgr.WorkerMoveSpeedMult);
+                    w.WriteNumber("harvest_len", bmgr.HarvestLength);
                 }
-                w.WriteNumber("ball_time_dist", Math.Round(BaseMgr.kBallTimeDist, 3));
+                w.WriteNumber("ball_time_dist", BaseMgr.kBallTimeDist);
             }
             catch { }
             try
@@ -782,6 +808,7 @@ namespace BallxPitBridge
                         sig = sig * 31 + (long)Math.Round(b.X * 100);
                         sig = sig * 31 + (long)Math.Round(b.Y * 100);
                         sig = sig * 31 + b.Rotation;
+                        sig = sig * 31 + b.UpgradeLvl;
                         try { sig = sig * 31 + (int)b.CurState; } catch { }
                     }
                 float t = Time.realtimeSinceStartup;
@@ -810,14 +837,14 @@ namespace BallxPitBridge
                         if (b == null || !b.IsActive) continue;
                         var pos = b.transform.position;
                         w.WriteStartArray();
-                        w.WriteNumberValue(Math.Round(pos.x, 3));
-                        w.WriteNumberValue(Math.Round(pos.y, 3));
-                        w.WriteNumberValue(Math.Round(b.AimDir.x, 3));
-                        w.WriteNumberValue(Math.Round(b.AimDir.y, 3));
-                        w.WriteNumberValue(Math.Round(b.Speed, 3));
+                        w.WriteNumberValue(pos.x);
+                        w.WriteNumberValue(pos.y);
+                        w.WriteNumberValue(b.AimDir.x);
+                        w.WriteNumberValue(b.AimDir.y);
+                        w.WriteNumberValue(b.Speed);
                         float r = -1;
                         try { var cc = b.GetComponent<CircleCollider2D>(); if (cc != null) r = cc.radius * Math.Abs(b.transform.lossyScale.x); } catch { }
-                        w.WriteNumberValue(Math.Round(r, 3));
+                        w.WriteNumberValue(r);
                         w.WriteNumberValue(b.NumBounces);
                         w.WriteNumberValue(b.HeldResources != null ? b.HeldResources.GetTotalAmount() : 0);
                         w.WriteNumberValue(b.WInst != null ? (int)b.WInst.Type : -1);
@@ -864,7 +891,7 @@ namespace BallxPitBridge
                         w.WritePropertyName("c");
                         Pt(w, t.TransformPoint(new Vector3(circ.offset.x, circ.offset.y, 0)));
                         var sc = t.lossyScale;
-                        w.WriteNumber("r", Math.Round(circ.radius * Math.Max(Math.Abs(sc.x), Math.Abs(sc.y)), 3));
+                        w.WriteNumber("r", circ.radius * Math.Max(Math.Abs(sc.x), Math.Abs(sc.y)));
                     }
                     else if (poly != null)
                     {
@@ -1083,6 +1110,7 @@ namespace BallxPitBridge
                     if (btn != null)
                     {
                         w.WriteNumber("tgt_lvl", btn.TgtLvl);
+                        EffectiveProperties.Write(w,info,btn.TgtLvl,c.IsNew,c.EquipmentIdx);
                         WriteRect(w, "rect", btn.Xfm);
                     }
                     w.WriteEndObject();
@@ -1699,6 +1727,7 @@ namespace BallxPitBridge
                     w.WriteNumber("tw", info.TileSize.x);
                     w.WriteNumber("th", info.TileSize.y);
                     try { w.WriteNumber("max_instances", info.GetMaxBuildingInst()); } catch { }
+                    PhysicsSnapshot.WriteRange(w,info,info.TileSize,0);
                     try { if (cost != null) w.WriteBoolean("affordable", cost.CanAfford()); } catch { }
                     w.WriteEndObject();
                 }

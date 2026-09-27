@@ -1074,5 +1074,16 @@
   "게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다.": "Oyunun doğrudan kararı alınamadı — oyun kurallarına göre hesaplanan tahmindir.",
   "생산 전용 강화 +{bonus:g}% — 일반 생산 배정 후에도 발사에 참가": "Üretim bonusu +{bonus:g}% — atandıktan sonra da hasat fırlatmalarına katılır",
   "빈 생산 건물 가동 — 일반 생산 배정 후에도 발사에 참가": "Boş üreticiyi çalıştır — hasat fırlatmalarına katılmaya devam eder",
-  "생산 전용 강화 {before:g}% → {after:g}% — 발사 참가 인원 유지": "Üretim bonusu {before:g}% → {after:g}% — fırlatma ekibinin sayısı değişmez"
+  "생산 전용 강화 {before:g}% → {after:g}% — 발사 참가 인원 유지": "Üretim bonusu {before:g}% → {after:g}% — fırlatma ekibinin sayısı değişmez",
+  "현재 능력치 반영: {effect}": "Mevcut özelliklerle: {effect}",
+  "기본 수치: {effect}": "Temel değerler: {effect}",
+  "게임 자료를 준비하고 있습니다…": "Oyun verileri hazırlanıyor…",
+  "게임 설치를 찾지 못했습니다. Steam 설치를 확인해 주세요.": "Oyun kurulumu bulunamadı. Lütfen Steam kurulumunu kontrol edin.",
+  "게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.": "Oyun metinleri hazır. Simgeler kullanılamıyor.",
+  "게임 자료를 준비했습니다.": "Oyun verileri hazır.",
+  "게임 자료 준비 중 오류가 발생했습니다. 진단 로그를 확인해 주세요.": "Oyun verileri hazırlanırken bir hata oluştu. Lütfen tanılama günlüğünü kontrol edin.",
+  "물리 정보가 불완전해 궤적 계산을 보류합니다.": "Fizik verileri eksik olduğu için yörünge hesaplaması bekletiliyor.",
+  "건물 효과 정보 부족: {buildings}": "Bina etkisi verileri eksik: {buildings}",
+  "현재 게임 정보가 부족해 배치 추천을 보류합니다.": "Güncel oyun verileri eksik olduğu için yerleşim önerileri bekletiliyor.",
+  "게임의 대상별 범위 판정 대조: {checked}건 · 불일치 {mismatches}건": "Hedef bazında oyun menzili kontrolü: {checked} · Uyuşmazlık: {mismatches}"
 }

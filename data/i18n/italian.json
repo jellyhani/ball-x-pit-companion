@@ -1074,5 +1074,16 @@
   "게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다.": "Verdetto diretto del gioco non disponibile — previsione calcolata dalle regole del gioco.",
   "생산 전용 강화 +{bonus:g}% — 일반 생산 배정 후에도 발사에 참가": "Bonus produzione +{bonus:g}% — partecipa ai lanci di raccolta anche dopo l’assegnazione",
   "빈 생산 건물 가동 — 일반 생산 배정 후에도 발사에 참가": "Attiva il produttore vuoto — partecipa ancora ai lanci di raccolta",
-  "생산 전용 강화 {before:g}% → {after:g}% — 발사 참가 인원 유지": "Bonus produzione {before:g}% → {after:g}% — stesso numero di partecipanti ai lanci"
+  "생산 전용 강화 {before:g}% → {after:g}% — 발사 참가 인원 유지": "Bonus produzione {before:g}% → {after:g}% — stesso numero di partecipanti ai lanci",
+  "현재 능력치 반영: {effect}": "Con le statistiche attuali: {effect}",
+  "기본 수치: {effect}": "Valori base: {effect}",
+  "게임 자료를 준비하고 있습니다…": "Preparazione dei dati di gioco…",
+  "게임 설치를 찾지 못했습니다. Steam 설치를 확인해 주세요.": "Installazione del gioco non trovata. Controlla l’installazione di Steam.",
+  "게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.": "I testi di gioco sono pronti. Le icone non sono disponibili.",
+  "게임 자료를 준비했습니다.": "I dati di gioco sono pronti.",
+  "게임 자료 준비 중 오류가 발생했습니다. 진단 로그를 확인해 주세요.": "Si è verificato un errore durante la preparazione dei dati. Controlla il registro diagnostico.",
+  "물리 정보가 불완전해 궤적 계산을 보류합니다.": "Il calcolo della traiettoria è sospeso perché i dati fisici sono incompleti.",
+  "건물 효과 정보 부족: {buildings}": "Dati degli effetti degli edifici mancanti: {buildings}",
+  "현재 게임 정보가 부족해 배치 추천을 보류합니다.": "I suggerimenti di disposizione sono sospesi perché i dati attuali del gioco sono incompleti.",
+  "게임의 대상별 범위 판정 대조: {checked}건 · 불일치 {mismatches}건": "Verifiche della portata per bersaglio: {checked} · Differenze: {mismatches}"
 }

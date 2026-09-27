@@ -50,7 +50,7 @@ class UnfinishedTest(unittest.TestCase):
 class RankTest(unittest.TestCase):
     def test_build_targets_come_first(self):
         fx = load()
-        world = hs.world_from_geo(fx["geo"], 0.03)
+        world = hs.world_from_geo(fx["geo"], 0.0)
         blds = {b["id"]: b for b in fx["buildings_before"]}
         team = team_of(fx)
         angles = range(20, 161, 20)
@@ -96,7 +96,7 @@ class RankTest(unittest.TestCase):
         blds = {b["id"]: b for b in fx["buildings_before"]}
         team = team_of(fx)
         r = sim_jobs.job_now(fx["geo"], blds, team, 48, fx["duration"], {11: 5})
-        total, _ = hs.run_angle(hs.world_from_geo(fx["geo"], 0.03), blds, team, 48, fx["duration"])
+        total, _ = hs.run_angle(hs.world_from_geo(fx["geo"], 0.0), blds, team, 48, fx["duration"])
         self.assertEqual(r["total"], total)
         self.assertTrue(r["path"])
         pickle.loads(pickle.dumps(r))
