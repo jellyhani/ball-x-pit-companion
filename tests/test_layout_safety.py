@@ -56,7 +56,12 @@ class MovementSafetyTest(unittest.TestCase):
 
     def test_safe_temporary_parking_still_finishes_swap(self):
         base = boxed_swap()
-        base["geo"]["chunk_h"] = 3
+        base["geo"]["chunk_h"] = 4
+        # 입구 앞줄을 비우는 정책이므로 안전한 맞바꿈 사례 자체는 그 위에 둔다.
+        for b in base["buildings"]:
+            b["y"] += 1
+        for c in base["geo"]["colliders"]:
+            c["pts"] = [[x,y+1] for x,y in c["pts"]]
         grid = grid_from_geo(base["geo"])
         pieces, before = lo.pieces_from_base(base, grid, lo.housing_types())
         target = dict(before)

@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Sequence
 from . import harvest_sim as hs
 from . import native
 from .aim_preview import worker_preview
+from .launch_access import allowed_angles, entrance_blockers, repair_entrance
 from ..i18n import tr
 
 
@@ -44,13 +45,13 @@ def job_sweep(geo: dict, blds: Dict[int, dict], team: Sequence[dict], dur: float
     limits = (lo, hi)
     if native.lib() is not None:
         # 네이티브 계산(각도 하나 약 1ms)이면 1° 간격 전부 — 좁은 틈으로만 닿는 각도도 놓치지 않는다
-        ranked = hs.rank_angles(world, blds, team, dur, need, targets, angles=_angle_grid(limits, 1))
+        ranked = hs.rank_angles(world, blds, team, dur, need, targets, angles=allowed_angles(geo, _angle_grid(limits, 1)))
     else:
         # 파이썬 계산: 거칠게 6° 간격 → 상위 3개 주변만 1° 간격 (전부 1°로 하면 작업자 10명·20초에 수 초)
-        coarse = hs.rank_angles(world, blds, team, dur, need, targets, angles=_angle_grid(limits, 6))
+        coarse = hs.rank_angles(world, blds, team, dur, need, targets, angles=allowed_angles(geo, _angle_grid(limits, 6)))
         fine = sorted({a for r in coarse[:3] for a in range(int(r.angle) - 2, int(r.angle) + 3)
                        if lo <= a <= hi} - {r.angle for r in coarse})
-        ranked = coarse + hs.rank_angles(world, blds, team, dur, need, targets, angles=fine)
+        ranked = coarse + hs.rank_angles(world, blds, team, dur, need, targets, angles=allowed_angles(geo, fine))
     ranked.sort(key=lambda r: -hs.angle_score(r, need))
     reach = {b: 0 for b in targets or {}}
     for r in ranked:
@@ -190,7 +191,7 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
         w = hs.world_from_geo(geo, 0.03)
         if not w:
             return [0, 0, 0, 0]
-        angles = HV_ANGLES(aim_limits)
+        angles = allowed_angles(geo, HV_ANGLES(aim_limits))
         if not angles:
             return [0, 0, 0, 0]
         a, total = hs.best_angles(w, blds, team, dur, need, angles=angles)[0]
@@ -211,7 +212,7 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
         w = hs.world_from_geo(geo, 0.03)
         out: Dict[int, int] = {}
         if w:
-            for r in hs.rank_angles(w, blds, team, dur, need, targets, angles=REACH_ANGLES(aim_limits)):
+            for r in hs.rank_angles(w, blds, team, dur, need, targets, angles=allowed_angles(geo, REACH_ANGLES(aim_limits))):
                 for b, v in r.per_building.items():
                     out[b] = max(out.get(b, 0), v)
         return out
@@ -236,7 +237,7 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
         return None, {}
     plan = _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib,
                       resources, resource_check, resource_before)
-    if resource_before is not None and resource_before.blocked:
+    if (resource_before is not None and resource_before.blocked) or entrance_blockers(snap):
         # 자원을 먼저 옮긴 뒤에는 기존 최적화의 생산 건물 이동이 무의미해질 수 있다.
         # 현재 배치에서 접근만 복구한 안과 최종 상태끼리 비교해 불필요한 추가 이동을 막는다.
         pcs, origins = lo.pieces_from_base(snap, grid, lo.housing_types())
@@ -245,11 +246,13 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
         simple = _plan_from(snap, neutral, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib,
                             resources, resource_check, resource_before)
         reached = {i for i, n in plan.reach_after.items() if n > 0}
-        safe = simple.movement_complete and all(simple.reach_after.get(i, 0) > 0 for i in reached)
+        safe = (simple.movement_complete and all(simple.reach_after.get(i, 0) > 0 for i in reached)
+                and len(entrance_blockers(simple.evaluated_base)) <= len(entrance_blockers(plan.evaluated_base)))
         fewer_blocked = len(simple.resource_unreachable_after) < len(plan.resource_unreachable_after)
+        clearer_entrance = len(entrance_blockers(simple.evaluated_base)) < len(entrance_blockers(plan.evaluated_base))
         dominates = (len(simple.resource_unreachable_after) == len(plan.resource_unreachable_after)
                      and simple.score_after >= plan.score_after - 1e-6 and len(simple.swaps) <= len(plan.swaps))
-        if safe and (fewer_blocked or dominates):
+        if safe and (clearer_entrance or fewer_blocked or dominates):
             plan = simple
     plan.preset = "guide"
     plan.model_limitations = limitations
@@ -265,7 +268,8 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
     if world and team:
         for res in (1, 2, 3):
             sweeps[res] = [(r.angle, r.total) for r in
-                           hs.rank_angles(world, final_blds, team, dur, res, None, angles=_angle_grid(aim_limits, 5))]
+                           hs.rank_angles(world, final_blds, team, dur, res, None,
+                                          angles=allowed_angles(final_state.get("geo") or {}, _angle_grid(aim_limits, 5)))]
     return plan, sweeps
 
 
@@ -277,6 +281,14 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
     from .layout_guide import preserves_guide
     final_base = lo.final_base(snap, full)
     entrance = lo.entrance_cells(snap.get("geo") or {}, grid)
+    original_blockers = entrance_blockers(snap)
+    reached0 = {i for i,n in reach(final_base.get("geo") or {}).items() if n > 0}
+    def entrance_safe(candidate):
+        if resource_check is not None and not resource_check.preserves(candidate, resource_before):
+            return False
+        got = reach(candidate.get("geo") or {}) if reached0 else {}
+        return all(got.get(i,0)>0 for i in reached0)
+    entrance_moves, final_base = repair_entrance(final_base,pad,entrance_safe)
     access, final_base, reserved = (plan_access(final_base, list(targets), reach, avoid=entrance,
                                                accept_fn=lambda nb: lo.preserves_production(snap, nb, pad)
                                                and preserves_guide(snap, nb, pad)
@@ -292,7 +304,7 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
             checked = reach(candidate.get("geo") or {})
             return all(checked.get(i, 0) > 0 for i in reached)
         resource_moves, final_base = repair_resources(final_base, resource_check, accept=safe_resource_move)
-    all_access = access + resource_moves
+    all_access = entrance_moves + access + resource_moves
     pieces, cur = lo.pieces_from_base(snap, grid, lo.housing_types())
     target_origin = dict(full.origin_after)
     for m in all_access:                              # 공사·자원 접근 개선도 목표 자리에 반영
@@ -320,6 +332,8 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
         rot = (rots.get(i, 0) + k) % 4 if k else -1
         if park:
             steps.append(Move(i, to, 0.0, tr("잠시 비켜 두기 (다른 건물 자리 비우기)")))
+        elif i in original_blockers:
+            steps.append(Move(i, to, 0., tr("발사 입구를 비우기 위해 이동"), rot=rot))
         elif i in resource_moved_ids:
             steps.append(Move(i, to, 0., resource_reasons[i], rot=rot))
         elif i in opener:
@@ -352,7 +366,16 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
     elif access:
         plan.notes = [tr("공사 경로를 연 최종 배치로 범위 효과와 채집 예상을 다시 계산했습니다.")]
     else:
-        plan.notes = [] if resource_moves else list(full.notes)
+        plan.notes = [] if resource_moves or entrance_moves else list(full.notes)
+    remaining_entrance = entrance_blockers(final_base)
+    if original_blockers or remaining_entrance:
+        plan.notes.append(tr("입구를 막는 건물: {before}개 → {after}개 (앞줄 전체와 중앙 통로 보호)",
+                             before=len(original_blockers),after=len(remaining_entrance)))
+    probe_angles = resource_check.angles if resource_check is not None else tuple(range(25,156,5))
+    if isinstance(hs.world_from_geo((snap.get("geo") or {}),0.),hs.World):
+        plan.notes.append(tr("발사 가능 각도 계산: {before}/{total} → {after}/{total} (이동 후 게임 판정 확인)",
+                             before=len(allowed_angles(snap['geo'],probe_angles)),total=len(probe_angles),
+                             after=len(allowed_angles(final_base['geo'],probe_angles))))
     if resource_check is not None and resource_before is not None:
         resource_after = resource_check.check(final_base)
         plan.resource_access_checked = resource_after is not None
@@ -401,7 +424,7 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
     options = [bp for bp in blueprints if is_recommended_building(bp.get("type", ""))]
     plan.build_costs = {bp["type"]: tuple(bp["cost"]) for bp in options if bp.get("cost") is not None}
     # 게임이 추가 건설 가능하다고 보낸 항목만 쓴다. 보유 건물을 근거로 설계도를 만들어 내지 않는다.
-    plan.construction_pending = bool(steps) or not movement_complete or bool(plan.resource_unreachable_after)
+    plan.construction_pending = bool(steps) or not movement_complete or bool(plan.resource_unreachable_after) or bool(remaining_entrance)
     if not plan.construction_pending:
         plan.builds = lo.suggest_builds(snap, options, res_weight, pad, resources=resources)
         plan.builds += lo.suggest_tiles(snap, res_weight, pad, build_options=options, resources=resources)

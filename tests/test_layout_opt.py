@@ -453,7 +453,7 @@ class GuideFewMovesTest(unittest.TestCase):
         _, base, grid, _, _ = setup()
         base["geo"]["entrance_grid"] = [2, 0]  # 실행 중인 1.13.0 브리지와 같은 입구 청크 값
         entrance = lo.entrance_cells(base["geo"], grid)
-        self.assertEqual(entrance, {(19, 0), (20, 0), (19, 1), (20, 1)})
+        self.assertEqual(entrance, {(c, 0) for c in range(16, 24)} | {(19, 1), (20, 1)})
         next(b for b in base["buildings"] if b["id"] == 39)["state"] = "kUpgrading"
         pieces, origin = lo.pieces_from_base(base, grid, lo.housing_types())
         lane = lo.lane_values(base["geo"], grid)
@@ -482,7 +482,7 @@ class GuideFewMovesTest(unittest.TestCase):
         base["geo"]["entrance_chunk"] = [100, 100]
         self.assertEqual(lo.entrance_cells(base["geo"], grid), set())
         base["geo"]["entrance_chunk"] = [2, 0]
-        self.assertEqual(lo.entrance_cells(base["geo"], grid), {(19, 0), (20, 0), (19, 1), (20, 1)})
+        self.assertEqual(lo.entrance_cells(base["geo"], grid), {(c, 0) for c in range(16, 24)} | {(19, 1), (20, 1)})
 
     def test_staffed_quarry_gets_free_coverage_move_below_global_cutoff(self):
         """채석장 바위 2→4개는 전체 효과 +4% 미만이어도 한 번 옮겨 챙긴다."""

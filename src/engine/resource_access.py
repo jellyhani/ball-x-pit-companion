@@ -66,7 +66,10 @@ class ResourceAccess:
         if not resources or not set(resources) <= {s.bid for s in world.shapes}:
             return None  # 자원 충돌 모양이 빠진 입력을 '채집 불가능'으로 오인하지 않는다.
         collected = {}
+        from .launch_access import launchable
         for angle in self.angles:
+            if not launchable(world, angle):
+                continue
             harvest = {}
             hs.run_angle(world, buildings, self.team, angle, self.duration, collected=harvest)
             for i, amount in harvest.items():

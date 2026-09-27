@@ -339,7 +339,7 @@ def lane_values(geo: dict, grid: Grid) -> Dict[Tuple[int, int], float]:
 
 
 def entrance_cells(geo: dict, grid: Grid) -> Set[Tuple[int, int]]:
-    """게임의 입구 청크 아래 중앙 두 칸 × 두 줄을 비운다 (이전 플러그인은 보호 범위 없음)."""
+    """입구 앞줄 전체와 중앙 두 번째 줄을 비운다. 발사 위치가 중앙에서 옮겨져도 앞줄에 막히지 않게 한다."""
     chunk = geo.get("entrance_chunk") or geo.get("entrance_grid") or []
     if not (isinstance(chunk, (list, tuple)) and len(chunk) == 2 and
             all(isinstance(v, int) and not isinstance(v, bool) for v in chunk)):
@@ -349,10 +349,12 @@ def entrance_cells(geo: dict, grid: Grid) -> Set[Tuple[int, int]]:
         return set()
     if chunk not in (geo.get("chunks") or []):
         return set()
-    # 실제 게임 입구는 8×6 청크 한 덩어리다. 전체를 비우면 이사량이 커지므로 아래 중앙의 최소 통로만 보호한다.
+    # 보호 폭은 배치 정책이다. 게임의 발사 금지 판정은 launch_access에서 첫 충돌로 별도 검사한다.
     left = chunk[0] * width + width // 2 - 1
     bottom = chunk[1] * height
-    return {(c, r) for c in (left, left + 1) for r in (bottom, bottom + 1) if (c, r) in grid.tiles}
+    cells = {(c, bottom) for c in range(chunk[0] * width, (chunk[0] + 1) * width)}
+    cells.update((c, bottom + 1) for c in (left, left + 1))
+    return cells & grid.tiles
 
 
 def lane_idle(p: "Piece") -> bool:

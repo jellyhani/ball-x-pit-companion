@@ -1329,6 +1329,8 @@ class AppController(QObject):
                 alts = " / ".join(tr("{i}위 {v0:.0f}° {v1}", i=i, v0=r['angle'], v1=self._yield_text(r)) for i, r in enumerate(top[1:3], 2))
                 if alts:
                     lines.append((alts, (170, 170, 180, 255)))
+        elif got and got[1] and got[0] == key:
+            lines.append((tr("발사 가능한 추천 각도를 찾지 못했습니다. 입구 배치를 확인해 주세요."), (255, 159, 10, 255)))
         else:
             lines.append((tr("추천 각도 계산 중…"), (190, 190, 200, 255)))
         l_ok, h_ok = self.aim_range.learned
