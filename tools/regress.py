@@ -84,7 +84,21 @@ def replay(msgs: List[dict]) -> List[dict]:
 
 def compare(expected: List[dict], got: List[dict]) -> List[str]:
     diffs = []
+    # 결과가 통째로 사라지거나 중복되면 내용 비교만으로는 회귀를 놓칠 수 있다.
+    for label, rows in (("기대 결과", expected), ("실제 결과", got)):
+        seen = set()
+        for row in rows:
+            seq = row.get("seq")
+            if seq is None:
+                diffs.append(f"{label}: seq 누락")
+            elif seq in seen:
+                diffs.append(f"{label}: seq {seq} 중복")
+            seen.add(seq)
     exp = {e.get("seq"): e for e in expected}
+    actual = {g.get("seq") for g in got}
+    for seq in exp:
+        if seq not in actual:
+            diffs.append(f"seq {seq}: 실제 결과 누락")
     for g in got:
         e = exp.get(g.get("seq"))
         if e is None:
