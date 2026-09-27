@@ -1071,5 +1071,8 @@
   "입구를 막는 건물: {before}개 → {after}개 (앞줄 전체와 중앙 통로 보호)": "Edifici che bloccano l’ingresso: {before} → {after} (fila anteriore e passaggio centrale protetti)",
   "발사 가능 각도 계산: {before}/{total} → {after}/{total} (이동 후 게임 판정 확인)": "Angoli di lancio possibili calcolati: {before}/{total} → {after}/{total} (verifica nel gioco dopo lo spostamento)",
   "발사 가능한 추천 각도를 찾지 못했습니다. 입구 배치를 확인해 주세요.": "Nessun angolo di lancio consigliato disponibile. Controlla la disposizione dell’ingresso.",
-  "게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다.": "Verdetto diretto del gioco non disponibile — previsione calcolata dalle regole del gioco."
+  "게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다.": "Verdetto diretto del gioco non disponibile — previsione calcolata dalle regole del gioco.",
+  "생산 전용 강화 +{bonus:g}% — 일반 생산 배정 후에도 발사에 참가": "Bonus produzione +{bonus:g}% — partecipa ai lanci di raccolta anche dopo l’assegnazione",
+  "빈 생산 건물 가동 — 일반 생산 배정 후에도 발사에 참가": "Attiva il produttore vuoto — partecipa ancora ai lanci di raccolta",
+  "생산 전용 강화 {before:g}% → {after:g}% — 발사 참가 인원 유지": "Bonus produzione {before:g}% → {after:g}% — stesso numero di partecipanti ai lanci"
 }

@@ -77,17 +77,17 @@ class _Names:
 
 
 class WorkerAdviceTest(unittest.TestCase):
-    """건물 일꾼은 채집 때 발사되지 않는다 (실제 궤적: 13명 중 동시에 10~11명) → 발사 강화가 적은 캐릭터를 건물에."""
+    """일반 생산 배정자는 계속 발사된다. 생산 전용 강화와 빈자리만 비교한다."""
 
-    def test_empty_mine_gets_weakest_launcher(self):
+    def test_empty_producers_can_use_strong_launchers_without_losing_them(self):
         from src.engine.harvest import advise_workers
         chars = [{"type": "kStrong", "state": "kIdle", "harvest": {"kPierceStone": 1, "kFasterStone": 1}},
                  {"type": "kWeak", "state": "kIdle"},
                  {"type": "kMid", "state": "kIdle", "harvest": {"kFasterWheat": 1}}]
         out = advise_workers(None, chars, ["kIdleFarm", "kIdleStoneMine"], _Names())
         self.assertEqual(sorted((a.char_id, a.action) for a in out),
-                         [("char:mid", "assign"), ("char:weak", "assign")])
-        self.assertNotIn("char:strong", [a.char_id for a in out])
+                         [("char:strong", "assign"), ("char:weak", "assign")])
+        self.assertTrue(all('발사에 참가' in a.reason for a in out))
 
     def test_gold_mines_are_not_filled_and_workers_come_out(self):
         """금광은 안 씀 (사용자 결정: 무한 모드로 골드 충분) — 빈 금광은 채우지 않고, 금광 일꾼은 빼라고 한다."""
@@ -97,14 +97,26 @@ class WorkerAdviceTest(unittest.TestCase):
         out = advise_workers(None, chars, ["kGoldMine", "kGoldMine"], _Names())
         self.assertEqual([(a.building, a.char_id, a.action) for a in out], [("kGoldMine", "char:miner", "remove")])
 
-    def test_strong_harvester_in_building_is_swapped_out(self):
+    def test_strong_harvester_stays_when_production_bonus_is_equal(self):
         from src.engine.harvest import advise_workers
         chars = [{"type": "kStrong", "state": "kWorking", "work": "kIdleStoneMine",
                   "harvest": {"kPierceStone": 1, "kFasterStone": 1}},
                  {"type": "kWeak", "state": "kIdle"}]
         out = advise_workers(None, chars, ["kIdleStoneMine"], _Names())
-        self.assertEqual([(a.building, a.char_id, a.action, a.replace) for a in out],
-                         [("kIdleStoneMine", "char:weak", "swap", "char:strong")])
+        self.assertEqual(out,[])
+
+    def test_larger_actual_production_bonus_wins_even_if_both_have_specialty(self):
+        from src.engine.harvest import advise_workers
+        chars=[{'type':'kA','state':'kWorking','work':'kIdleFarm','harvest':{'kFarmSpeed':1},'harvest_bonus':{'kFarmSpeed':20}},
+               {'type':'kB','state':'kIdle','harvest':{'kFarmSpeed':2},'harvest_bonus':{'kFarmSpeed':40}},
+               {'type':'kC','state':'kInBattle','harvest':{'kFarmSpeed':9}}]
+        out=advise_workers(None,chars,['kIdleFarm'],_Names())
+        self.assertEqual([(a.char_id,a.replace) for a in out],[('char:b','char:a')])
+
+    def test_unavailable_characters_are_not_assigned(self):
+        from src.engine.harvest import advise_workers
+        chars=[{'type':'kInfluencer','state':'kIdle'},{'type':'kA','state':'kRecovering'},{'type':'kB','state':'kInBattle'}]
+        self.assertEqual(advise_workers(None,chars,['kIdleFarm'],_Names()),[])
 
     def test_building_upgrade_wins_the_slot(self):
         from src.engine.harvest import advise_workers

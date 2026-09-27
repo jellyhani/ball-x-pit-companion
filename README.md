@@ -27,6 +27,8 @@ These 16 guides cover installation, everyday use, limitations, and bug reports. 
 | Base planning | Move sequences that check entrance space, existing production, construction access, and resource access |
 | Building and worker advice | Suggestions based on available buildings, costs, resources, and the chosen guide policy |
 
+Workers assigned to farms, lumberyards, or quarries still participate in harvest launches. Assignment advice compares production-specific bonuses and vacant jobs; it does not remove strong harvesters from those jobs merely because they have good launch upgrades.
+
 Community tiers are opinions. Game values, community advice, and model estimates are different inputs. See the [detailed technical notes and sources (Korean)](docs/reference/README.ko.md#자료-출처).
 
 ## Install

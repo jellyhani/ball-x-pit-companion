@@ -148,6 +148,13 @@ PyInstaller onedir 빌드(Qt 라이브러리는 LGPL 조건대로 별도 파일)
 
 게임 규칙·공략의 선택 기준은 아래 자료를 참고합니다. 직접 읽은 게임 값, 공략의 의견, 검증 중인 모형 가중치를 구분합니다.
 
+- **일꾼·조합 회관 확인**: 일반 농장·야적장·채석장 배정자는 발사에도 참가합니다(`SetUpActiveWorkers`, 0x45D090).
+  생산 배정은 `GetTaskTgtSecs`(0x4640A0)의 전용 강화 보너스로 비교하고, 발사 능력이 좋다는 이유만으로 교체하지 않습니다.
+  `GetHarvestRerollCost`(0x47D0E0)는 (현재 강화 레벨 합 + 이전 새로고침 횟수) × 100골드를 요구합니다.
+  `OnRerollClicked`(0x4B3980)는 기존 강화를 지우고 같은 강화 수를 다시 고르게 합니다.
+  `SetRerollingActive`(0x4B5370)는 추가 가능한 능력을 섞어 후보 버튼에 표시하므로 원하는 능력이 확정으로 나오는 것은 아닙니다.
+  조합 회관 선택지를 읽어 실시간 HUD로 추천하는 기능은 아직 포함하지 않습니다.
+
 - **채집·백과사전 원본 확인**: Steam 빌드 23150541, 게임 1.301의 `GameAssembly.dll`과
   BepInEx가 생성한 메서드 주소 표를 읽었습니다. 채집량은 `BuildingInst.Harvest`(RVA 0x464990),
   시간 보너스는 `BaseGridMgr.WorkerHarvestResource`(0x4552C0), 20회 제한은 `BaseMgr.IncreaseHarvestClock`(0x457E30),

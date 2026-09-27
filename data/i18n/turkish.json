@@ -1071,5 +1071,8 @@
   "입구를 막는 건물: {before}개 → {after}개 (앞줄 전체와 중앙 통로 보호)": "Girişi engelleyen binalar: {before} → {after} (ön sıra ve orta geçit korunur)",
   "발사 가능 각도 계산: {before}/{total} → {after}/{total} (이동 후 게임 판정 확인)": "Hesaplanan geçerli fırlatma açıları: {before}/{total} → {after}/{total} (taşıdıktan sonra oyunda doğrulayın)",
   "발사 가능한 추천 각도를 찾지 못했습니다. 입구 배치를 확인해 주세요.": "Fırlatmaya uygun önerilen açı bulunamadı. Giriş düzenini kontrol edin.",
-  "게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다.": "Oyunun doğrudan kararı alınamadı — oyun kurallarına göre hesaplanan tahmindir."
+  "게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다.": "Oyunun doğrudan kararı alınamadı — oyun kurallarına göre hesaplanan tahmindir.",
+  "생산 전용 강화 +{bonus:g}% — 일반 생산 배정 후에도 발사에 참가": "Üretim bonusu +{bonus:g}% — atandıktan sonra da hasat fırlatmalarına katılır",
+  "빈 생산 건물 가동 — 일반 생산 배정 후에도 발사에 참가": "Boş üreticiyi çalıştır — hasat fırlatmalarına katılmaya devam eder",
+  "생산 전용 강화 {before:g}% → {after:g}% — 발사 참가 인원 유지": "Üretim bonusu {before:g}% → {after:g}% — fırlatma ekibinin sayısı değişmez"
 }

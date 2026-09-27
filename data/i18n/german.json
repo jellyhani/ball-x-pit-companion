@@ -1071,5 +1071,8 @@
   "입구를 막는 건물: {before}개 → {after}개 (앞줄 전체와 중앙 통로 보호)": "Gebäude im Eingang: {before} → {after} (vordere Reihe und Mittelgang geschützt)",
   "발사 가능 각도 계산: {before}/{total} → {after}/{total} (이동 후 게임 판정 확인)": "Berechnete mögliche Abschusswinkel: {before}/{total} → {after}/{total} (nach Verschieben im Spiel prüfen)",
   "발사 가능한 추천 각도를 찾지 못했습니다. 입구 배치를 확인해 주세요.": "Kein möglicher empfohlener Abschusswinkel gefunden. Eingangsaufstellung prüfen.",
-  "게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다.": "Direkte Spielentscheidung fehlt — Vorhersage anhand der Spielregeln."
+  "게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다.": "Direkte Spielentscheidung fehlt — Vorhersage anhand der Spielregeln.",
+  "생산 전용 강화 +{bonus:g}% — 일반 생산 배정 후에도 발사에 참가": "Produktionsbonus +{bonus:g}% — nimmt auch nach Zuweisung an Ernteabschüssen teil",
+  "빈 생산 건물 가동 — 일반 생산 배정 후에도 발사에 참가": "Leeres Produktionsgebäude aktivieren — nimmt weiter an Ernteabschüssen teil",
+  "생산 전용 강화 {before:g}% → {after:g}% — 발사 참가 인원 유지": "Produktionsbonus {before:g}% → {after:g}% — Abschussteam bleibt gleich groß"
 }
