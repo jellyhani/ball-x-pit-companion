@@ -259,6 +259,23 @@ class RunState:
     def effect_ids(self) -> Set[str]:
         return {i for o in self.owned.values() for i in o.effect_ids}
 
+    def solo_balls(self) -> Dict[str, Owned]:
+        """게임 IsAtMaxSolo는 융합된 볼을 제외한다. 복사본 중 단독 볼만 재료 후보로 돌려준다."""
+        out = {}
+        for iid, owned in self.owned.items():
+            if owned.kind != "ball":
+                continue
+            if owned.instances:
+                slots = tuple(s for s in owned.instances if not s.combined)
+                if not slots:
+                    continue
+                best = max(slots, key=lambda s: s.level if s.level is not None else -1)
+                out[iid] = Owned(iid, "ball", best.level, owned.source, copies=len(slots),
+                                  at_max=best.at_max, instances=slots)
+            elif not owned.combined:
+                out[iid] = owned
+        return out
+
     def damage_share(self, item_id: str) -> Optional[float]:
         """이번 런 볼 피해 중 이 볼의 비율. 피해 기록이 충분하지 않으면 None."""
         balls = {i: v for i, v in self.damage.items() if i.startswith("ball:")}

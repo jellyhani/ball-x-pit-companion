@@ -437,7 +437,8 @@ class RecommendationHud(QWidget):
                         subtitle=tr("{action_text} · {position} 카드", action_text=best.action_text, position=tr(best.card.position)),
                         status=status, status_tone="ok" if rec.confidence == tr("확실") else tone, icons=(best.card.item_id,))
             v.lines = [(best.effect, "primary")] if best.effect else []
-            v.lines += [(r.text, "secondary") for r in best.top_reasons(1 if best.effect else 2)]   # 결론 + 이유 한두 줄
+            v.lines += [(r.text, "secondary") for r in best.top_reasons(1 if best.effect else 2,
+                         include_growth=rec.growth_plan is not None)]   # 결론 + 이유 한두 줄
             if best.warnings:
                 v.lines.append((best.warnings[0].text, "warn"))
         elif rec.ranked:
@@ -448,7 +449,7 @@ class RecommendationHud(QWidget):
                         status=status, status_tone=tone, icons=(fb.card.item_id,))
             v.lines = [(fb.effect, "primary")] if fb.effect else []
             # 왜 그나마 1위인지 (덱 계열·캐릭터 궁합·평가·내 기록 중 가장 큰 근거)와 걸리는 점
-            v.lines += [(r.text, "secondary") for r in fb.top_reasons(1)]
+            v.lines += [(r.text, "secondary") for r in fb.top_reasons(1, include_growth=rec.growth_plan is not None)]
             if fb.warnings:
                 v.lines.append((fb.warnings[0].text, "warn"))
             v.lines.append((tr("어느 카드도 현재 덱과 뚜렷하게 이어지지 않음 — 새로고침도 고려"), "tertiary"))
@@ -456,6 +457,15 @@ class RecommendationHud(QWidget):
             v = HudView(title=rec.headline, subtitle=rec.limitations[0] if rec.limitations else "",
                         status=STATUS_TEXT.get(rec.status, ""), status_tone=tone)
         top = best if best is not None else (rec.fallback or (rec.ranked[0] if rec.ranked else None))
+        if rec.growth_plan is not None:
+            gp = rec.growth_plan
+            v.lines = [(gp.summary, "primary")]
+            if gp.benefit:
+                v.lines.append((gp.benefit, "secondary"))
+            if best and best.warnings:
+                v.lines.append((best.warnings[0].text, "warn"))
+            elif gp.effect:
+                v.lines.append((gp.effect, "secondary"))
         if rec.discovery_text:
             v.lines.insert(0, (rec.discovery_text, "primary"))
             if len(v.lines) > 3:
@@ -500,7 +510,7 @@ class RecommendationHud(QWidget):
         act = tr("레벨 {level_after}", level_after=e.level_after) if e.action.startswith("upgrade") and e.level_after else e.action_text
         # 게임 카드에 이미 순위 배지가 있으니 이름을 앞에, 행동·이유는 아랫줄 한마디로
         text = tr("{n}위  {v0}", n=n, v0=self.data.name(e.card.item_id)) if n else self.data.name(e.card.item_id)
-        top = e.top_reasons(1)
+        top = e.top_reasons(1, include_growth=rec.growth_plan is not None)
         good = (top[0].short or top[0].text) if top else ""
         bad = e.warnings[0].text if e.warnings else ""
         if verdict in ("banish", "skip"):
@@ -509,6 +519,8 @@ class RecommendationHud(QWidget):
             why = " · ".join(x for x in (good, bad) if x)
         if e.effect:
             why = f"{e.effect} · {why}" if why else e.effect
+        if e.growth_plan is not None and rec.growth_plan is not None:
+            why = e.growth_plan.summary
         why = f"{act} · {why}" if why else act
         return HudRow((e.card.item_id,), text, why, verdict=verdict, badge=card_badge(rec, e))
 

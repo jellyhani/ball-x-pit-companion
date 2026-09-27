@@ -222,6 +222,12 @@ class FusionAdvisor:
         title = f"{label(left)} + {label(right)}"
         pick = FusionPick("combo", title, tr("두 볼의 효과를 한 볼에"), None, (c.item1, c.item2), score=10)
         pick.display_parts = tuple(dict.fromkeys(left + right))
+        if len(left) > 1 or len(right) > 1:
+            # 게임 1.301 PopulateUpgrades(51CCBC/51CD6D): 두 후보 모두 IsAtMaxSolo여야 한다.
+            # 닫히는 UI의 후보 캐시가 남아 있어도 이미 융합된 볼을 다시 합치라고 권하지 않는다.
+            pick.selectable = False
+            pick.warnings.append(Reason("combo_already_fused", tr("이미 융합된 볼은 다시 융합할 수 없음"), 0, tr("융합 불가")))
+            return pick
         if d.item(c.item1) is None or d.item(c.item2) is None:
             pick.selectable = False
             pick.warnings.append(Reason("combo_unknown", tr("융합 재료를 읽지 못해 추천을 보류함"), 0, tr("미확인")))

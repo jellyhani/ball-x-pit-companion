@@ -24,6 +24,7 @@ from ..tracking.run_state import RunState
 from .deck_plan import DeckPlan, build_plan
 from .passive_value import ROLE_LABEL, ball_effect, passive_effect
 from .archetype import AXIS_LABEL, AXIS_PASSIVE_ROLE, Archetype, axes_of, detect as detect_archetype
+from .growth_plan import GrowthPlan, plans_for_choices
 from ..tracking.meta_state import MetaState
 from ..i18n import tr
 
@@ -51,6 +52,7 @@ class ActionEval:
     warnings: List[Reason] = field(default_factory=list)
     effect: str = ""                  # 이 선택의 실제 수치 변화 (게임 레벨별 수치, 예: '받는 피해 감소 10% → 20%')
     target_step: bool = False          # 사용자 고정 목표의 다음 재료 획득/강화. 게임 성능 점수와 구분한다.
+    growth_plan: Optional[GrowthPlan] = None
 
     @property
     def evaluated(self) -> bool:
@@ -75,7 +77,7 @@ class ActionEval:
     @property
     def linked(self) -> bool:
         """진화 레시피로 현재 덱과 이어지는지."""
-        return self.target_step or any(r.rule_id.startswith(("evo_", "passive_recipe")) for r in self.reasons)
+        return self.target_step or self.growth_plan is not None or any(r.rule_id.startswith(("evo_", "passive_recipe")) for r in self.reasons)
 
     @property
     def plan_blocked(self) -> bool:
@@ -83,8 +85,9 @@ class ActionEval:
         캐릭터 궁합 같은 가산점이 있어도 '확실 추천' 으로 올리지 않는다 — 새로고침이 나은 상황."""
         return any(w.rule_id in ("last_slot", "endless_unlinked") for w in self.warnings)
 
-    def top_reasons(self, n: int = 2) -> List[Reason]:
-        return sorted((r for r in self.reasons if r.rule_id not in BASE_RULES),
+    def top_reasons(self, n: int = 2, *, include_growth: bool = True) -> List[Reason]:
+        return sorted((r for r in self.reasons if r.rule_id not in BASE_RULES
+                       and (include_growth or r.rule_id != "growth_plan")),
                       key=lambda r: -r.weight)[:n]
 
 
@@ -110,6 +113,7 @@ class Recommendation:
     ranked: List[ActionEval] = field(default_factory=list)   # 읽은 카드 전체의 순위 (보류여도 순서는 있다)
     confidence: str = ""              # 확실 | 추천 | 근소 | 근거 약함 — 1위와 2위의 차이·근거로 정한다
     discovery_text: str = ""          # 백과사전 목표. 전투 성능 이유와 분리해서 표시한다.
+    growth_plan: Optional[GrowthPlan] = None  # 선택한 카드의 장기 성장 계획. 해금 모드가 우선하면 비운다.
 
 
 def card_rank(rec: "Recommendation", e: ActionEval) -> Optional[int]:
@@ -130,6 +134,8 @@ def card_badge(rec: "Recommendation", e: ActionEval) -> str:
     if v == "best":
         return tr("1위 {v0}", v0=rec.confidence or tr("추천"))
     if v == "alt":
+        if rec.growth_plan is not None and e.growth_plan is not None:
+            return tr("{n}위 · 성장 대안", n=n)
         return tr("{n}위 비슷함", n=n)
     if v in ("neutral", "pick"):
         return tr("1위 무난") if n == 1 else tr("{n}위", n=n)
@@ -151,6 +157,8 @@ def card_verdict(rec: "Recommendation", e: ActionEval) -> str:
         # 판단 보류: 확신은 못 하지만 그나마 나은 하나('무난')는 짚어 준다 — 전부 회색이면 뭘 골라야 할지 알 수 없다
         return "pick" if rec.fallback is not None and e is rec.fallback else "neutral"
     if e in rec.close_to:
+        return "alt"
+    if rec.growth_plan is not None and e.growth_plan is not None:
         return "alt"
     return "skip"
 
@@ -218,12 +226,21 @@ class Recommender:
                                   None, evals, reroll_status="unknown", reroll_text=tr("새로고침 판단 보류"),
                                   situation=situation, plan_text=plan.text, limitations=limitations)
 
+        growth = plans_for_choices(d, self.meta, run, session, plan, evals)
+        for e in known:
+            if e.card.index not in growth:
+                continue
+            e.growth_plan = growth[e.card.index]
+            e.warnings = [w for w in e.warnings if w.rule_id not in ("endless_unlinked", "last_slot")]
+            e.reasons.append(Reason("growth_plan", e.growth_plan.summary, e.growth_plan.score, tr("다음 성장 준비")))
+            e.score = sum(r.weight for r in e.reasons) + sum(w.weight for w in e.warnings)
+
         # 고정 목표는 임의 점수를 더하지 않고 명시적인 선택 방침으로 적용한다.
         # 기존 생존 규칙의 위험 기준(체력 35% 미만)에서는 회복/방어 선택을 먼저 둔다.
         target_active = any(e.target_step for e in known)
         low_hp = progress is not None and progress.health_ratio is not None and progress.health_ratio < 0.35
         def priority(e):
-            if not target_active:
+            if not target_active and not growth:
                 return 0
             survival = low_hp and any(r.rule_id in ("heal_low_hp", "passive_defense_low_hp") for r in e.reasons)
             if survival and not any(w.rule_id in ("slot_full", "char_reduces") for w in e.warnings):
@@ -233,6 +250,8 @@ class Recommender:
         best = ranked[0]
         if target_active and priority(best) == 2 and not best.target_step:
             best.reasons.append(Reason("target_survival", tr("체력이 낮아 고정 목표보다 생존을 우선"), 0, tr("생존")))
+        elif growth and priority(best) == 2:
+            best.reasons.append(Reason("growth_survival", tr("체력이 낮아 성장 준비보다 생존을 우선"), 0, tr("생존")))
         close = [e for e in ranked[1:] if priority(e) == priority(best) and best.score - e.score < CLOSE_MARGIN]
         if not any(e.strong and not e.plan_blocked for e in known):
             status, headline = "hold", tr("뚜렷한 차이 없음")
@@ -255,6 +274,8 @@ class Recommender:
             confidence = tr("확실") if margin >= 15 or decisive else tr("추천")
             if target_active:
                 confidence = tr("추천")   # 목표를 따른다는 사실은 성능 차이의 확신도가 아니다.
+            elif best.growth_plan is not None:
+                confidence = tr("성장 추천")
         odds = self.reroll_odds(session, plan, run)
         rs, rt = self._reroll(session, known, unknown, status, odds)
         banish_card, banish_text = self._banish(session, known, best if status != "hold" else None, run, plan)
@@ -262,9 +283,11 @@ class Recommender:
             session_id=session.session_id, rules_version=version, status=status, headline=headline,
             best=best if status != "hold" else None, evals=evals, close_to=close,
             reroll_status=rs, reroll_text=rt, banish_text=banish_text, banish_card=banish_card,
-            situation=situation, plan_text=self._plan_line(plan, best if status != "hold" else None),
+            situation=situation, plan_text=(tr("장기 성장 비교 · 실제 DPS 예측값은 아님") if best.growth_plan is not None
+                                           else self._plan_line(plan, best if status != "hold" else None)),
             reroll_odds=odds, fallback=best if status == "hold" and best.score > 0 else None,
             limitations=limitations, ranked=ranked, confidence=confidence, plan_locked=plan.locked,
+            growth_plan=best.growth_plan if status != "hold" else None,
         )
 
     # ---- 카드 하나 평가 ----

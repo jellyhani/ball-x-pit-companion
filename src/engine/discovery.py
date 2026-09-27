@@ -71,17 +71,17 @@ def apply_discovery(rec, session, run, data, meta):
     if rec.status == "auto":
         rec.discovery_text = tr("백과사전 해금 모드: 자동 선택 캐릭터입니다")
         return rec
-    owned = {i: o for i, o in run.owned.items() if o.kind == "ball"}
+    owned = run.solo_balls()  # 이미 융합된 볼을 다시 단독 재료로 추천하지 않는다.
     progress = session.progress
     if progress is None or progress.max_balls is None or run.unreadable_slots:
         rec.discovery_text = tr("백과사전 해금 모드: 보유 볼과 빈 슬롯을 확인하는 중")
         return rec
     maximum = data.max_level("ball")
-    free = max(0, progress.max_balls - sum(o.copies for o in owned.values()))
+    free = max(0, progress.max_balls - sum(o.copies for o in run.owned.values() if o.kind == "ball"))
     blocked = set(progress.banished)
     goals = []
     for target, row in records.items():
-        if row.get("obtained") != 0 or row.get("in_game") is not True or target in owned:
+        if row.get("obtained") != 0 or row.get("in_game") is not True or target in run.effect_ids:
             continue
         for leaves, steps in _routes(target, data, records, owned, blocked):
             # 현재 가진 볼과 이어지는 경로만 우선한다.
@@ -141,6 +141,7 @@ def apply_discovery(rec, session, run, data, meta):
     rec.status, rec.confidence = "recommend", tr("해금 우선")
     rec.headline = tr("{position} 선택 추천", position=tr(best.card.position))
     rec.discovery_text = choices[best.card.index][1]
+    rec.growth_plan = None
     rec.plan_text, rec.plan_locked = "", False  # 다른 고정 목표를 같은 HUD에서 동시에 우선하라고 표시하지 않는다.
     rec.reroll_status, rec.reroll_text = "keep", ""
     rec.banish_card, rec.banish_text = None, ""
