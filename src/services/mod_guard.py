@@ -1,6 +1,6 @@
 """게임 연동 모드 감시: 설치 상태·버전 확인, 게임이 꺼져 있을 때 자동 설치, 업데이트 뒤 연동 끊김 경고.
 
-10초마다 백그라운드 스레드에서 확인한다 (파일 존재·버전 리소스·tasklist 만 읽는다).
+평소 10초, 설치 대기 중에는 1초마다 확인한다. 빠른 재시작의 종료 구간을 놓치지 않게 한다.
 """
 from __future__ import annotations
 
@@ -22,6 +22,7 @@ NO_BRIDGE_WARN_S = 60.0   # 게임이 켜진 뒤 이만큼 연동이 없으면 �
 class ModGuard(QObject):
     status = Signal(str, str)     # (설명, 상태: ok | wait | warn | error)
     notice = Signal(str)          # 트레이 알림
+    poll_interval = Signal(int)   # 작업 스레드에서 Qt 타이머를 직접 바꾸지 않는다.
 
     def __init__(self, settings, data_build: Optional[str], bridge_connected: Callable[[], bool]):
         super().__init__()
@@ -36,6 +37,7 @@ class ModGuard(QObject):
         self.timer = QTimer(self)
         self.timer.setInterval(10_000)
         self.timer.timeout.connect(self.check_soon)
+        self.poll_interval.connect(self.timer.setInterval)
 
     def start(self):
         self.timer.start()
@@ -71,6 +73,8 @@ class ModGuard(QObject):
     def _check(self, force_install: bool, connected: bool):
         st = mi.check()
         self.last = st
+        pending = st.needs_install and st.vendor_ok and (self.settings.auto_install_mod or force_install)
+        self.poll_interval.emit(1_000 if pending else 10_000)
         now = time.monotonic()
         if st.running:
             self._game_since = self._game_since or now
@@ -100,6 +104,7 @@ class ModGuard(QObject):
             try:
                 new = mi.install(st, say=lambda m: log.info("설치: %s", m))
                 self.last = new
+                self.poll_interval.emit(10_000)
                 self.notice.emit(tr("게임 연동 {PLUGIN_VERSION} 설치 완료 — 다음 게임 실행부터 적용", PLUGIN_VERSION=mi.PLUGIN_VERSION))
                 self._emit(new.summary + suffix, "ok")
             except mi.InstallError as e:

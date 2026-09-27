@@ -28,6 +28,30 @@ def allowed_angles(geo, angles):
     return list(angles) if not isinstance(world,hs.World) else [a for a in angles if launchable(world,a)]
 
 
+def modeled_current_launch(base):
+    """구형 브리지용 대체 판정. 최신 조준 위치·방향·충돌 자료가 충분할 때만 반환한다."""
+    if base.get('state') != 'kAimWorkers':
+        return None
+    geo=base.get('geo') or {};player=base.get('player') or []
+    point=geo.get('launcher')
+    try:
+        if (not isinstance(point,(list,tuple)) or len(point)!=2 or len(player)<4
+                or not geo.get('colliders') or 'player_y' not in geo):
+            return None
+        values=[*point,player[2],player[3],geo['player_y'],geo['left'],geo['right']]
+        if not all(type(v) in (int,float) and math.isfinite(v) for v in values):
+            return None
+        if (not geo['left'] <= point[0] <= geo['right'] or abs(point[1]-geo['player_y'])>.002
+                or player[3]<=0 or math.hypot(player[2],player[3])<1e-6):
+            return None
+        world=hs.world_from_geo(geo,0.)
+        if world is None:
+            return None
+        return launchable(world,math.degrees(math.atan2(player[3],player[2])))
+    except (TypeError,ValueError,KeyError):
+        return None
+
+
 def entrance_blockers(base):
     grid=grid_from_geo(base.get('geo') or {})
     if grid is None:

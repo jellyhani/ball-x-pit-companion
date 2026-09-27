@@ -40,6 +40,28 @@ class LaunchGateTest(unittest.TestCase):
         base['launch_aim']=[1,1]
         self.assertIsNone(AppController._launch_block_message(base))
 
+    def test_old_bridge_uses_model_only_with_complete_current_aim_data(self):
+        from tests.test_launch_access import front_base
+        from src.engine.launch_access import repair_entrance
+        from src.engine import sim_jobs
+        b=front_base();b.update(state='kAimWorkers',player=[0,0,0,1]);b['geo']['player_y']=-.844
+        self.assertIn('발사 불가',AppController._launch_block_message(b))
+        _,opened=repair_entrance(b)
+        self.assertIsNone(AppController._launch_block_message(opened))
+        ctx,_=aiming()
+        lines=AppController._harvest_sim(ctx,opened,1,[])
+        self.assertEqual(ctx.sim.submit.call_count,2)
+        self.assertTrue(any('게임 규칙' in text for text,_ in lines))
+        for call in ctx.sim.submit.call_args_list:
+            channel,key,fn,*args=call.args
+            ctx._sim_res[channel]=(key,fn(*args))
+        AppController._harvest_sim(ctx,opened,1,[])
+        self.assertTrue(ctx.base_overlay.set_paths.call_args.args[0])
+        opened['launch_allowed']=False
+        self.assertIn('발사 불가',AppController._launch_block_message(opened))
+        del opened['launch_allowed'];opened['geo']['launcher']=[0,-3.5]
+        self.assertIn('미확인',AppController._launch_block_message(opened))
+
     def test_blocked_render_clears_fallback_recommendation_line_and_marks(self):
         ctx,base=aiming();base['launch_allowed']=False
         ctx.window=NS(rect=(0,0,1280,720),size=(1280,720))

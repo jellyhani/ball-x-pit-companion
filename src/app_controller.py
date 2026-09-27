@@ -1018,7 +1018,11 @@ class AppController(QObject):
             game = geo.phys_to_logical_rect(self.window.rect)
             scale = game.width() / max(1, self.window.size[0])
             # adv/조준점을 넘기지 않아 기존 대체 추천선도 남지 않게 한다.
-            self.base_overlay.show_advice(game, scale, None, None, [(blocked, (255, 159, 10, 255))])
+            messages = [(blocked, (255, 159, 10, 255))]
+            from .engine.launch_access import modeled_current_launch
+            if "launch_allowed" not in base and modeled_current_launch(base) is not None:
+                messages.append((tr("게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다."), (190, 190, 200, 255)))
+            self.base_overlay.show_advice(game, scale, None, None, messages)
             if not self.base_overlay.isVisible():
                 self.base_overlay.show()
             return
@@ -1227,6 +1231,9 @@ class AppController(QObject):
     @staticmethod
     def _launch_block_message(base: dict):
         allowed = base.get("launch_allowed")
+        if "launch_allowed" not in base:
+            from .engine.launch_access import modeled_current_launch
+            allowed = modeled_current_launch(base)
         if allowed is False:
             return tr("발사 불가 — 입구를 비우거나 조준 위치를 바꿔 주세요.")
         if allowed is not True:
@@ -1291,6 +1298,8 @@ class AppController(QObject):
             self.sim.submit("sweep", key, sim_jobs.job_sweep, geo_, blds, team, dur, need, targets, lo, hi)
         lines = []
         self._stuck_text = ""
+        if "launch_allowed" not in base:
+            lines.append((tr("게임 직접 판정 미수신 — 게임 규칙으로 계산한 예상입니다."), (255, 190, 110, 255)))
         now_path: list = []
         pl = base.get("player") or []
         if len(pl) >= 4:

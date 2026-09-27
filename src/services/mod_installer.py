@@ -305,7 +305,17 @@ def install(st: Optional[ModStatus] = None, say: Callable[[str], None] = log.inf
     os.makedirs(plugins, exist_ok=True)
     dst = os.path.join(plugins, "BallxPitBridge.dll")
     if file_version(dst) != PLUGIN_VERSION:
-        shutil.copy2(PLUGIN_DLL, dst)
+        # 임시 파일 준비 중 게임이 재실행되면 기존 DLL을 그대로 둔다. 최종 교체는 원자적으로 한다.
+        import tempfile
+        fd, pending = tempfile.mkstemp(prefix="BallxPitBridge-", suffix=".pending", dir=plugins)
+        os.close(fd)
+        try:
+            shutil.copy2(PLUGIN_DLL, pending)
+            require_game_closed()
+            os.replace(pending, dst)
+        finally:
+            if os.path.exists(pending):
+                os.unlink(pending)
         added.append(os.path.join("BepInEx", "plugins", "BallxPitBridge.dll"))
         say(tr("연동 플러그인 {PLUGIN_VERSION} 설치", PLUGIN_VERSION=PLUGIN_VERSION))
     _record(added)
