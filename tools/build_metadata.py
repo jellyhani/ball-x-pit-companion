@@ -10,39 +10,50 @@ sys.path.insert(0, str(ROOT))
 from src.version import APP_VERSION, WINDOWS_VERSION
 
 
+def source_identity(root: Path = ROOT) -> dict:
+    """Git 없는 소스 ZIP도 빌드하되, 확인하지 못한 revision을 깨끗한 커밋처럼 표시하지 않는다."""
+    if not (root / ".git").exists():
+        return {"revision": "source-archive", "dirty": None}
+    try:
+        revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+        changed = subprocess.check_output(
+            [
+                "git",
+                "status",
+                "--porcelain",
+                "--",
+                "src",
+                "data",
+                "native",
+                "tools",
+                "main.py",
+                "BallxPitCompanion.spec",
+                "requirements.txt",
+                "requirements-setup.txt",
+                "requirements-build.txt",
+                "vendor",
+                "LICENSE",
+                "NOTICE.md",
+                "DISCLAIMER.md",
+                "PRIVACY.md",
+                "README.md",
+                "docs",
+                "build_exe.ps1",
+            ],
+            cwd=root,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return {"revision": "unavailable", "dirty": None}
+    return {"revision": revision, "dirty": bool(changed)}
+
+
 def write_metadata():
-    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    changed = subprocess.check_output(
-        [
-            "git",
-            "status",
-            "--porcelain",
-            "--",
-            "src",
-            "data",
-            "native",
-            "tools",
-            "main.py",
-            "BallxPitCompanion.spec",
-            "requirements.txt",
-            "requirements-setup.txt",
-            "requirements-build.txt",
-            "vendor",
-            "LICENSE",
-            "NOTICE.md",
-            "DISCLAIMER.md",
-            "PRIVACY.md",
-            "README.md",
-            "docs",
-            "build_exe.ps1",
-        ],
-        cwd=ROOT,
-        text=True,
-    )
+    identity = source_identity()
     folder = ROOT / "build"
     folder.mkdir(exist_ok=True)
     (folder / "build-info.json").write_text(
-        json.dumps({"version": APP_VERSION, "revision": revision, "dirty": bool(changed)}, indent=2) + "\n",
+        json.dumps({"version": APP_VERSION, **identity}, indent=2) + "\n",
         encoding="utf-8",
     )
     value = f"""VSVersionInfo(ffi=FixedFileInfo(filevers={WINDOWS_VERSION!r},prodvers={WINDOWS_VERSION!r},

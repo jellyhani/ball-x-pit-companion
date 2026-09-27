@@ -1,0 +1,29 @@
+name: Bug report / 버그 제보
+description: Something is broken or a recommendation looks wrong.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        English or Korean is fine. Please remove private information from attachments.
+        한국어로 적어도 됩니다. 세이브·추출 게임 자료·비밀번호는 올리지 마세요.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Versions and setup / 버전과 사용 환경
+      placeholder: "Companion and game version, Windows version, language, resolution"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened? / 어떤 문제가 있나요?
+      description: Describe what you expected and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 재현 방법
+      description: Include a cropped screenshot or a short, redacted log if it helps.
+    validations:
+      required: false

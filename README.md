@@ -1,20 +1,14 @@
 # BALL x PIT Companion
 
-An unofficial **Windows overlay for BALL x PIT**: level-up advice, evolution and fusion planning, encyclopedia unlock goals, harvest trajectories, and base layout suggestions.
+A Windows overlay that helps with ball choices, fusion recipes, harvest aiming, and base layouts.
+It reads the game through BepInEx. You still make the choices and move buildings yourself.
 
-The companion reads live game state through a BepInEx bridge. It does not play the game, send game input, or modify saves. Game text and icons are extracted from your own installation and are not distributed in this repository.
-
-**Early development:** recommendations and trajectories can be wrong. Layout suggestions are not proven optimal, and build ratings are not predictions of future DPS. The main tested environment is Windows 11, 1920×1080, Korean, Steam game version 1.301. Other languages and resolutions need more real-world testing.
-
-**Unofficial, provided as-is.** The game and its assets remain the property of their respective
-rights holders. This project does not promise error-free advice or protection from game/platform
-enforcement. Read the [project notice and disclaimer](DISCLAIMER.md), [privacy statement](PRIVACY.md),
-and [third-party notices](NOTICE.md). These notices do not limit rights that applicable law or
-open-source licenses do not allow us to exclude.
+**This is a beta.** Advice can be wrong, and predicted paths can differ from the game.
+It is an unofficial project, with no affiliation to the game's developer or publisher.
 
 ## Choose your language
 
-These 16 guides cover installation, everyday use, limitations, and bug reports. They are user guides, not full translations of every developer document. Translations have not all received native-speaker review.
+Installation and usage guides are available in 16 languages. Some translations still need review.
 
 | | | | |
 |---|---|---|---|
@@ -23,29 +17,15 @@ These 16 guides cover installation, everyday use, limitations, and bug reports. 
 | [Español (España)](docs/guides/spanish.md) | [Español (Latinoamérica)](docs/guides/latam.md) | [Português (Brasil)](docs/guides/brazilian.md) | [Polski](docs/guides/polish.md) |
 | [Русский](docs/guides/russian.md) | [Українська](docs/guides/ukrainian.md) | [Türkçe](docs/guides/turkish.md) | [ไทย](docs/guides/thai.md) |
 
-## What it helps with
-
-| Feature | What you get |
-|---|---|
-| Level-up and fusion advice | Ranked choices, reasons, alternatives, current recipes, and plans for later growth |
-| Encyclopedia mode | Optional priority for undiscovered balls and unrecorded fusion combinations |
-| Harvest aiming | Predicted paths and resource yields using game geometry and worker upgrades |
-| Base planning | Move sequences that check entrance space, existing production, construction access, and resource access |
-| Building and worker advice | Suggestions based on available buildings, costs, resources, and the chosen guide policy |
-
-Workers assigned to farms, lumberyards, or quarries still participate in harvest launches. The current automatic producers use building-level production intervals; legacy farm/lumberyard/quarry speed upgrades do not improve those intervals. Assignment advice fills vacant jobs and uses a character bonus only for the old building types to which the game actually applies it.
-
-Community tiers are opinions. Game values, community advice, and model estimates are different inputs. See the [detailed technical notes and sources (Korean)](docs/reference/README.ko.md#자료-출처).
-
-The [game-data contract audit (Korean)](docs/reference/GAME_DATA_CONTRACT.ko.md) maps game getters to calculations and lists effects that still need live validation.
-
 ## Install
 
 You need **Windows 10/11 and your own Steam copy of BALL x PIT**. Close the game normally when the bridge needs installation or an update.
 
 ### Packaged version
 
-Check [Releases](https://github.com/jellyhani/ball-x-pit-companion/releases) for a published `BallxPitCompanion-*.zip`. **If no release is listed, use the source instructions below.** A local build is not a published download.
+Download the application ZIP from [Releases](https://github.com/jellyhani/ball-x-pit-companion/releases).
+The separate `dependency-sources.zip` contains library source code and is not needed to run the app.
+If there is no published release yet, use the source instructions below.
 
 Extract the entire ZIP and run `BallxPitCompanion.exe`. Keep its `_internal` folder beside it. The first run extracts game data locally. The bridge installer waits for the game to close. Builds are unsigned; Windows may show a SmartScreen warning.
 
@@ -58,7 +38,8 @@ winget install --id=astral-sh.uv -e
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
-Then run `run_overlay.bat`. Setup creates a Python environment, installs dependencies, extracts your game data, and prepares the bridge. It does not include a copy of the game.
+Then run `run_overlay.bat`. Setup installs dependencies, extracts labels and icons from your game,
+and installs the bridge. No game files are included in the download.
 
 ## First use
 
@@ -66,26 +47,36 @@ Then run `run_overlay.bat`. Setup creates a Python environment, installs depende
 2. Open a level-up or fusion selection screen to see advice. You make the selection yourself.
 3. Turn **encyclopedia mode** on in the display settings when discovering combinations is your priority; it is off by default.
 4. In the base, compare the current and suggested layouts and follow the listed move order manually.
-5. Treat harvest paths and yields as predictions. Resource access across several tested angles does not mean one shot collects every tile.
+5. In harvest mode, hold Shift to extend the predicted path. Check the result in game before relying on it.
 
-If the overlay is missing, check its visibility, game window state, and bridge status. If the bridge needs updating, let the game exit normally and then reopen it. Please report persistent failures instead of assuming a recommendation is correct.
+If the overlay is missing, check its visibility and bridge status in settings. A bridge update
+requires a normal game restart after installation.
 
-## Privacy and limits
+## What to expect
 
-- Logs and extracted data stay under `%LOCALAPPDATA%\BallxPitCompanion`. The companion does not upload gameplay records.
-- Setup downloads dependencies and BepInEx. The read-only bridge uses a local named pipe and no Harmony patches.
-- Hotkeys and recent left-click coordinates are observed to identify choices; the app does not record typed text.
-- Game updates may break the bridge. Physics approximations, heuristic scores, and unverified effects can affect advice.
-- Bridge 1.18.0 supplies live static walls, collider normals, pickup/raycast roles, roads, worker order and building effects. Older inputs reconstruct unopened chunk walls. Unsupported geometry holds the calculation instead of assuming an empty space.
-- The harvest model includes resource depletion, regeneration and automatic production, but frame ordering, future completion changes and random effects remain approximate or explicitly unmodeled. Automatic producer income is separate from worker harvest totals. Cached angle recommendations can use a task timer up to ten seconds old; they are not exact forecasts.
-- Current building range membership is checked against the game's own target-by-target verdicts. A disagreement holds layout suggestions and writes a local diagnostic; passing unit tests alone does not prove the bridge matches a live game scene.
-- The game's direct launch verdict takes priority with bridge 1.17.0 or newer. With an older bridge, complete current aiming geometry can use the game-rule model, clearly labeled as a prediction. Blocked launches and incomplete inputs still hide the paths.
-- Layout planning reserves the entrance's front row and central passage, moves blockers independently of the score-improvement threshold, and checks candidate launch angles against the game's first-contact rule. Verify the proposed placement in game after moving.
-- Unofficial fan project; not affiliated with the developer or publisher. Compatibility with every game policy or leaderboard rule has not been established.
+- Ball advice includes reasons, alternatives, and evolution/fusion plans. Community rankings are opinions, not game rules.
+- Base suggestions try to keep the entrance and resources accessible while limiting how much you need to move. They are not a proven best layout.
+- Harvest predictions account for walls, roads, worker upgrades, and several building effects. Frame timing and some effects still differ from the game; a fresh live comparison is still needed for the recent physics changes.
+- The main tested setup is Windows 11, 1920×1080, Korean, with game version 1.301. Game updates may break the bridge.
+
+The [calculation notes](docs/reference/GAME_DATA_CONTRACT.ko.md) list the remaining gaps.
+[Mechanics and guide sources](docs/reference/README.ko.md#자료-출처) are documented separately.
+
+## Local data and permissions
+
+The companion does not send game input or change saves. Installing BepInEx and the bridge does
+add files to the game folder. Settings, extracted data, and gameplay logs stay under
+`%LOCALAPPDATA%\BallxPitCompanion`; the app does not upload those records.
+
+See [Privacy](PRIVACY.md) for screen capture, hotkeys, stored files, and installation downloads.
+The app is provided as-is; [Disclaimer](DISCLAIMER.md) and [Third-party notices](NOTICE.md)
+explain the rights and limits. Game assets remain the property of their rights holders.
 
 ## Report a problem
 
-Use [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues) when the repository is available to you. Include the game/companion version, language, resolution, steps, expected result, and actual result. A cropped screenshot is useful. Review logs for personal paths and other private information before sharing; do not upload saves or extracted game assets.
+Open an [issue](https://github.com/jellyhani/ball-x-pit-companion/issues) with your versions,
+language, resolution, and steps to reproduce the problem. A cropped screenshot helps.
+Remove private information from logs and images; do not attach saves or extracted game assets.
 
 ## Development
 
@@ -94,7 +85,9 @@ Use [Issues](https://github.com/jellyhani/ball-x-pit-companion/issues) when the 
 .venv\Scripts\python.exe tools\regress.py
 ```
 
-Some tests require locally extracted game data and are skipped without it. A green CI run does not prove live game behavior. See [contribution guidelines (Korean)](CONTRIBUTING.md), [technical notes (Korean)](docs/reference/README.ko.md), and the [maintenance loop](IMPROVEMENT_LOOP.md).
+Tests that need locally extracted game data are skipped when it is absent. CI covers the
+remaining tests; live game behavior needs separate checks. See [Contributing](CONTRIBUTING.md)
+for development and testing instructions.
 
 For code navigation, see the [architecture and reading guide](docs/ARCHITECTURE.md).
 Maintainers should follow the [release procedure](docs/RELEASING.md), including publishing the

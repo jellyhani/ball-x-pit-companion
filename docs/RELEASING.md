@@ -19,6 +19,10 @@
 5. 실행 파일 ZIP과 `dependency-sources.zip`을 함께 검토합니다. 후자는 배포한 Qt/PySide/Shiboken/pynput의 대응 소스입니다.
 6. 바이너리의 `_internal/build-info.json`에 소스 revision이 있고 `dirty`가 false인지 확인합니다.
 
+GitHub 소스 ZIP에서 개인 빌드를 하면 revision은 `source-archive`, dirty는 `null`로 기록됩니다.
+Git 정보를 읽지 못한 경우에는 `unavailable`로 남습니다. 공개 릴리스는 Git checkout에서 빌드해
+어느 커밋의 파일인지 확인할 수 있도록 해 주세요.
+
 ```powershell
 .venv\Scripts\python.exe -m unittest discover -s tests -t .
 $env:BXP_NO_NATIVE = '1'

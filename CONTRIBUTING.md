@@ -22,8 +22,8 @@ powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
 게임 자료(문구·아이콘)가 있어야 하는 테스트는 `setup.ps1`을 실제 게임이 설치된 PC에서 돌리기 전까지는
-자동으로 건너뜁니다(`tests/__init__.py`의 `HAS_GAME_DATA`). CI(GitHub Actions)는 게임 파일이 없는
-환경이라 이 테스트들은 항상 건너뜁니다.
+자동으로 건너뜁니다(`tests/__init__.py`의 `HAS_GAME_DATA`). CI(GitHub Actions)는 게임 파일 없이
+기본 계산과 Python 대체 계산을 각각 검사합니다. 게임 자료가 필요한 테스트는 로컬에서 확인해야 합니다.
 
 네이티브 계산 없이 테스트하려면(파이썬 대체 경로 확인):
 
