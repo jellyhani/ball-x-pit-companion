@@ -29,6 +29,18 @@ def unchanged_plan(base):
 
 
 class ResourceAccessTest(unittest.TestCase):
+    def test_production_stock_changes_do_not_invalidate_full_layout_but_do_update_aim(self):
+        from src.engine.sim_signature import physical_base
+        b=enclosed()
+        before=copy.deepcopy(b)
+        before['buildings'][0]['held']=[0,0,7,0]
+        after=copy.deepcopy(before)
+        after['buildings'][0].update(res=0,held=[0,0,0,0],can_harvest=False)
+        self.assertEqual(physical_base(before,full=True),physical_base(after,full=True))
+        self.assertNotEqual(physical_base(before),physical_base(after))
+        after['buildings'][0]['cap']=14
+        self.assertNotEqual(physical_base(before,full=True),physical_base(after,full=True))
+
     def test_pass_through_harvest_is_recorded_without_a_bounce(self):
         shape=hs.Shape(1,'box',pts=[(3,.5),(4,.5),(4,1.5),(3,1.5)])
         world=hs.World(0,10,0,10,[shape],(1,1),radius=.03)
@@ -66,6 +78,23 @@ class ResourceAccessTest(unittest.TestCase):
     def test_unknown_collision_is_not_reported_as_impossible_access(self):
         b=enclosed();b['geo']['colliders']=[c for c in b['geo']['colliders'] if c['id']!=1]
         self.assertIsNone(ResourceAccess(b,TEAM,4,[45]).check(b))
+
+    def test_idle_producer_follows_relocated_resource_without_losing_access(self):
+        b=enclosed()
+        b['buildings'][1].update(type='kIdleLumberyard',range=1.1,worker=-1,
+                                  in_range={'kGrandTree':1})
+        checker=ResourceAccess(b,TEAM,4,[30,45,60,90,120,150])
+        moves,after=repair_resources(b,checker,
+                                    accept=lambda candidate: candidate['buildings'][0]['x'] < 3,
+                                    max_candidates=128)
+        self.assertEqual([m.a for m in moves],[1,2])
+        self.assertEqual(checker.check(after).blocked,set())
+        rows={r['id']:r for r in after['buildings']}
+        self.assertTrue(lo.in_range(rows[1]['x']-rows[2]['x'],rows[1]['y']-rows[2]['y'],1.1))
+        # 근로자를 배정한 생산 건물은 이미 이 자원을 채집하므로 이동할 이유가 없다.
+        b['buildings'][1]['worker']=0
+        working=ResourceAccess(b,TEAM,4,[30,45,60,90,120,150])
+        self.assertEqual(repair_resources(b,working)[0],[])
 
     def test_today_empty_tile_is_checked_with_refilled_resources(self):
         b=base_of([building(1,'kGrandTree',1.5,3.5,cap=7,res=0,can_harvest=False)],8,8)

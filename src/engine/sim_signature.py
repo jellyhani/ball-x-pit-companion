@@ -11,7 +11,7 @@ def digest(value):
 def physical_base(base, *, full=False):
     """화면 좌표·투영·날아가는 작업자 관측은 빼고, 모양·상태·범위·속도는 그대로 비교한다."""
     geo = base.get("geo") or {}
-    geometry = {k: v for k, v in geo.items() if k not in ("proj", "workers")}
+    geometry = {k: v for k, v in geo.items() if k not in ("proj", "workers", "launcher_source")}
     buildings = {b["id"]: b for b in base.get("buildings") or [] if "id" in b}
     if full:
         from .sim_jobs import full_tiles

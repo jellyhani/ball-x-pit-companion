@@ -1061,5 +1061,8 @@
   "채집 가능한 자리로 자원 이동": "Ressource an eine erntbare Position verschieben",
   "자원 접근 검사: {before}/{total} → {after}/{total} (발사 각도 검사·가동 생산 범위)": "Ressourcenzugang: {before}/{total} → {after}/{total} (getestete Winkel / aktive Produktion)",
   "채집 경로가 없던 자원 {count}개를 우선 이동합니다. 범위 점수 2% 기준과 별도로 판단했습니다.": "Zuerst {count} Ressourcen ohne bestätigten Ernteweg verschieben. Unabhängig von der 2%-Grenze der Reichweitenwertung.",
-  "검사한 각도에서 채집 경로 미확인: {targets}. 새 자원 구매보다 배치 확인이 먼저입니다.": "Kein Ernteweg bei getesteten Winkeln gefunden: {targets}. Vor weiteren Ressourcenkäufen die Anordnung prüfen."
+  "검사한 각도에서 채집 경로 미확인: {targets}. 새 자원 구매보다 배치 확인이 먼저입니다.": "Kein Ernteweg bei getesteten Winkeln gefunden: {targets}. Vor weiteren Ressourcenkäufen die Anordnung prüfen.",
+  "발사 위치는 같은 기지의 최근 실제 채집 기록을 사용했습니다.": "Die Startposition stammt aus der letzten beobachteten Ernte in derselben Basis.",
+  "실제 채집 발사 위치를 아직 확인하지 못해 경로 검사를 보류했습니다.": "Die Wegprüfung wartet auf eine tatsächlich beobachtete Startposition.",
+  "생산 건물을 채집 가능한 자원 쪽으로 이동": "Produktionsgebäude in die Nähe erntbarer Ressourcen verschieben"
 }

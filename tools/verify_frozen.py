@@ -21,7 +21,7 @@ snap={'v':1,'plugin':'1.15.0','seq':1,'game_version':'synthetic-smoke','screen_w
  {'id':1,'type':'kIdleFarm','x':3,'y':3,'tw':2,'th':2,'rot':0,'lvl':0,'state':'kNormal','stat':'kNum','worker':0,'range':2.5,'in_range':{'kDenseWheat':1}},
  {'id':2,'type':'kDenseWheat','x':3.5,'y':4.5,'tw':1,'th':1,'rot':0,'lvl':0,'state':'kNormal','stat':'kNum','cap':4,'res':4,'can_harvest':True}],
  'geo':{'left':0,'right':8,'bottom':0,'top':8,'space_w':1,'chunk_w':8,'chunk_h':8,'chunks':[[0,0]],'launcher':[3,.1],
- 'worker_speed':5,'worker_speed_mult':1,'harvest_len':1,'colliders':[
+ 'worker_speed':5,'worker_speed_mult':1,'harvest_len':1,'player_y':.1,'colliders':[
  {'id':1,'shape':'box','pts':[[2,2],[4,2],[4,4],[2,4]]},
  {'id':2,'shape':'box','pts':[[3,4],[4,4],[4,5],[3,5]]}]}}}
 k=ctypes.WinDLL('kernel32',use_last_error=True)
@@ -56,6 +56,7 @@ try:
    if '\ubc30\uce58 \ucd94\ucc9c:' in logtext:passed=True;break
   time.sleep(.2)
  if not passed:raise RuntimeError('No frozen worker result; connected='+str(connected.is_set())+'; stderr='+ (profile/'stderr.log').read_text(encoding='utf-8',errors='replace')[-4000:])
+ if not (profile/'harvest_origin.json').exists():raise RuntimeError('Frozen harvest origin tracking was not exercised.')
  q=subprocess.run([str(exe),'--stop'],cwd=root,env=env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,startupinfo=si,creationflags=subprocess.CREATE_NO_WINDOW,timeout=15)
  p.wait(timeout=15)
  if p.returncode!=0 or q.returncode!=0:raise RuntimeError('Frozen helper did not stop cleanly.')

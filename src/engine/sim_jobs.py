@@ -131,8 +131,17 @@ def gold_mine_spot(base: dict, blds: Dict[int, dict], team: Sequence[dict], dur:
 def full_tiles(blds: Dict[int, dict]) -> Dict[int, dict]:
     """자원 타일을 가득 찬 상태로 (배치는 오래 쓰는 것 — 오늘 이미 캐서 빈 타일로 비교하면 모든 배치가 0이 된다)."""
     from .layout_opt import TILE_RES
-    return {i: (dict(b, res=int(b.get("cap") or b.get("res") or 1), can_harvest=True) if b.get("type") in TILE_RES else b)
-            for i, b in blds.items()}
+    out = {}
+    for i, b in blds.items():
+        if b.get("type") not in TILE_RES:
+            out[i] = b
+            continue
+        capacity = int(b.get("cap") or b.get("res") or 1)
+        held = [0, 0, 0, 0]
+        held[TILE_RES[b["type"]]] = capacity
+        # res뿐 아니라 held도 같은 '가득 찬 상태'로 맞춘다. 자동 생산의 저장량 변화로 배치 결과가 버려지면 안 된다.
+        out[i] = dict(b, res=capacity, held=held, can_harvest=True)
+    return out
 
 
 def _angle_grid(limits: Optional[Sequence[float]], step: int) -> List[float]:
@@ -227,8 +236,28 @@ def job_layout(snap: dict, team: Sequence[dict], dur: float, blueprints: Sequenc
         return None, {}
     plan = _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib,
                       resources, resource_check, resource_before)
+    if resource_before is not None and resource_before.blocked:
+        # 자원을 먼저 옮긴 뒤에는 기존 최적화의 생산 건물 이동이 무의미해질 수 있다.
+        # 현재 배치에서 접근만 복구한 안과 최종 상태끼리 비교해 불필요한 추가 이동을 막는다.
+        pcs, origins = lo.pieces_from_base(snap, grid, lo.housing_types())
+        centers = {b["id"]: (b["x"], b["y"]) for b in snap.get("buildings") or []}
+        neutral = lo.FullPlan(origins, dict(origins), centers, 0., 0., {}, {})
+        simple = _plan_from(snap, neutral, grid, targets, team, reach, hv, blueprints, res_weight, pad, blds, dur, need, calib,
+                            resources, resource_check, resource_before)
+        reached = {i for i, n in plan.reach_after.items() if n > 0}
+        safe = simple.movement_complete and all(simple.reach_after.get(i, 0) > 0 for i in reached)
+        fewer_blocked = len(simple.resource_unreachable_after) < len(plan.resource_unreachable_after)
+        dominates = (len(simple.resource_unreachable_after) == len(plan.resource_unreachable_after)
+                     and simple.score_after >= plan.score_after - 1e-6 and len(simple.swaps) <= len(plan.swaps))
+        if safe and (fewer_blocked or dominates):
+            plan = simple
     plan.preset = "guide"
     plan.model_limitations = limitations
+    source = (snap.get("geo") or {}).get("launcher_source")
+    if source == "last_observed":
+        plan.notes.append(tr("발사 위치는 같은 기지의 최근 실제 채집 기록을 사용했습니다."))
+    elif source == "unavailable":
+        plan.notes.append(tr("실제 채집 발사 위치를 아직 확인하지 못해 경로 검사를 보류했습니다."))
     final_state = plan.evaluated_base
     world = hs.world_from_geo(final_state.get("geo") or {}, 0.03)
     final_blds = full_tiles({b["id"]: b for b in final_state.get("buildings") or [] if "id" in b})
@@ -267,11 +296,12 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
     pieces, cur = lo.pieces_from_base(snap, grid, lo.housing_types())
     target_origin = dict(full.origin_after)
     for m in all_access:                              # 공사·자원 접근 개선도 목표 자리에 반영
-        p = pieces[m.a]
+        p = lo.rotated(pieces[m.a], (getattr(full, "turned", None) or {}).get(m.a, 0))
         target_origin[m.a] = (round((m.to[0] - p.w * grid.size / 2 - grid.ox) / grid.size),
                               round((m.to[1] - p.h * grid.size / 2 - grid.oy) / grid.size))
     opener = {m.a: m.target for m in access}
     resource_moved_ids = {m.a for m in resource_moves}
+    resource_reasons = {m.a: m.reason for m in resource_moves}
     turn = {i: k for i, k in (getattr(full, "turned", None) or {}).items() if i in cur}
     rots = {b["id"]: int(b.get("rot") or 0) for b in snap.get("buildings") or [] if "id" in b}
     sequence = lo.move_sequence(grid, pieces, cur, {i: o for i, o in target_origin.items() if i in cur},
@@ -291,7 +321,7 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
         if park:
             steps.append(Move(i, to, 0.0, tr("잠시 비켜 두기 (다른 건물 자리 비우기)")))
         elif i in resource_moved_ids:
-            steps.append(Move(i, to, 0., tr("채집 가능한 자리로 자원 이동"), rot=rot))
+            steps.append(Move(i, to, 0., resource_reasons[i], rot=rot))
         elif i in opener:
             steps.append(Move(i, to, access_gains[i], tr("미완성 건물로 가는 길 열기"), target=opener[i], rot=rot))
         else:
@@ -333,7 +363,7 @@ def _plan_from(snap, full, grid, targets, team, reach, hv, blueprints, res_weigh
                                  before=len(resource_before.served), after=len(resource_after.served), total=len(resource_before.resources)))
             if resource_moves:
                 plan.notes.append(tr("채집 경로가 없던 자원 {count}개를 우선 이동합니다. 범위 점수 2% 기준과 별도로 판단했습니다.",
-                                     count=len(resource_moves)))
+                                     count=sum(m.a in resource_before.resources for m in resource_moves)))
             if resource_after.blocked:
                 from collections import Counter
                 names = lo._game_text().get("buildings") or {}

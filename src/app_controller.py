@@ -1058,7 +1058,7 @@ class AppController(QObject):
         if not force and time.monotonic() < getattr(self, "_layout_retry_at", 0):
             return
         team = hs.team_from_chars(self.meta.chars_raw, getattr(self, "_team_order", None))
-        snap = json.loads(json.dumps(base))
+        snap = json.loads(json.dumps(AppController._layout_input(self, base)))
         # 원정 중 live_state에는 기지가 없다. 마지막 계산 입력은 진단용으로 따로 보존한다.
         try:
             path = os.path.join(self.dump_dir, "last_base.json")
@@ -1087,7 +1087,16 @@ class AppController(QObject):
         self.sim.submit("layout", key, sim_jobs.job_layout, snap, team, duration, bps, targets, need, 8.0,
                         dict(prev) if prev else None, char_levels, tuple(self.meta.resources), limits)
 
+    def _layout_input(self, base):
+        if "player_y" not in (base.get("geo") or {}):
+            return base
+        from .tracking.harvest_origin import HarvestOrigin
+        if not hasattr(self, "_harvest_origin"):
+            self._harvest_origin = HarvestOrigin(self.dump_dir)
+        return self._harvest_origin.resolve(base)
+
     def _layout_fingerprint(self, base):
+        base = AppController._layout_input(self, base)
         from .engine.sim_signature import layout_signature
         options = self.meta.build_options if self.meta.build_options is not None else self.meta.blueprints
         need, _ = need_resource(self.meta, self._shortfalls())

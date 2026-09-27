@@ -1061,5 +1061,8 @@
   "채집 가능한 자리로 자원 이동": "Kaynağı hasat edilebilir bir konuma taşı",
   "자원 접근 검사: {before}/{total} → {after}/{total} (발사 각도 검사·가동 생산 범위)": "Kaynak erişimi: {before}/{total} → {after}/{total} (denenen açılar / etkin üreticiler)",
   "채집 경로가 없던 자원 {count}개를 우선 이동합니다. 범위 점수 2% 기준과 별도로 판단했습니다.": "Önce doğrulanmış hasat yolu olmayan {count} kaynağı taşı. Bu karar menzil puanının %2 eşiğinden bağımsızdır.",
-  "검사한 각도에서 채집 경로 미확인: {targets}. 새 자원 구매보다 배치 확인이 먼저입니다.": "Denenen açılarda hasat yolu bulunamadı: {targets}. Daha fazla kaynak almadan önce yerleşimi kontrol et."
+  "검사한 각도에서 채집 경로 미확인: {targets}. 새 자원 구매보다 배치 확인이 먼저입니다.": "Denenen açılarda hasat yolu bulunamadı: {targets}. Daha fazla kaynak almadan önce yerleşimi kontrol et.",
+  "발사 위치는 같은 기지의 최근 실제 채집 기록을 사용했습니다.": "Fırlatma konumu, aynı üste gözlemlenen son hasattan alındı.",
+  "실제 채집 발사 위치를 아직 확인하지 못해 경로 검사를 보류했습니다.": "Gerçek bir hasat fırlatma konumu gözlemlenene kadar yol kontrolü ertelendi.",
+  "생산 건물을 채집 가능한 자원 쪽으로 이동": "Üretim binasını toplanabilir kaynakların yakınına taşı"
 }

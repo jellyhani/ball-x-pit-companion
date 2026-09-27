@@ -152,4 +152,41 @@ def repair_resources(base, checker, accept=None, max_moves=8, max_candidates=16)
             moves.append(Move(target, pos, 0., tr("채집 가능한 자리로 자원 이동")))
             current, report = candidate, checked
             break
+    if moves:
+        # 옮긴 자원을 뒤에 남겨 두고 미가동 생산 건물만 옛 위치에 남는 모순을 피한다.
+        changed_kinds = {lo.TILE_RES[raw[m.a]["type"]] for m in moves}
+        for provider in sorted(raw):
+            source = raw[provider]
+            kind = PRODUCERS.get(source.get("type"))
+            if (kind not in changed_kinds or type(source.get("worker")) is not int or source["worker"] >= 0
+                    or source.get("state") in hs.CONSTRUCTION_STATES):
+                continue
+            blds = buildings_from_base(current)
+            p = blds.get(provider)
+            if p is None:
+                continue
+            tiles = [b for i,b in blds.items() if lo.TILE_RES.get(b.type) == kind and i in report.resources]
+            def covered(pos):
+                return sum(in_range(b.x-pos[0], b.y-pos[1], p.range+checker.pad) for b in tiles)
+            count = covered((p.x,p.y))
+            if count == len(tiles):
+                continue
+            masks = shape_masks(current.get("geo") or {}, blds, grid)
+            occ = occupied(blds, grid, skip=[provider], masks=masks)
+            spots = free_spots(grid, occ | entrance, *p.footprint)
+            spots.sort(key=lambda pos: (-covered(pos), (pos[0]-p.x)**2+(pos[1]-p.y)**2, pos))
+            for pos in spots[:max_candidates]:
+                if covered(pos) <= count:
+                    break
+                candidate = moved_base(current,blds,provider,pos)
+                if (not lo.preserves_production(base,candidate,checker.pad)
+                        or not preserves_guide(base,candidate,checker.pad)
+                        or (accept is not None and not accept(candidate))):
+                    continue
+                checked = checker.check(candidate)
+                if checked is None or not report.served <= checked.served:
+                    continue
+                moves.append(Move(provider,pos,0.,tr("생산 건물을 채집 가능한 자원 쪽으로 이동")))
+                current,report = candidate,checked
+                break
     return moves, current
