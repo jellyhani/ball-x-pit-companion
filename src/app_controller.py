@@ -386,6 +386,9 @@ class AppController(QObject):
             self.control.refresh_run()
             return
         now = time.monotonic()
+        if now - at > .25:
+            diagnostics.emit("state.ui_backlog", stream="queue", interval=5.,
+                             sequence=snapshot.get("seq"), receive_to_ui_ms=round((now - at) * 1000, 2))
         if now - getattr(self, "_live_dump_at", 0.0) >= 0.5:
             # 개발·진단용: 최신 게임 연동 상태를 파일로 (tools/drive.py state)
             self._live_dump_at = now
@@ -440,14 +443,16 @@ class AppController(QObject):
         }
         try:
             self._on_base(snapshot.get("base") if isinstance(snapshot.get("base"), dict) else None)
-        except Exception:  # noqa: BLE001 — 기지 화면 오류가 선택창·융합 처리를 막지 않게
-            diagnostics.emit("state.failed", stream="base", phase="base", sequence=snapshot.get("seq"))
+        except Exception as error:  # noqa: BLE001 — 기지 화면 오류가 선택창·융합 처리를 막지 않게
+            diagnostics.emit("state.failed", stream="base", state=type(error).__name__, phase="base",
+                             sequence=snapshot.get("seq"), error_type=type(error).__name__)
             if not getattr(self, "_base_error_logged", False):
                 log.exception("기지 화면 처리 오류 (한 번만 기록)")
                 self._base_error_logged = True
         self._base_ms = 0.9 * self._base_ms + 0.1 * (time.perf_counter() - t0) * 1000
-        diagnostics.emit("state.base_timing", stream="base", sequence=snapshot.get("seq"),
-                         elapsed_ms=round((time.perf_counter() - t0) * 1000, 2),
+        base_elapsed_ms = (time.perf_counter() - t0) * 1000
+        diagnostics.emit("state.base_timing", stream="base", state=base_elapsed_ms >= 100,
+                         sequence=snapshot.get("seq"), elapsed_ms=round(base_elapsed_ms, 2),
                          moving_average_ms=round(self._base_ms, 2))
         if bridge_state.battle is not None:
             self.battle_info = bridge_state.battle
