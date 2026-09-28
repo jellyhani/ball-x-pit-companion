@@ -4,6 +4,8 @@
 
 BALL x PIT의 비공식 Windows 도우미입니다. 게임 상태를 읽어 강화 선택·융합·백과사전 해금·채집·기지 배치를 안내합니다. 게임 조작은 사용자가 직접 합니다.
 
+AI 코딩 도구를 사용해 바이브 코딩으로 만든 개인 프로젝트입니다.
+
 ## 설치
 
 Windows 10/11과 본인이 설치한 Steam판 BALL x PIT이 필요합니다. [Releases](https://github.com/jellyhani/ball-x-pit-companion/releases)에 ZIP이 게시돼 있으면 전체를 풀고 `BallxPitCompanion.exe`를 실행하세요. `_internal` 폴더도 함께 있어야 합니다. 릴리스가 없으면 아래 소스 설치를 이용하세요. 서명되지 않은 파일이라 SmartScreen 경고가 나올 수 있습니다.

@@ -3,6 +3,8 @@
 A Windows overlay that helps with ball choices, fusion recipes, harvest aiming, and base layouts.
 It reads the game through BepInEx. You still make the choices and move buildings yourself.
 
+A personal project built with AI coding assistants (vibe coding).
+
 **This is a beta.** Advice can be wrong, and predicted paths can differ from the game.
 It is an unofficial project, with no affiliation to the game's developer or publisher.
 
