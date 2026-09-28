@@ -1085,5 +1085,6 @@
   "물리 정보가 불완전해 궤적 계산을 보류합니다.": "Obliczanie toru wstrzymano z powodu niepełnych danych fizycznych.",
   "건물 효과 정보 부족: {buildings}": "Brak danych efektów budynków: {buildings}",
   "현재 게임 정보가 부족해 배치 추천을 보류합니다.": "Sugestie rozmieszczenia wstrzymano z powodu niepełnych bieżących danych gry.",
-  "게임의 대상별 범위 판정 대조: {checked}건 · 불일치 {mismatches}건": "Porównanie zasięgu dla celów: {checked} · Rozbieżności: {mismatches}"
+  "게임의 대상별 범위 판정 대조: {checked}건 · 불일치 {mismatches}건": "Porównanie zasięgu dla celów: {checked} · Rozbieżności: {mismatches}",
+  "공사 건물 {count}개를 입구 쪽으로 우선 배치했습니다.": "Priorytetowo umieszczono {count} budynków w budowie bliżej wejścia."
 }

@@ -1085,5 +1085,6 @@
   "물리 정보가 불완전해 궤적 계산을 보류합니다.": "Fizik verileri eksik olduğu için yörünge hesaplaması bekletiliyor.",
   "건물 효과 정보 부족: {buildings}": "Bina etkisi verileri eksik: {buildings}",
   "현재 게임 정보가 부족해 배치 추천을 보류합니다.": "Güncel oyun verileri eksik olduğu için yerleşim önerileri bekletiliyor.",
-  "게임의 대상별 범위 판정 대조: {checked}건 · 불일치 {mismatches}건": "Hedef bazında oyun menzili kontrolü: {checked} · Uyuşmazlık: {mismatches}"
+  "게임의 대상별 범위 판정 대조: {checked}건 · 불일치 {mismatches}건": "Hedef bazında oyun menzili kontrolü: {checked} · Uyuşmazlık: {mismatches}",
+  "공사 건물 {count}개를 입구 쪽으로 우선 배치했습니다.": "İnşaat halindeki {count} binanın girişe daha yakın yerleştirilmesine öncelik verildi."
 }

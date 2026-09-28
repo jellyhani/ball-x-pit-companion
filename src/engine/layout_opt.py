@@ -1,4 +1,4 @@
-"""전체 재배치 최적화: 기지를 다 치우고 다시 놓는다고 보고, 건물마다 효과를 최대로 하는 자리를 찾는다.
+"""현재 기지에서 적은 이동으로 공사 접근성과 건물 효과를 개선하는 재배치 추천.
 
 건물 효과 (게임 건물 설명·강화 설명 원문, data/game_text_ko.json):
   농장·야적장·채석장     배정된 캐릭터가 '인근' 밭·숲·바위에서 주기적으로 채집
@@ -14,7 +14,8 @@
 
 탐색: 타일 격자 위의 '같은 크기 두 영역 맞바꾸기'(건물 맞바꾸기·빈 자리로 옮기기·작은 타일 묶음 교환을 모두 포함)로
 담금질(simulated annealing). 충돌 모양(ㄱ자 건물) 기준으로 겹침을 막는다. 공사 중인 건물도 옮긴다(커뮤니티 공략: 채집 구역 가장자리로).
-마지막에 후보 몇 개를 채집 궤적 계산으로 다시 비교해 (범위 효과 / 지금 값) + (채집 발사량 / 지금 값) 이 가장 큰 것을 고른다.
+가이드 배치는 입구 비움·공사 도달·공사 거리 순서로 비교하고, 같은 우선순위에서 범위 효과·채집·이동 수를 비교한다.
+후보의 물리 검증은 별도로 수행하며 기존 허브 범위 효과와 가동 생산 구역을 보존한다.
 """
 
 from __future__ import annotations
@@ -1293,6 +1294,27 @@ def optimize(
         if turn:
             turn_of[id(origins)] = dict(turn)
 
+    launcher = geometry.get("launcher") if geometry.get("launcher_source") != "unavailable" else None
+    if guide:
+        from . import construction_front
+        from .layout_guide import preserves_guide
+
+        def preserves_front_move(origins, turns):
+            candidate_layout = Layout(grid, shaped_of(turns), origins)
+            proposal = FullPlan(origin0, origins,
+                                {index: candidate_layout.center(index) for index in origins},
+                                0., 0., {}, {}, turned=turns)
+            candidate_base = final_base(base, proposal)
+            return preserves_production(base, candidate_base, pad) and preserves_guide(base, candidate_base, pad)
+
+        # 공사 앞배치는 허브 다듬기가 시간 예산을 다 쓰기 전에 후보로 만든다.
+        front_deadline = min(search_deadline, time.perf_counter() + min(2., max(0., seconds) * .3))
+        for origins, turns in construction_front.candidates(
+            grid, pieces, origin0, launcher, entrance, preserves_front_move, front_deadline
+        ):
+            add_cand(origins, turns)
+            starts.append((origins, turns, {index for index, piece in pieces.items() if piece.unfinished}))
+
     # 단순히 생산 범위 안의 빈칸을 복구하는 일은 시간 제한 무작위 탐색의 성공 여부에 맡기지 않는다.
     restored_origin = None
     if preset in ("effect", "guide"):
@@ -1664,11 +1686,16 @@ def optimize(
             if pturn:
                 turn_of[id(po)] = pturn
     totals = {}
-    best_cov = (0, 0, 0)
+    best_cov = (0, 0, (), 0, 0)
+    # 현재 안만 도달 검사를 면제해 두면, 더 가까워도 실제로 못 치는 원위치가 계속 이긴다.
+    current_reachable = (
+        reach_ok(base) if guide and reach_ok is not None and any(piece.unfinished for piece in pieces.values())
+        else True
+    )
 
     def cov_of(origins):
         if not guide:
-            return (0, 0, 0)
+            return (0, 0, (), 0, 0)
         sp = shaped_of(turn_of.get(id(origins), {}))
         lay = Layout(grid, sp, origins)
         build_front = sum(
@@ -1678,8 +1705,11 @@ def optimize(
         )
         occupied = {column for index in origins for column in lay.cells(index)}
         clear = len(entrance - occupied)
-        # 입구와 허브가 앞구역 점수 때문에 희생되지 않게 한다. 실제 공사 도달은 reach_ok에서 별도로 검사한다.
-        return (clear, coverage(grid, sp, origins, groups, pad), build_front if reach_ok is None else 0)
+        # 입구→실제 도달→공사 거리→허브 순서. 기존 허브 효과·생산은 위의 보존 검사로 보호한다.
+        proximity = construction_front.priority(grid, sp, origins, launcher)
+        reachable = current_reachable if origins == origin0 and not turn_of.get(id(origins)) else True
+        return (clear, int(reachable), proximity, coverage(grid, sp, origins, groups, pad),
+                build_front if reach_ok is None else 0)
 
     cov0 = cov_of(origin0)
     plain0 = plain.score(lay0)[0]
@@ -1720,8 +1750,13 @@ def optimize(
             return True
         return bool(hv and h0 and wsum(hv) > wsum(h0))
 
-    for orig, s in cands:
+    # 우선순위가 더 낮은 안은 수확 점수가 높아도 이길 수 없다. 앞배치부터 검증해 불필요한 재계산을 줄인다.
+    ordered_candidates = [cands[0]] + sorted(cands[1:], key=lambda candidate: cov_of(candidate[0]), reverse=True)
+    for orig, s in ordered_candidates:
         current = orig is cands[0][0]
+        cov = cov_of(orig)
+        if guide and best is not None and cov < best_cov:
+            continue
         nb = to_base(orig)
         if guide and not current:
             from .layout_guide import preserves_guide
@@ -1750,8 +1785,7 @@ def optimize(
             * sum(1 for index in orig if orig[index] != origin0.get(index) or tn.get(index))
         )
         totals[id(orig)] = (total, orig, s, hv)
-        # 가이드 배치: 허브 범위 달성도가 먼저, 같으면 효과·채집·옮기는 수
-        cov = cov_of(orig)
+        # 가이드 배치: 입구·공사 접근 우선순위가 같으면 효과·채집·옮기는 수를 비교한다.
         if best is None or (cov, total) > (best_cov, best[0]):
             best, best_cov = (total, orig, s, hv), cov
     if best is None:

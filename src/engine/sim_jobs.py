@@ -312,9 +312,16 @@ def job_layout(
         a, total = hs.best_angles(world, buildings, team, dur, need, angles=angles)[0]
         return total
 
+    reach_cache = {}
+
     def reach(geo):
         if not targets:
             return {}
+        # 같은 작업의 후보 검사와 최종 이동 검사가 동일한 충돌 모양을 다시 보내는 경우를 공유한다.
+        # 전체 geometry를 키로 써 벽·발사 위치·충돌 좌표 변화가 있는 결과를 재사용하지 않는다.
+        key = repr(geo)
+        if key in reach_cache:
+            return dict(reach_cache[key])
         world = hs.world_from_geo(geo, 0.0)
         result: Dict[int, int] = {}
         if world:
@@ -329,6 +336,7 @@ def job_layout(
             ):
                 for building_id, value in angle_result.per_building.items():
                     result[building_id] = max(result.get(building_id, 0), value)
+        reach_cache[key] = dict(result)
         return result
 
     calib = lo.calibrate_range(snapshot)  # 게임이 직접 센 범위 안 타일 수와 맞춤 (플러그인 1.9)
@@ -422,6 +430,8 @@ def job_layout(
             and simple.score_after >= plan.score_after - 1e-6
             and len(simple.swaps) <= len(plan.swaps)
         )
+        from .construction_front import base_priority
+        dominates = dominates and base_priority(simple.evaluated_base) >= base_priority(plan.evaluated_base)
         if safe and (clearer_entrance or fewer_blocked or dominates):
             plan = simple
     plan.preset = "guide"
@@ -432,6 +442,14 @@ def job_layout(
     elif source == "unavailable":
         plan.notes.append(tr("실제 채집 발사 위치를 아직 확인하지 못해 경로 검사를 보류했습니다."))
     final_state = plan.evaluated_base
+    from .construction_front import base_distances
+    before_distances, after_distances = base_distances(snapshot), base_distances(final_state)
+    closer = sum(
+        math.floor(after_distances[index] + 1e-6) < math.floor(distance + 1e-6)
+        for index, distance in before_distances.items() if index in after_distances
+    )
+    if closer:
+        plan.notes.insert(1, tr("공사 건물 {count}개를 입구 쪽으로 우선 배치했습니다.", count=closer))
     world = hs.world_from_geo(final_state.get("geo") or {}, 0.0)
     final_blds = full_tiles(
         {building["id"]: building for building in final_state.get("buildings") or [] if "id" in building}
