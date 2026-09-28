@@ -81,10 +81,41 @@ def preserves_guide(base: dict, candidate: dict, pad: float = 0.0) -> bool:
     after = covered_members(grid, p1, o1, groups, pad)
     if any(not members <= after[hub] for hub, members in before.items()):
         return False
+    # 오두막에 거처를 넣느라 원래 캐던 밀밭·숲·바위를 잃으면 공략 개선이 아니다.
+    # 범위 보고와 같은 게임 대상 모양으로 계산하며, 수와 용량을 함께 보존한다.
+    if not preserves_house_resources(grid, p0, o0, p1, o1, pad):
+        return False
     entrance = lo.entrance_cells(base.get("geo") or {}, grid)
     occupied0 = set(lo.Layout(grid, p0, o0).occ) & entrance
     occupied1 = set(lo.Layout(grid, p1, o1).occ) & entrance
     return occupied1 <= occupied0
+
+
+def preserves_house_resources(grid, before_pieces, before_origins, after_pieces, after_origins, pad):
+    from .layout_opt import EFFECTS, TILE_RES, Layout, target_in_range
+
+    before = Layout(grid, before_pieces, before_origins)
+    after = Layout(grid, after_pieces, after_origins)
+
+    def covered(layout, building_id, resource_kind):
+        source = layout.pieces[building_id]
+        source_x, source_y = layout.center(building_id)
+        targets = [piece for index, piece in layout.pieces.items()
+                   if TILE_RES.get(piece.type) == resource_kind
+                   and target_in_range(layout.center(index)[0] - source_x,
+                                       layout.center(index)[1] - source_y,
+                                       source.range + pad, piece, pad)]
+        return len(targets), sum(piece.cap for piece in targets)
+
+    for building_id, piece in before_pieces.items():
+        effect = EFFECTS.get(piece.type)
+        if not effect or not isinstance(effect[0], int) or effect[3] != "upgraded":
+            continue
+        old_count, old_capacity = covered(before, building_id, effect[0])
+        new_count, new_capacity = covered(after, building_id, effect[0])
+        if new_count < old_count or new_capacity + 1e-6 < old_capacity:
+            return False
+    return True
 
 
 class _State:

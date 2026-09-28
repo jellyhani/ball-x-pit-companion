@@ -774,16 +774,23 @@ def _guide_score(
     """가이드 달성도 (클수록 좋음): (오두막 범위 안 거처 수, 대위 막사 범위 안 능력치 건물 수,
     강철 요새 범위 안 공사 중·무한 강화 건물 수, 자기 자원 타일을 범위에 둔 채집·재생 거처 수)."""
 
+    from .layout_opt import target_in_range
+
+    def contains(source, target):
+        source_x, source_y = _center(shaped[source.id], final[source.id])
+        target_x, target_y = _center(shaped[target.id], final[target.id])
+        return target_in_range((target_x - source_x) * size, (target_y - source_y) * size,
+                               source.range + pad, shaped[target.id], pad)
+
     def cov(src, ids) -> int:
         if src is None or src.id not in final:
             return 0
-        rng = (src.range + pad) / size
         return sum(
             1
             for index in ids
             if index in final
             and index != src.id
-            and _in_box(shaped[src.id], final[src.id], shaped[index], final[index], rng)
+            and contains(src, shaped[index])
         )
 
     hh_ok = 0
@@ -791,10 +798,9 @@ def _guide_score(
         if piece.type not in hh_types or piece.id not in final:
             continue
         resource_kind = _effect_kind(piece.type)
-        rng = (piece.range + pad) / size
         if any(
             tile.id in final
-            and _in_box(shaped[piece.id], final[piece.id], shaped[tile.id], final[tile.id], rng)
+            and contains(piece, tile)
             for tile in by_res.get(resource_kind, ())
         ):
             hh_ok += 1

@@ -436,6 +436,10 @@ def job_layout(
         )
         from .construction_front import base_priority
         dominates = dominates and base_priority(simple.evaluated_base) >= base_priority(plan.evaluated_base)
+        # 효과 점수의 합이 높아도 공략 허브의 새로 확보한 대상을 다시 잃는 안으로 바꾸지 않는다.
+        from .layout_guide import preserves_guide
+
+        dominates = dominates and preserves_guide(plan.evaluated_base, simple.evaluated_base, pad)
         if safe and (clearer_entrance or fewer_blocked or dominates):
             plan = simple
     plan.preset = "guide"

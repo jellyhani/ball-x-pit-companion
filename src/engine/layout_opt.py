@@ -1525,11 +1525,17 @@ def optimize(
                 house_candidates.append(origins)
                 add_cand(origins, {})
         variants = []
+        protected = pinned_of({}, production_pin) if production_pin else pieces
+        # 여러 허브를 한꺼번에 고치다 시간 초과하면, 먼저 고친 막사까지 통째로 사라졌다.
+        # 미충족 대상이 많은 허브부터 독립 후보로 확보한 뒤 전체 조합을 탐색한다.
+        incomplete_groups = sorted(
+            (group for group in groups if len(group0[group[0].id]) < len(group[1])),
+            key=lambda group: (-(len(group[1]) - len(group0[group[0].id])), group[0].id),
+        )
+        variants.extend((protected, [group], lane if group[0].type == "kBrickHouse" else {})
+                        for group in incomplete_groups)
         if production_pin:
-            protected = pinned_of({}, production_pin)
             variants.append((protected, groups, lane))
-            # 건설 앞구역을 강제하는 단계가 안전한 거처 개선까지 취소하지 않도록 허브별 후보도 비교한다.
-            variants.extend((protected, [group], {}) for group in groups)
         variants.append((pieces, groups, lane))
         for repair_pieces, repair_groups, repair_lane in variants:
             if time.perf_counter() >= search_deadline:
@@ -1696,7 +1702,7 @@ def optimize(
             if pturn:
                 turn_of[id(po)] = pturn
     totals = {}
-    best_cov = (0, 0, (), 0, 0)
+    best_cov = (0, 0, 0, (), 0)
     # 현재 안만 도달 검사를 면제해 두면, 더 가까워도 실제로 못 치는 원위치가 계속 이긴다.
     current_reachable = (
         reach_ok(base) if guide and reach_ok is not None and any(piece.unfinished for piece in pieces.values())
@@ -1705,7 +1711,7 @@ def optimize(
 
     def cov_of(origins):
         if not guide:
-            return (0, 0, (), 0, 0)
+            return (0, 0, 0, (), 0)
         sp = shaped_of(turn_of.get(id(origins), {}))
         lay = Layout(grid, sp, origins)
         build_front = sum(
@@ -1715,10 +1721,11 @@ def optimize(
         )
         occupied = {column for index in origins for column in lay.cells(index)}
         clear = len(entrance - occupied)
-        # 입구→실제 도달→공사 거리→허브 순서. 기존 허브 효과·생산은 위의 보존 검사로 보호한다.
+        # 입구·실제 도달을 확보한 뒤 공략 범위를 개선한다. 같은 범위면 공사를 입구에 더 가깝게 둔다.
+        # 거리 한 칸이 대위 막사·오두막의 미충족 대상 여럿보다 우선하던 문제를 막는다.
         proximity = construction_front.priority(grid, sp, origins, launcher)
         reachable = current_reachable if origins == origin0 and not turn_of.get(id(origins)) else True
-        return (clear, int(reachable), proximity, coverage(grid, sp, origins, groups, pad),
+        return (clear, int(reachable), coverage(grid, sp, origins, groups, pad), proximity,
                 build_front if reach_ok is None else 0)
 
     cov0 = cov_of(origin0)

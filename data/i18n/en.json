@@ -1087,5 +1087,6 @@
   "현재 게임 정보가 부족해 배치 추천을 보류합니다.": "Layout advice is paused because current game data is incomplete.",
   "게임의 대상별 범위 판정 대조: {checked}건 · 불일치 {mismatches}건": "Game range checks by target: {checked} · Mismatches: {mismatches}",
   "공사 건물 {count}개를 입구 쪽으로 우선 배치했습니다.": "Prioritized placing {count} buildings under construction closer to the entrance.",
-  "추천 각도 갱신 중 — 직전 계산 결과를 표시합니다.": "Refreshing recommended angles — showing the previous calculation."
+  "추천 각도 갱신 중 — 직전 계산 결과를 표시합니다.": "Refreshing recommended angles — showing the previous calculation.",
+  "이번 이동 완료 · 현재 공략 범위": "Planned moves finished · Current guide coverage"
 }

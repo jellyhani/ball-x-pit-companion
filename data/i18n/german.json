@@ -1087,5 +1087,6 @@
   "현재 게임 정보가 부족해 배치 추천을 보류합니다.": "Layoutvorschläge pausieren, da die aktuellen Spieldaten unvollständig sind.",
   "게임의 대상별 범위 판정 대조: {checked}건 · 불일치 {mismatches}건": "Abgleich mit Spielreichweite je Ziel: {checked} · Abweichungen: {mismatches}",
   "공사 건물 {count}개를 입구 쪽으로 우선 배치했습니다.": "{count} Gebäude im Bau wurden vorrangig näher am Eingang platziert.",
-  "추천 각도 갱신 중 — 직전 계산 결과를 표시합니다.": "Empfohlene Winkel werden aktualisiert — das vorige Ergebnis wird angezeigt."
+  "추천 각도 갱신 중 — 직전 계산 결과를 표시합니다.": "Empfohlene Winkel werden aktualisiert — das vorige Ergebnis wird angezeigt.",
+  "이번 이동 완료 · 현재 공략 범위": "Geplante Züge abgeschlossen · Aktuelle Ratgeber-Abdeckung"
 }

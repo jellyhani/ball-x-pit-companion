@@ -1400,7 +1400,24 @@ class AppController(QObject):
                     ),
                 ]
             else:
-                lines = [(tr("가이드 배치 완료 — 재배치를 끝내도 됩니다"), (48, 209, 88, 255))]
+                # 이동 완료와 공략 조건 충족은 다르다. 현재 게임 배치의 범위 수를 함께 보여 준다.
+                report_key = (layout_key(base), getattr(self.layout_plan, "calibration", (0., 0, 0)))
+                if getattr(self, "_guide_report_key", None) != report_key:
+                    from .engine import layout_opt
+                    from .engine.layout import grid_from_geo
+                    from .engine.layout_city import guide_report
+
+                    grid = grid_from_geo(base.get("geo") or {})
+                    self._guide_report = []
+                    if grid is not None:
+                        housing = layout_opt.housing_types()
+                        pieces, origins = layout_opt.pieces_from_base(base, grid, housing)
+                        pad = report_key[1][0]
+                        scorer = layout_opt.Scorer(pieces, layout_opt._stat_types(base), housing, pad=pad)
+                        self._guide_report = guide_report(grid, pieces, origins, scorer, pad)
+                    self._guide_report_key = report_key
+                lines = [(tr("이번 이동 완료 · 현재 공략 범위"), (245, 245, 247, 255))]
+                lines += [(line, (255, 159, 10, 255)) for line in self._guide_report]
             self.base_overlay.show_advice(game, scale, None, None, lines)
             if not self.base_overlay.isVisible():
                 self.base_overlay.show()
