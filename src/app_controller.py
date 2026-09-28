@@ -1626,6 +1626,9 @@ class AppController(QObject):
                 self._render_base(self._base_snap, self._base_state)
         else:
             self._sim_res[channel] = (key, result)
+            if channel == "sweep":
+                # 완료를 먼저 보여 준 다음 새 생산 주기로 갱신한다. 계산 중에는 타이머만으로 요청을 교체하지 않는다.
+                self._sweep_refresh_after = time.monotonic() + 5.0
             if self._base_snap and self._base_state == "kAimWorkers":
                 self._render_base(self._base_snap, self._base_state)
         diagnostics.emit("compute.accepted", channel=channel, request=diagnostics.request_token(key),
@@ -1808,19 +1811,24 @@ class AppController(QObject):
                          dynamic=hs.needs_dynamic_simulation(buildings))
         # 배치·남은 자원·필요 자원·미완성 건물이 바뀔 때만 각도 탐색을 다시 한다
         lo, hi = self.aim_range.limits
-        from .engine.sim_signature import aim_signature
+        from .engine.sim_signature import aim_signature, sweep_signature
 
         key = aim_signature(base, team, duration, need, targets, (lo, hi))
+        sweep_key = sweep_signature(base, team, duration, need, targets, (lo, hi))
         retry = getattr(self, "_sim_retry_at", {})
         now = time.monotonic()
-        if self._sim_req.get("sweep") != key and now >= retry.get("sweep", 0):
-            self._sim_req["sweep"] = key
-            diagnostics.emit("compute.input", channel="sweep", request=diagnostics.request_token(key),
+        sweep_busy = bool(getattr(self.sim, "busy", lambda _channel: False)("sweep"))
+        refresh_due = now >= getattr(self, "_sweep_refresh_after", float("inf")) and not sweep_busy
+        if (self._sim_req.get("sweep") != sweep_key or refresh_due) and now >= retry.get("sweep", 0):
+            reason = "inputs_changed" if self._sim_req.get("sweep") != sweep_key else "task_clock_refresh"
+            self._sim_req["sweep"] = sweep_key
+            diagnostics.emit("compute.input", channel="sweep", request=diagnostics.request_token(sweep_key),
                              sequence=getattr(self, "_trace_identity", {}).get("sequence"),
                              buildings=len(buildings), workers=len(team), duration=duration,
-                             targets=len(targets), need=need, minimum_angle=lo, maximum_angle=hi)
+                             targets=len(targets), need=need, minimum_angle=lo, maximum_angle=hi,
+                             reason=reason)
             self.sim.submit(
-                "sweep", key, sim_jobs.job_sweep, geometry, buildings, team, duration, need, targets, lo, hi
+                "sweep", sweep_key, sim_jobs.job_sweep, geometry, buildings, team, duration, need, targets, lo, hi
             )
         lines = []
         quality_notes = set(hs.model_limitations(team, buildings))
@@ -1855,12 +1863,12 @@ class AppController(QObject):
                     )
         best_path: list = []
         cached_result = self._sim_res.get("sweep")
-        if cached_result and cached_result[1] and cached_result[0] == key:
+        if cached_result and cached_result[1] and cached_result[0] == sweep_key:
             quality_notes.update(cached_result[1].get("model_limitations", ()))
             if cached_result[1].get("error"):
                 self.base_overlay.set_paths([], [])
                 return [(tr("물리 정보가 불완전해 궤적 계산을 보류합니다."), (255, 159, 10, 255))]
-        if cached_result and cached_result[1] and cached_result[0] == key and cached_result[1].get("top"):
+        if cached_result and cached_result[1] and cached_result[0] == sweep_key and cached_result[1].get("top"):
             top, reach = cached_result[1]["top"], cached_result[1].get("reach") or {}
             # 어떤 각도로도 닿지 않는 미완성 건물: 배치도의 '길 열기'로 안내
             stuck = [u for u in unf if u.id in reach and not reach[u.id]]
@@ -1904,7 +1912,7 @@ class AppController(QObject):
                 )
                 if alts:
                     lines.append((alts, (170, 170, 180, 255)))
-        elif cached_result and cached_result[1] and cached_result[0] == key:
+        elif cached_result and cached_result[1] and cached_result[0] == sweep_key:
             lines.append(
                 (
                     tr("발사 가능한 추천 각도를 찾지 못했습니다. 입구 배치를 확인해 주세요."),
@@ -1913,6 +1921,8 @@ class AppController(QObject):
             )
         else:
             lines.append((tr("추천 각도 계산 중…"), (190, 190, 200, 255)))
+        if cached_result and cached_result[0] == sweep_key and getattr(self.sim, "busy", lambda _channel: False)("sweep"):
+            lines.append((tr("추천 각도 갱신 중 — 직전 계산 결과를 표시합니다."), (190, 190, 200, 255)))
         l_ok, h_ok = self.aim_range.learned
         if not (l_ok and h_ok):
             lines.append(

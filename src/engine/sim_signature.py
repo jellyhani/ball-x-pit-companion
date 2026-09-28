@@ -12,7 +12,7 @@ def digest(value):
     ).hexdigest()
 
 
-def physical_base(base, *, full=False):
+def physical_base(base, *, full=False, task_progress=True):
     """화면 좌표·투영·날아가는 작업자 관측은 빼고, 모양·상태·범위·속도는 그대로 비교한다."""
     geo = base.get("geo") or {}
     geometry = {
@@ -85,13 +85,22 @@ def physical_base(base, *, full=False):
         for _, b in sorted(buildings.items())
     ]
     for row, (_, b) in zip(rows, sorted(buildings.items())):
-        if not full and "task_seconds" in b:
+        if not full and task_progress and "task_seconds" in b:
             row["task_bucket"] = int(b["task_seconds"]) // 10
     return {"geo": geometry, "buildings": rows}
 
 
 def aim_signature(base, team, duration, need, targets, limits):
     return digest((physical_base(base), team, duration, need, targets, limits))
+
+
+def sweep_signature(base, team, duration, need, targets, limits):
+    """무거운 탐색의 무효화 조건. 타이머 진행은 완료 뒤 주기 갱신으로 처리한다.
+
+    건물별 10초 경계가 엇갈리면 1초마다 키가 바뀌어 완료 결과가 영원히 폐기된다.
+    실제 재고·충돌 역할·위치·공사 상태·참가자는 계속 비교하며, 계산 입력의 task_seconds는 그대로 사용한다.
+    """
+    return digest((physical_base(base, task_progress=False), team, duration, need, targets, limits))
 
 
 def layout_signature(base, characters, options, resources, duration, need, limits):

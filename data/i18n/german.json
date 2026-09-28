@@ -1086,5 +1086,6 @@
   "건물 효과 정보 부족: {buildings}": "Fehlende Gebäudeeffektdaten: {buildings}",
   "현재 게임 정보가 부족해 배치 추천을 보류합니다.": "Layoutvorschläge pausieren, da die aktuellen Spieldaten unvollständig sind.",
   "게임의 대상별 범위 판정 대조: {checked}건 · 불일치 {mismatches}건": "Abgleich mit Spielreichweite je Ziel: {checked} · Abweichungen: {mismatches}",
-  "공사 건물 {count}개를 입구 쪽으로 우선 배치했습니다.": "{count} Gebäude im Bau wurden vorrangig näher am Eingang platziert."
+  "공사 건물 {count}개를 입구 쪽으로 우선 배치했습니다.": "{count} Gebäude im Bau wurden vorrangig näher am Eingang platziert.",
+  "추천 각도 갱신 중 — 직전 계산 결과를 표시합니다.": "Empfohlene Winkel werden aktualisiert — das vorige Ergebnis wird angezeigt."
 }
