@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+from . import diagnostics
 import time
 from dataclasses import dataclass, field
 from typing import Dict, Optional
@@ -225,7 +226,14 @@ class RecognitionService(QObject):
 
     def _on_finished(self, res: ScanResult):
         if res.job_id != self.inflight_job:
+            diagnostics.emit("ocr.discarded", job=res.job_id, reason="superseded", current=self.inflight_job)
             return  # 스레드 교체 전에 큐에 들어온 이전 결과도 버린다.
+        diagnostics.emit("ocr.completed", stream="scan",
+                         state=(res.observation.kind.value, res.skipped, bool(res.observation.error)),
+                         job=res.job_id, observed=res.observation.kind.value, skipped=res.skipped,
+                         failed=bool(res.observation.error),
+                         elapsed_ms=round((time.monotonic() - self.busy_since) * 1000, 2)
+                         if self.busy_since is not None else None)
         self.inflight_job = None
         self.busy_since = None
         self.result.emit(res)

@@ -13,6 +13,7 @@ from typing import Callable, Optional
 from PySide6.QtCore import QObject, QTimer, Signal
 
 from . import mod_installer as mi
+from . import diagnostics
 from ..i18n import tr
 
 log = logging.getLogger(__name__)
@@ -76,6 +77,11 @@ class ModGuard(QObject):
         st = mi.check()
         self.last = st
         pending = st.needs_install and st.vendor_ok and (self.settings.auto_install_mod or force_install)
+        diagnostics.emit("bridge.installation", stream="guard",
+                         state=(st.ok, st.running, st.needs_install, connected),
+                         ok=st.ok, game_running=st.running, needs_install=st.needs_install,
+                         update_pending=pending, connected=connected, game_build=st.build_id,
+                         data_build=self.data_build)
         self.poll_interval.emit(1_000 if pending else 10_000)
         now = time.monotonic()
         if st.running:

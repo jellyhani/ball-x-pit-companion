@@ -9,6 +9,7 @@ from __future__ import annotations
 import ctypes
 import logging
 import os
+from ..services import diagnostics
 from typing import Dict, List, Optional
 
 log = logging.getLogger(__name__)
@@ -29,10 +30,15 @@ def lib():
         return _lib or None
     _lib = False
     if os.environ.get("BXP_NO_NATIVE") or os.name != "nt" or not os.path.exists(_DLL):
+        reason = "disabled" if os.environ.get("BXP_NO_NATIVE") else "platform" if os.name != "nt" else "missing_dll"
+        diagnostics.emit("engine.backend", native=False, reason=reason)
         return None
     try:
         native_library = ctypes.CDLL(_DLL)
-        if native_library.bxp_version() != 10:
+        version = native_library.bxp_version()
+        if version != 10:
+            log.warning("계산 DLL 인터페이스가 달라 파이썬으로 계산합니다: 기대=10 실제=%s", version)
+            diagnostics.emit("engine.backend", native=False, reason="abi_mismatch", expected=10, actual=version)
             return None
         pointer_type = ctypes.POINTER
         double_type, integer_type = ctypes.c_double, ctypes.c_int
@@ -86,7 +92,9 @@ def lib():
         ]
         _lib = native_library
         log.info("네이티브 계산 모듈 사용 (%s)", _DLL)
+        diagnostics.emit("engine.backend", native=True, abi=version)
     except (OSError, AttributeError) as error:
+        diagnostics.emit("engine.backend", native=False, reason="load_error", error_type=type(error).__name__)
         log.warning("네이티브 계산 모듈을 불러오지 못해 파이썬으로 계산합니다: %s", error)
         return None
     return _lib

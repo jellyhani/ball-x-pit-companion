@@ -30,6 +30,7 @@ from .engine.recommender import Recommendation, Recommender, card_badge, card_ve
 from .gamedata import GameData, load_game_data
 from .recognition.ocr import check_ocr
 from .services import autostart
+from .services import diagnostics
 from .services import game_window as gw
 from .services.mod_guard import ModGuard
 from .services.bridge_client import BridgeClient
@@ -250,6 +251,11 @@ class AppController(QObject):
 
     # ---- 감시 루프 ----
     def _tick(self):
+        diagnostics.emit("tracking.source", stream="active", state=(self.bridge.live, self.bridge.connected),
+                         bridge_live=self.bridge.live, connected=self.bridge.connected,
+                         receive_age_ms=round((time.monotonic() - self.bridge.last_at) * 1000, 1)
+                         if self.bridge.last_at else None,
+                         ocr_enabled=self.settings.watch_enabled, ocr_available=self.ocr_status.ok)
         if self.bridge.live:
             # 게임 연동 중: 화면 인식은 쉬고, HUD 표시 판단용으로 게임 창 상태만 갱신한다
             self.window = gw.find_game_window()
@@ -395,6 +401,15 @@ class AppController(QObject):
         origin = self.window.origin if self.window else (0, 0)
         bridge_state = convert(snapshot, self.data, origin, frame_id=int(snapshot.get("seq") or 0), at=at)
         self.bridge_state = bridge_state
+        base_state = snapshot["base"].get("state") if isinstance(snapshot.get("base"), dict) else None
+        page = snapshot["levelup"].get("page") if isinstance(snapshot.get("levelup"), dict) else None
+        observed_kind = bridge_state.observation.kind.value
+        diagnostics.emit("state.interpreted", stream="game",
+                         state=(bridge_state.game_state, base_state, page, observed_kind),
+                         sequence=snapshot.get("seq"), game_state=bridge_state.game_state,
+                         base_state=base_state, page=page, observed=observed_kind,
+                         choices=len(bridge_state.observation.cards), unknown=len(bridge_state.unknown_types),
+                         receive_to_ui_ms=round(max(0., now - at) * 1000, 2))
         self._read_ui_avoid(snapshot, bridge_state)
         building = snapshot.get("battle")
         if isinstance(building, dict):
@@ -426,10 +441,14 @@ class AppController(QObject):
         try:
             self._on_base(snapshot.get("base") if isinstance(snapshot.get("base"), dict) else None)
         except Exception:  # noqa: BLE001 — 기지 화면 오류가 선택창·융합 처리를 막지 않게
+            diagnostics.emit("state.failed", stream="base", phase="base", sequence=snapshot.get("seq"))
             if not getattr(self, "_base_error_logged", False):
                 log.exception("기지 화면 처리 오류 (한 번만 기록)")
                 self._base_error_logged = True
         self._base_ms = 0.9 * self._base_ms + 0.1 * (time.perf_counter() - t0) * 1000
+        diagnostics.emit("state.base_timing", stream="base", sequence=snapshot.get("seq"),
+                         elapsed_ms=round((time.perf_counter() - t0) * 1000, 2),
+                         moving_average_ms=round(self._base_ms, 2))
         if bridge_state.battle is not None:
             self.battle_info = bridge_state.battle
             self.dps_meter.set_battle(bridge_state.battle)
@@ -856,6 +875,10 @@ class AppController(QObject):
                 round(recommendation.free.score, 1) if recommendation.free else None,
             )
         self.fusion_rec = recommendation
+        diagnostics.emit("recommendation.fusion", stream="fusion",
+                         state=(recommendation.status, recommendation.headline),
+                         status=recommendation.status, evolutions=len(recommendation.evos),
+                         combinations=len(recommendation.combos), free_upgrade=recommendation.free is not None)
         self.hud.show_fusion(recommendation)
 
     def _resolve_pending_pick(self, inventory):
@@ -914,6 +937,8 @@ class AppController(QObject):
                 if self._is_after_pick_echo(s):
                     # 고른 직후 닫히는 애니메이션 동안 같은 카드가 다시 잡힌 것 — 새 선택창이 아니다
                     self._echo_sessions.add(s.session_id)
+                    diagnostics.emit("recommendation.deferred", stream="echo", state=s.session_id,
+                                     session=s.session_id, reason="closing_animation")
                     continue
                 self._echo_sessions.discard(s.session_id)
                 if evaluation.kind == "opened":
@@ -936,7 +961,13 @@ class AppController(QObject):
                     self.run.apply_inventory(s.inventory, self.data)
                 else:
                     self.run.reconcile_cards(s.cards, self.data)
+                recommendation_started = time.perf_counter()
                 self.recommendation = self.recommender.recommend(evaluation.session, self.run)
+                diagnostics.emit("recommendation.choice", stream="choice",
+                                 state=(s.session_id, s.signature, self.recommendation.status),
+                                 session=s.session_id, status=self.recommendation.status,
+                                 choices=len(s.cards), unknown=s.unknown_count, points=s.points_left,
+                                 elapsed_ms=round((time.perf_counter() - recommendation_started) * 1000, 2))
                 self.hud.show_recommendation(self.recommendation, evaluation.session.points_left)
                 self._log_recommendation(evaluation)
             elif evaluation.kind == "closed":
@@ -1256,6 +1287,10 @@ class AppController(QObject):
             and self.settings.hud_auto_show
             and not self.user_hidden
         )
+        diagnostics.emit("display.base_gate", stream="base",
+                         state=(state, visible_ok, self.user_hidden, self.settings.hud_auto_show),
+                         base_state=state, allowed=visible_ok, active=self._game_active(),
+                         user_hidden=self.user_hidden, auto_show=self.settings.hud_auto_show)
         g0 = (base or {}).get("geo") or {}
         hm0 = self._homography(g0.get("proj")) if g0.get("proj") else None
         if hm0 is not None and all(k in g0 for k in ("left", "right", "top", "bottom")):
@@ -1473,6 +1508,11 @@ class AppController(QObject):
         self._layout_for = key
         self._layout_request = (key, snapshot)
         self._sim_req["layout"] = key
+        diagnostics.emit("compute.input", channel="layout", request=diagnostics.request_token(key),
+                         sequence=getattr(self, "_trace_identity", {}).get("sequence"),
+                         buildings=len(snapshot.get("buildings") or []), workers=len(team),
+                         duration=duration, targets=len(targets), build_options=len(bps),
+                         need=need, forced=force, has_previous=previous is not None)
         self.sim.submit(
             "layout",
             key,
@@ -1545,8 +1585,12 @@ class AppController(QObject):
 
     def _on_sim_done(self, channel: str, key, result):
         if key != self._sim_req.get(channel):
+            diagnostics.emit("compute.discarded", channel=channel, request=diagnostics.request_token(key),
+                             reason="superseded", current=diagnostics.request_token(self._sim_req.get(channel)))
             return
         if channel != "layout" and not result:
+            diagnostics.emit("compute.retry", channel=channel, request=diagnostics.request_token(key),
+                             reason="empty_result", delay_ms=500)
             self._sim_req.pop(channel, None)
             self._sim_res.pop(channel, None)
             self._sim_retry_at[channel] = time.monotonic() + 0.5
@@ -1561,10 +1605,14 @@ class AppController(QObject):
                 or self._base_state == "kRearrangeBuildings"
                 or key != self._layout_fingerprint(self._base_snap)
             ):
+                diagnostics.emit("compute.discarded", channel=channel, request=diagnostics.request_token(key),
+                                 reason="layout_context_changed", base_state=self._base_state)
                 self._layout_for = None
                 return
             self._sim_res[channel] = (key, result)
             if not result:
+                diagnostics.emit("compute.retry", channel=channel, request=diagnostics.request_token(key),
+                                 reason="empty_result", delay_ms=2000)
                 self._layout_for = None
                 self._layout_retry_at = time.monotonic() + 2.0
             self._on_layout_done(request[1], result)
@@ -1574,6 +1622,8 @@ class AppController(QObject):
             self._sim_res[channel] = (key, result)
             if self._base_snap and self._base_state == "kAimWorkers":
                 self._render_base(self._base_snap, self._base_state)
+        diagnostics.emit("compute.accepted", channel=channel, request=diagnostics.request_token(key),
+                         has_result=bool(result), error=result.get("error") if isinstance(result, dict) else None)
 
     def _on_layout_done(self, snapshot: dict, result):
         self._layout_busy = False
@@ -1715,6 +1765,8 @@ class AppController(QObject):
 
         blocked = AppController._launch_block_message(base)
         if blocked:
+            diagnostics.emit("harvest.gate", stream="aim", state="launch_blocked",
+                             reason="launch_blocked_or_unknown", launch_allowed=base.get("launch_allowed"))
             AppController._clear_harvest_paths(self)
             return [(blocked, (255, 159, 10, 255))]
         geometry = base.get("geo") or {}
@@ -1725,10 +1777,14 @@ class AppController(QObject):
             or self.meta is None
             or not all(k in geometry for k in ("left", "right", "bottom", "top", "launcher"))
         ):
+            diagnostics.emit("harvest.gate", stream="aim", state="missing_geometry",
+                             reason="missing_geometry_or_meta", has_projection=homography is not None,
+                             has_colliders=isinstance(geometry.get("colliders"), list), has_meta=self.meta is not None)
             self.base_overlay.set_paths([], [])
             return []
         team = hs.team_from_base(base, self.meta.chars_raw, getattr(self, "_team_order", None))
         if not team:
+            diagnostics.emit("harvest.gate", stream="aim", state="empty_team", reason="empty_team")
             self.base_overlay.set_paths([], [])
             return []
         length = getattr(getattr(self, "settings", None), "aim_path_length", "normal")
@@ -1741,6 +1797,9 @@ class AppController(QObject):
         buildings = {building["id"]: building for building in base.get("buildings") or [] if "id" in building}
         targets = {u.id: u.hits_left for u in unf}
         duration = hs.initial_harvest_duration(base, team, self._harvest_dur)
+        diagnostics.emit("harvest.gate", stream="aim", state="ready", reason="ready", workers=len(team),
+                         buildings=len(buildings), colliders=len(geometry["colliders"]), duration=duration,
+                         dynamic=hs.needs_dynamic_simulation(buildings))
         # 배치·남은 자원·필요 자원·미완성 건물이 바뀔 때만 각도 탐색을 다시 한다
         lo, hi = self.aim_range.limits
         from .engine.sim_signature import aim_signature
@@ -1750,6 +1809,10 @@ class AppController(QObject):
         now = time.monotonic()
         if self._sim_req.get("sweep") != key and now >= retry.get("sweep", 0):
             self._sim_req["sweep"] = key
+            diagnostics.emit("compute.input", channel="sweep", request=diagnostics.request_token(key),
+                             sequence=getattr(self, "_trace_identity", {}).get("sequence"),
+                             buildings=len(buildings), workers=len(team), duration=duration,
+                             targets=len(targets), need=need, minimum_angle=lo, maximum_angle=hi)
             self.sim.submit(
                 "sweep", key, sim_jobs.job_sweep, geometry, buildings, team, duration, need, targets, lo, hi
             )
@@ -1766,6 +1829,9 @@ class AppController(QObject):
             ang = math.degrees(math.atan2(player[3], player[2]))
             if self._sim_req.get("now") != (ang, key) and now >= retry.get("now", 0):
                 self._sim_req["now"] = (ang, key)
+                diagnostics.emit("compute.input", channel="now", request=diagnostics.request_token((ang, key)),
+                                 sequence=getattr(self, "_trace_identity", {}).get("sequence"),
+                                 angle=ang, duration=duration, workers=len(team), buildings=len(buildings))
                 self.sim.submit(
                     "now", (ang, key), sim_jobs.job_now, geometry, buildings, team, ang, duration, targets
                 )
@@ -1879,6 +1945,11 @@ class AppController(QObject):
             (tr("첫 작업자의 예상 경로입니다. 먼 점선은 실제와 달라질 수 있습니다."), (140, 140, 150, 255))
         )
         self.base_overlay.set_paths(now_path, best_path)
+        diagnostics.emit("display.harvest", stream="paths",
+                         state=(bool(now_path), bool(best_path), tuple(sorted(quality_notes))),
+                         current_points=len(now_path), recommended_points=len(best_path),
+                         limitations=",".join(sorted(quality_notes)),
+                         request=diagnostics.request_token(key))
         return lines
 
     def _update_dps(self):
@@ -1963,6 +2034,11 @@ class AppController(QObject):
             "선택창=%s 추천=%s 융합=%s 알림=%s 잔상보류=%s 위치=%s 전면배치=%s",
             *signature, self.hud.geometry().getRect(), raised,
         )
+        diagnostics.emit("display.hud", wanted=wanted, visible=self.hud.isVisible(),
+                         active=self._game_active(), user_hidden=self.user_hidden,
+                         session=session.session_id if session else None,
+                         echo=bool(self._echo_sessions), raised=raised,
+                         x=self.hud.x(), y=self.hud.y(), width=self.hud.width(), height=self.hud.height())
 
     def _update_highlight(self):
         """모든 선택지 카드에 판정 색 테두리와 이름표 (HUD 목록과 같은 색)."""

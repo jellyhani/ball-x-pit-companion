@@ -3,8 +3,8 @@
 import json
 from pathlib import Path
 
-APP_VERSION = "0.1.0-beta.4"
-WINDOWS_VERSION = (0, 1, 0, 4)
+APP_VERSION = "0.1.0-beta.5"
+WINDOWS_VERSION = (0, 1, 0, 5)
 
 
 def build_info():

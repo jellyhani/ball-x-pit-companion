@@ -23,6 +23,10 @@ def setup_logging() -> str:
     root = logging.getLogger()
     root.setLevel(logging.INFO)
     root.addHandler(handler)
+    from . import diagnostics
+    from ..version import build_info
+    diagnostics.configure(log_dir)
+    diagnostics.emit("app.logging_ready", **build_info())
     return path
 
 

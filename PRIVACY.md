@@ -26,6 +26,12 @@ The companion has no built-in account system, advertising tracker, or automatic 
 upload. Its bridge communicates over a local named pipe. Local storage is not encrypted by this
 application; other software or users with access to those files may be able to read them.
 
+`logs/diagnostics.jsonl` records processing stages, state changes, calculation request fingerprints,
+queue and execution times, and reasons a result was accepted, discarded, or not displayed.
+It uses selected metadata rather than copying raw game snapshots or calculation inputs. Repeated
+unchanged states are summarized. This log rotates at 5 MB with four backups (about 25 MB total);
+that limit does not apply to the separate snapshots, history files, or ordinary application log.
+
 ## Network access and sharing
 
 Setup and bridge installation download dependencies or BepInEx from their distribution services.
@@ -65,6 +71,9 @@ are retained so other installed mods are not removed. Back up anything you want 
   진단 자료에는 로컬 사용자명·경로 또는 화면에 보인 내용이 포함될 수 있습니다.
 - 자체 계정·광고 추적·플레이 기록 자동 업로드 기능은 없습니다. 연동은 로컬 named pipe를 사용합니다.
   저장 파일을 앱 자체에서 암호화하지 않으므로, 접근 권한을 가진 다른 사용자나 프로그램이 읽을 수 있습니다.
+- `logs/diagnostics.jsonl`에는 처리 단계·상태 변화·계산 요청 지문·대기 및 실행 시간·결과 적용/폐기/표시
+  사유를 기록합니다. 원본 스냅샷이나 계산 입력 전체 대신 선택한 메타데이터를 남기며, 같은 상태는 요약합니다.
+  파일당 5MB, 이전 파일 4개로 총 약 25MB를 유지합니다. 별도 스냅샷·이력·일반 로그에는 이 제한이 적용되지 않습니다.
 - 초기 설정·연동 설치에는 의존성과 BepInEx 다운로드가 있습니다. 다운로드 서비스는 IP 주소 등
   일반적인 접속 정보를 자체 정책에 따라 처리합니다. ‘플레이 기록을 업로드하지 않는다’는 설명은
   설치 과정에도 인터넷 접속이 전혀 없다는 뜻이 아닙니다.

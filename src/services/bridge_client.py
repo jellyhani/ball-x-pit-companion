@@ -17,6 +17,7 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal
 
 from ..i18n import tr
+from . import diagnostics
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ class BridgeClient(QObject):
             self.connected = on
             text = tr("게임 연동 연결됨") if on else tr("게임 연동 없음{v0}", v0=(" — " + why) if why else "")
             log.info(text)
+            diagnostics.emit("bridge.connection", connected=on, messages=self.messages)
             self.status_changed.emit(text)
 
     def _run(self):
@@ -76,6 +78,7 @@ class BridgeClient(QObject):
                     buffer += chunk
                     if len(buffer) > MAX_LINE and b"\n" not in buffer:
                         log.warning("브리지 메시지가 너무 김 — 버림")
+                        diagnostics.emit("bridge.rejected", stream="length", reason="oversized", bytes=len(buffer))
                         buffer = b""
                     while b"\n" in buffer:
                         line, buffer = buffer.split(b"\n", 1)
@@ -94,13 +97,22 @@ class BridgeClient(QObject):
             message = json.loads(line.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
             log.warning("브리지 메시지를 읽지 못함 (%d바이트)", len(line))
+            diagnostics.emit("bridge.rejected", stream="decode", reason="invalid_json", bytes=len(line))
             return
         if not isinstance(message, dict) or message.get("v") != PROTOCOL_VERSION:
             log.warning(
                 "브리지 프로토콜 버전이 다름: %s", message.get("v") if isinstance(message, dict) else "?"
             )
+            diagnostics.emit("bridge.rejected", stream="version", reason="protocol_version", bytes=len(line))
             return
+        previous_at = self.last_at
         self.last_at = time.monotonic()
         self.game_version = message.get("game_version", "")
         self.messages += 1
+        message_kind = "catalog" if "catalog" in message else "meta" if "meta" in message else "state"
+        diagnostics.emit("bridge.received", stream=message_kind, state=message.get("plugin"),
+                         kind=message_kind, sequence=message.get("seq"), plugin=message.get("plugin"),
+                         bytes=len(line), messages=self.messages,
+                         gap_ms=round((self.last_at - previous_at) * 1000, 1) if previous_at else None,
+                         plugin_read_ms=message.get("cost_ms"))
         self.snapshot.emit(message, self.last_at)
