@@ -1165,6 +1165,7 @@ class AppController(QObject):
                     self._harvest_pending = True
             self._base_state = state
         self._base_snap = base
+        self.layout_win.set_current_base(base)
         AppController._precompute_harvest(self, base, state)
         self.control.set_base_context(base)
         self._update_char_combo(base, state)
@@ -1488,6 +1489,9 @@ class AppController(QObject):
 
     # ---- 배치도 ----
     def open_layout(self):
+        self.layout_win.set_current_base(self._base_snap)
+        diagnostics.emit("display.layout_open", buildings=len((self._base_snap or {}).get("buildings") or []),
+                         has_plan=self.layout_plan is not None, calculating=self._layout_busy)
         self.layout_win.show()
         self.layout_win.raise_()
         self.layout_win.activateWindow()
@@ -1626,7 +1630,6 @@ class AppController(QObject):
                 not request
                 or not self._base_snap
                 or self.meta is None
-                or self._base_state == "kRearrangeBuildings"
                 or key != self._layout_fingerprint(self._base_snap)
             ):
                 diagnostics.emit("compute.discarded", channel=channel, request=diagnostics.request_token(key),

@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-APP_VERSION = "0.1.0-beta.11"
+APP_VERSION = "0.1.0-beta.12"
 WINDOWS_VERSION = (0, 1, 0, 10)
 
 

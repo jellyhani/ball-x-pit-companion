@@ -237,8 +237,29 @@ class LayoutWindow(QWidget):
         scroll_area.setWidget(widget)
         horizontal_layout.addWidget(scroll_area, 2)
         self.base: Optional[dict] = None
+        self.current_base: Optional[dict] = None
+        self._current_received = False
+        self._current_key = None
         self.plan: Optional[LayoutPlan] = None
         self.sweeps: Dict[int, list] = {}
+
+    def set_current_base(self, base: Optional[dict]):
+        """현재 지도는 추천 계산 완료와 무관하게 갱신한다. 가이드의 계산 기준은 따로 보존한다."""
+        self.current_base = base
+        self._current_received = True
+        geometry = (base or {}).get("geo") or {}
+        key = (
+            tuple(geometry.get(name) for name in ("left", "right", "bottom", "top", "space_w", "chunk_w", "chunk_h")),
+            repr(geometry.get("chunks")),
+            tuple((building.get("id"), building.get("type"), building.get("x"), building.get("y"),
+                   building.get("tw"), building.get("th"), building.get("rot"), building.get("range"))
+                  for building in (base or {}).get("buildings") or []),
+            repr(geometry.get("colliders")),
+        )
+        if key != self._current_key:
+            self._current_key = key
+            if self.view.group.checkedId() == 0:
+                self._redraw()
 
     def set_result(self, base: dict, plan: Optional[LayoutPlan], sweeps: Dict[int, list]):
         """plan: 현재 배치에서 출발한 가이드 이동안."""
@@ -463,10 +484,11 @@ class LayoutWindow(QWidget):
 
     def _redraw(self):
         self.view_label.setText(tr("가이드 배치") if self.view.group.checkedId() == 1 else tr("지금 배치"))
-        if not self.base:
+        base = self.current_base if self.view.group.checkedId() == 0 and self._current_received else self.base
+        if not base:
             self.canvas.set_state({}, {}, [], {})
             return
-        buildings = buildings_from_base(self.base)
+        buildings = buildings_from_base(base)
         swaps = self.plan.swaps if self.plan else []
         if self.view.group.checkedId() == 1 and swaps:
             for sw in swaps:
@@ -483,11 +505,11 @@ class LayoutWindow(QWidget):
             if b.type in EFFECTS or b.type not in TILE_TYPES
         }
         # 건물 모양: 지금 기지의 충돌 모양을 목표 자리·회전으로 옮겨 그린다 (사각형이 아니라 ㄱ·ㅜ·ㅠ 모양 그대로)
-        geo = self.base.get("geo") or {}
+        geo = base.get("geo") or {}
         grid = grid_from_geo(geo)
         shapes = {}
         if grid is not None:
-            orig = buildings_from_base(self.base)
+            orig = buildings_from_base(base)
             masks = shape_masks(geo, orig, grid)
             for index, b in buildings.items():
                 o = orig.get(index)

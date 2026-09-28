@@ -105,11 +105,18 @@ class RuntimeAuditFixTest(unittest.TestCase):
         ctx._on_layout_done.assert_not_called()
         self.assertIsNone(ctx._layout_for)
 
-    def test_layout_result_is_not_applied_during_rearrangement(self):
+    def test_unchanged_layout_result_is_applied_during_rearrangement(self):
         ctx = NS(_sim_req={"layout": "same"}, _sim_res={}, _layout_busy=True,
                  _layout_request=("same", {"buildings": []}), _base_snap={"buildings": []}, meta=object(),
                  _base_state="kRearrangeBuildings", _layout_fingerprint=lambda _: "same", _on_layout_done=Mock())
         AppController._on_sim_done(ctx, "layout", "same", (LayoutPlan(1, 2), {}))
+        ctx._on_layout_done.assert_called_once()
+
+    def test_moved_building_still_invalidates_result_during_rearrangement(self):
+        ctx = NS(_sim_req={"layout": "old"}, _sim_res={}, _layout_busy=True,
+                 _layout_request=("old", {"buildings": []}), _base_snap={"buildings": []}, meta=object(),
+                 _base_state="kRearrangeBuildings", _layout_fingerprint=lambda _: "moved", _on_layout_done=Mock())
+        AppController._on_sim_done(ctx, "layout", "old", (LayoutPlan(1, 2), {}))
         ctx._on_layout_done.assert_not_called()
 
     def test_submission_failure_signals_completion(self):
