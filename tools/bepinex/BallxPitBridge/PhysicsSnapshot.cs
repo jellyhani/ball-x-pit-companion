@@ -15,32 +15,32 @@ namespace BallxPitBridge
         static float _environmentAt = -10;
         static string _environmentState;
 
-        internal static void Write(Utf8JsonWriter w, BaseGridMgr g, BaseMgr bm, MetaSaveData meta)
+        internal static void Write(Utf8JsonWriter writer, BaseGridMgr gridManager, BaseMgr baseManager, MetaSaveData saveData)
         {
             try
             {
-                string state = bm.CurState.ToString();
+                string state = baseManager.CurState.ToString();
                 if (_environment == null || _environmentState != state || Time.realtimeSinceStartup - _environmentAt >= 1f)
                 {
-                    using var ms = new MemoryStream();
-                    using (var ew = new Utf8JsonWriter(ms))
+                    using var memoryStream = new MemoryStream();
+                    using (var environmentWriter = new Utf8JsonWriter(memoryStream))
                     {
-                        ew.WriteStartObject();
-                        ew.WriteBoolean("queries_start_in_colliders", Physics2D.queriesStartInColliders);
-                        ew.WriteBoolean("queries_hit_triggers", Physics2D.queriesHitTriggers);
-                        ew.WriteStartArray("walls");
-                        var cols = UnityEngine.Object.FindObjectsOfType<Collider2D>();
+                        environmentWriter.WriteStartObject();
+                        environmentWriter.WriteBoolean("queries_start_in_colliders", Physics2D.queriesStartInColliders);
+                        environmentWriter.WriteBoolean("queries_hit_triggers", Physics2D.queriesHitTriggers);
+                        environmentWriter.WriteStartArray("walls");
+                        var colliders = UnityEngine.Object.FindObjectsOfType<Collider2D>();
                         int mask = ColMgr.kLayerMaskAllBaseObstacles;
-                        if (cols != null) foreach (var col in cols)
+                        if (colliders != null) foreach (var collider in colliders)
                         {
-                            if (col == null || !col.enabled || !col.gameObject.activeInHierarchy || col.isTrigger) continue;
-                            if ((mask & (1 << col.gameObject.layer)) == 0) continue;
-                            if (g.BuildingColDict != null && g.BuildingColDict.ContainsKey(col)) continue;
-                            WriteCollider(ew, col);
+                            if (collider == null || !collider.enabled || !collider.gameObject.activeInHierarchy || collider.isTrigger) continue;
+                            if ((mask & (1 << collider.gameObject.layer)) == 0) continue;
+                            if (gridManager.BuildingColDict != null && gridManager.BuildingColDict.ContainsKey(collider)) continue;
+                            WriteCollider(environmentWriter, collider);
                         }
-                        ew.WriteEndArray();
-                        ew.WriteStartArray("roads");
-                        var chunks = meta.BaseChunks;
+                        environmentWriter.WriteEndArray();
+                        environmentWriter.WriteStartArray("roads");
+                        var chunks = saveData.BaseChunks;
                         if (chunks != null && BuildingMgr.I != null)
                             for (int x = 0; x < chunks.Length; x++)
                                 if (chunks[x] != null) for (int y = 0; y < chunks[x].Length; y++)
@@ -48,140 +48,140 @@ namespace BallxPitBridge
                                     var chunk = chunks[x][y];
                                     if (chunk == null || !chunk.IsPurchased) continue;
                                     var corner = BaseGridMgr.GetChunkBotLeft(chunk.X, chunk.Y);
-                                    for (int cx = 0; cx < BaseGridMgr.kChunkWidth; cx++)
-                                        for (int cy = 0; cy < BaseGridMgr.kChunkHeight; cy++)
+                                    for (int columnIndex = 0; columnIndex < BaseGridMgr.kChunkWidth; columnIndex++)
+                                        for (int rowIndex = 0; rowIndex < BaseGridMgr.kChunkHeight; rowIndex++)
                                         {
-                                            float lx = corner.x + cx * BaseGridMgr.kSpaceWidth;
-                                            float ly = corner.y + cy * BaseGridMgr.kSpaceHeight;
-                                            if (BuildingMgr.I.GetTile(lx + BaseGridMgr.kSpaceWidth / 2,
-                                                                      ly + BaseGridMgr.kSpaceHeight / 2) != BaseTileType.kStoneRoad) continue;
-                                            ew.WriteStartArray();
-                                            ew.WriteNumberValue(lx); ew.WriteNumberValue(ly);
-                                            ew.WriteNumberValue(lx + BaseGridMgr.kSpaceWidth);
-                                            ew.WriteNumberValue(ly + BaseGridMgr.kSpaceHeight);
-                                            ew.WriteEndArray();
+                                            float logicalX = corner.x + columnIndex * BaseGridMgr.kSpaceWidth;
+                                            float logicalY = corner.y + rowIndex * BaseGridMgr.kSpaceHeight;
+                                            if (BuildingMgr.I.GetTile(logicalX + BaseGridMgr.kSpaceWidth / 2,
+                                                                      logicalY + BaseGridMgr.kSpaceHeight / 2) != BaseTileType.kStoneRoad) continue;
+                                            environmentWriter.WriteStartArray();
+                                            environmentWriter.WriteNumberValue(logicalX); environmentWriter.WriteNumberValue(logicalY);
+                                            environmentWriter.WriteNumberValue(logicalX + BaseGridMgr.kSpaceWidth);
+                                            environmentWriter.WriteNumberValue(logicalY + BaseGridMgr.kSpaceHeight);
+                                            environmentWriter.WriteEndArray();
                                         }
                                 }
-                        ew.WriteEndArray();
+                        environmentWriter.WriteEndArray();
                         var road = InfoDB.I.Buildings[(int)BuildingType.kStoneRoad];
-                        ew.WriteNumber("road_speed_mult", 1.0 + road.GetStatBonusAmt(0) / 100.0);
-                        ew.WriteEndObject();
+                        environmentWriter.WriteNumber("road_speed_mult", 1.0 + road.GetStatBonusAmt(0) / 100.0);
+                        environmentWriter.WriteEndObject();
                     }
-                    _environment = Encoding.UTF8.GetString(ms.ToArray());
+                    _environment = Encoding.UTF8.GetString(memoryStream.ToArray());
                     _environmentAt = Time.realtimeSinceStartup;
                     _environmentState = state;
                 }
-                w.WritePropertyName("environment"); w.WriteRawValue(_environment, true);
-                w.WriteNumber("physics_contract", 2);
-                w.WriteNumber("environment_age", Math.Round(Time.realtimeSinceStartup - _environmentAt, 3));
+                writer.WritePropertyName("environment"); writer.WriteRawValue(_environment, true);
+                writer.WriteNumber("physics_contract", 2);
+                writer.WriteNumber("environment_age", Math.Round(Time.realtimeSinceStartup - _environmentAt, 3));
             }
-            catch (Exception e) { w.WriteString("physics_error", e.GetType().Name); }
+            catch (Exception error) { writer.WriteString("physics_error", error.GetType().Name); }
             try
             {
                 if (TimeMgr.I != null)
                 {
-                    w.WriteNumber("game_time", TimeMgr.I.GetTime());
-                    w.WriteNumber("physics_time", TimeMgr.I.GetPhysicsTime());
-                    w.WriteNumber("game_speed", TimeMgr.I.GetGameSpeed());
-                    w.WriteNumber("physics_step", TimeMgr.I.GetFixedDeltaTime());
+                    writer.WriteNumber("game_time", TimeMgr.I.GetTime());
+                    writer.WriteNumber("physics_time", TimeMgr.I.GetPhysicsTime());
+                    writer.WriteNumber("game_speed", TimeMgr.I.GetGameSpeed());
+                    writer.WriteNumber("physics_step", TimeMgr.I.GetFixedDeltaTime());
                 }
                 if (WorldTimeMgr.I != null)
                 {
-                    w.WriteNumber("world_tick_progress", WorldTimeMgr.I._timeProgress);
-                    w.WriteNumber("world_tick_interval", WorldTimeMgr.I.GetTimeThreshold());
+                    writer.WriteNumber("world_tick_progress", WorldTimeMgr.I._timeProgress);
+                    writer.WriteNumber("world_tick_interval", WorldTimeMgr.I.GetTimeThreshold());
                 }
             }
             catch { }
             try
             {
-                using var ms = new MemoryStream();
-                using (var tw = new Utf8JsonWriter(ms))
+                using var teamBuffer = new MemoryStream();
+                using (var teamWriter = new Utf8JsonWriter(teamBuffer))
                 {
-                    tw.WriteStartArray();
-                    var workers = bm.ActiveWorkers;
-                    if (workers != null) for (int i = 0; i < workers.Count; i++)
+                    teamWriter.WriteStartArray();
+                    var workers = baseManager.ActiveWorkers;
+                    if (workers != null) for (int index = 0; index < workers.Count; index++)
                     {
-                        var c = workers[i];
-                        if (c == null) continue;
-                        tw.WriteStartObject();
-                        tw.WriteString("type", c.Type.ToString());
-                        tw.WriteNumber("launch_index", i);
-                        tw.WriteStartObject("upgrades");
+                        var character = workers[index];
+                        if (character == null) continue;
+                        teamWriter.WriteStartObject();
+                        teamWriter.WriteString("type", character.Type.ToString());
+                        teamWriter.WriteNumber("launch_index", index);
+                        teamWriter.WriteStartObject("upgrades");
                         foreach (HarvestUpgradeType type in Enum.GetValues(typeof(HarvestUpgradeType)))
-                            if (type != HarvestUpgradeType.kNum) tw.WriteNumber(type.ToString(), c.GetHarvestUpgradeLvl(type));
-                        tw.WriteEndObject();
-                        tw.WriteStartObject("harvest_bonus");
+                            if (type != HarvestUpgradeType.kNum) teamWriter.WriteNumber(type.ToString(), character.GetHarvestUpgradeLvl(type));
+                        teamWriter.WriteEndObject();
+                        teamWriter.WriteStartObject("harvest_bonus");
                         foreach (HarvestUpgradeType type in Enum.GetValues(typeof(HarvestUpgradeType)))
-                            if (type != HarvestUpgradeType.kNum) tw.WriteNumber(type.ToString(), c.GetHarvestUpgradeBonusAmt(type));
-                        tw.WriteEndObject();
-                        tw.WriteEndObject();
+                            if (type != HarvestUpgradeType.kNum) teamWriter.WriteNumber(type.ToString(), character.GetHarvestUpgradeBonusAmt(type));
+                        teamWriter.WriteEndObject();
+                        teamWriter.WriteEndObject();
                     }
-                    tw.WriteEndArray();
+                    teamWriter.WriteEndArray();
                 }
-                w.WritePropertyName("launch_team"); w.WriteRawValue(Encoding.UTF8.GetString(ms.ToArray()), true);
+                writer.WritePropertyName("launch_team"); writer.WriteRawValue(Encoding.UTF8.GetString(teamBuffer.ToArray()), true);
             }
-            catch (Exception e) { w.WriteString("team_error", e.GetType().Name); }
+            catch (Exception errorE) { writer.WriteString("team_error", errorE.GetType().Name); }
         }
 
-        internal static void WriteBuilding(Utf8JsonWriter w, BuildingInst b)
+        internal static void WriteBuilding(Utf8JsonWriter writer, BuildingInst building)
         {
-            w.WriteStartArray("observed_pose"); w.WriteNumberValue(b.X); w.WriteNumberValue(b.Y);
-            w.WriteNumberValue(b.Rotation); w.WriteEndArray();
+            writer.WriteStartArray("observed_pose"); writer.WriteNumberValue(building.X); writer.WriteNumberValue(building.Y);
+            writer.WriteNumberValue(building.Rotation); writer.WriteEndArray();
             try
             {
-                w.WriteBoolean("is_resource", BuildingUtl.IsResource(b.Type));
-                w.WriteNumber("resource_type", (int)BuildingUtl.GetResourceType(b.Type));
+                writer.WriteBoolean("is_resource", BuildingUtl.IsResource(building.Type));
+                writer.WriteNumber("resource_type", (int)BuildingUtl.GetResourceType(building.Type));
             }
             catch { }
             try
             {
-                var col = b.Obj?.Col;
-                if (col != null)
+                var collider = building.Obj?.Col;
+                if (collider != null)
                 {
-                    bool active = col.enabled && col.gameObject.activeInHierarchy;
-                    int layer = 1 << col.gameObject.layer;
-                    w.WriteBoolean("raycast_enabled", active && (ColMgr.kLayerMaskBounce & layer) != 0);
-                    w.WriteBoolean("pickup_enabled", active && (ColMgr.kLayerMaskPickup & layer) != 0);
+                    bool active = collider.enabled && collider.gameObject.activeInHierarchy;
+                    int layer = 1 << collider.gameObject.layer;
+                    writer.WriteBoolean("raycast_enabled", active && (ColMgr.kLayerMaskBounce & layer) != 0);
+                    writer.WriteBoolean("pickup_enabled", active && (ColMgr.kLayerMaskPickup & layer) != 0);
                 }
             }
             catch { }
-            try { w.WriteNumber("effect_value", b.GetStatBonusAmt()); } catch { }
+            try { writer.WriteNumber("effect_value", building.GetStatBonusAmt()); } catch { }
             try
             {
-                int level = b.UpgradeLvl + (b.CurState.ToString() == "kUpgrading" ? 1 : 0);
-                w.WriteNumber("completion_effect_value", b.GetInfo().GetStatBonusAmt(level));
+                int level = building.UpgradeLvl + (building.CurState.ToString() == "kUpgrading" ? 1 : 0);
+                writer.WriteNumber("completion_effect_value", building.GetInfo().GetStatBonusAmt(level));
             }
             catch { }
-            try { w.WriteBoolean("housing_effect_active", BuildingUtl.HasHousingUpgrade(b.Type)); } catch { }
-            try { w.WriteNumber("hit_limit", b.GetBabyWorkerBounceLimit()); } catch { }
-            try { w.WriteNumber("hits_this_harvest", b.NumBouncesThisHarvest); } catch { }
-            try { w.WriteNumber("task_seconds", b.CurTaskSecs); w.WriteNumber("task_target_seconds", b.GetTaskTgtSecs()); } catch { }
+            try { writer.WriteBoolean("housing_effect_active", BuildingUtl.HasHousingUpgrade(building.Type)); } catch { }
+            try { writer.WriteNumber("hit_limit", building.GetBabyWorkerBounceLimit()); } catch { }
+            try { writer.WriteNumber("hits_this_harvest", building.NumBouncesThisHarvest); } catch { }
+            try { writer.WriteNumber("task_seconds", building.CurTaskSecs); writer.WriteNumber("task_target_seconds", building.GetTaskTgtSecs()); } catch { }
             try
             {
-                w.WriteBoolean("task_active", b.HasActiveTask());
-                w.WriteBoolean("is_idle_harvester", BuildingUtl.IsIdleHarvester(b.Type));
-                w.WriteNumber("production_resource", (int)BuildingUtl.GetWorkstationResource(b.Type));
-                int level = b.UpgradeLvl + (b.CurState.ToString() == "kUpgrading" ? 1 : 0);
-                w.WriteNumber("completion_capacity", BuildingUtl.GetResourceCapacity(b.Type, level));
+                writer.WriteBoolean("task_active", building.HasActiveTask());
+                writer.WriteBoolean("is_idle_harvester", BuildingUtl.IsIdleHarvester(building.Type));
+                writer.WriteNumber("production_resource", (int)BuildingUtl.GetWorkstationResource(building.Type));
+                int level = building.UpgradeLvl + (building.CurState.ToString() == "kUpgrading" ? 1 : 0);
+                writer.WriteNumber("completion_capacity", BuildingUtl.GetResourceCapacity(building.Type, level));
             }
             catch { }
-            try { w.WriteNumber("regen_bonus", b.GetSpeedImprovementAmtInRange()); } catch { }
-            try { WriteRange(w, b.GetInfo(), b.GetTileSize(), b.Rotation); }
-            catch (Exception e) { w.WriteNull("range_boxes"); w.WriteString("range_error", e.GetType().Name); }
+            try { writer.WriteNumber("regen_bonus", building.GetSpeedImprovementAmtInRange()); } catch { }
+            try { WriteRange(writer, building.GetInfo(), building.GetTileSize(), building.Rotation); }
+            catch (Exception error) { writer.WriteNull("range_boxes"); writer.WriteString("range_error", error.GetType().Name); }
         }
 
-        internal static void WriteRange(Utf8JsonWriter w, BuildingInfo info, Vector2Int size, int rotation)
+        internal static void WriteRange(Utf8JsonWriter writer, BuildingInfo info, Vector2Int size, int rotation)
         {
             try
             {
                 // BuildingUtl.IsInRange(0x6B6560)의 대상 영역. 상대 좌표라 이동 후보에도 재사용한다.
                 // 물리 충돌 상자와 효과 범위의 대상 상자는 다르다. 콜라이더 AABB로 대체하지 않는다.
-                using var ms = new MemoryStream();
-                using (var rw = new Utf8JsonWriter(ms))
+                using var memoryStream = new MemoryStream();
+                using (var rangeWriter = new Utf8JsonWriter(memoryStream))
                 {
-                    rw.WriteStartArray();
+                    rangeWriter.WriteStartArray();
                     string shape = info.ColType.ToString();
-                    if (shape == "kBox") RangeBox(rw, -size.x * .5f, -size.y * .5f, size.x * .5f, size.y * .5f);
+                    if (shape == "kBox") RangeBox(rangeWriter, -size.x * .5f, -size.y * .5f, size.x * .5f, size.y * .5f);
                     else if (shape == "kPoly")
                     {
                         var grid = info.InnerGrid.TryCast<Il2CppSystem.Array>();
@@ -193,78 +193,78 @@ namespace BallxPitBridge
                             else if (rotation == 2) { ix = size.x - 1 - x; iy = size.y - 1 - y; }
                             else if (rotation == 3) { ix = size.y - 1 - y; iy = x; }
                             if (!grid.GetValue(ix, iy).Unbox<bool>()) continue;
-                            float cx = (x + .5f - size.x * .5f) * BaseGridMgr.kSpaceWidth;
-                            float cy = (size.y * .5f - y - .5f) * BaseGridMgr.kSpaceWidth;
-                            RangeBox(rw, cx - .3125f, cy - .3125f, cx + .3125f, cy + .3125f);
+                            float columnIndex = (x + .5f - size.x * .5f) * BaseGridMgr.kSpaceWidth;
+                            float rowIndex = (size.y * .5f - y - .5f) * BaseGridMgr.kSpaceWidth;
+                            RangeBox(rangeWriter, columnIndex - .3125f, rowIndex - .3125f, columnIndex + .3125f, rowIndex + .3125f);
                         }
                     }
-                    else if (shape == "kCircle") RangeBox(rw, 0, 0, 0, 0);
+                    else if (shape == "kCircle") RangeBox(rangeWriter, 0, 0, 0, 0);
                     else throw new InvalidOperationException("ColliderType");
-                    rw.WriteEndArray();
+                    rangeWriter.WriteEndArray();
                 }
-                w.WritePropertyName("range_boxes"); w.WriteRawValue(Encoding.UTF8.GetString(ms.ToArray()), true);
-                w.WriteNumber("range_rotation", rotation);
+                writer.WritePropertyName("range_boxes"); writer.WriteRawValue(Encoding.UTF8.GetString(memoryStream.ToArray()), true);
+                writer.WriteNumber("range_rotation", rotation);
             }
-            catch (Exception e) { w.WriteNull("range_boxes"); w.WriteString("range_error", e.GetType().Name); }
+            catch (Exception error) { writer.WriteNull("range_boxes"); writer.WriteString("range_error", error.GetType().Name); }
         }
 
-        static void RangeBox(Utf8JsonWriter w, float x0, float y0, float x1, float y1)
+        static void RangeBox(Utf8JsonWriter writer, float x0, float y0, float x1, float y1)
         {
-            w.WriteStartArray(); w.WriteNumberValue(x0); w.WriteNumberValue(y0);
-            w.WriteNumberValue(x1); w.WriteNumberValue(y1); w.WriteEndArray();
+            writer.WriteStartArray(); writer.WriteNumberValue(x0); writer.WriteNumberValue(y0);
+            writer.WriteNumberValue(x1); writer.WriteNumberValue(y1); writer.WriteEndArray();
         }
 
-        static void Point(Utf8JsonWriter w, Vector3 p)
+        static void Point(Utf8JsonWriter writer, Vector3 position)
         {
-            w.WriteStartArray(); w.WriteNumberValue(p.x); w.WriteNumberValue(p.y); w.WriteEndArray();
+            writer.WriteStartArray(); writer.WriteNumberValue(position.x); writer.WriteNumberValue(position.y); writer.WriteEndArray();
         }
 
-        static void WriteCollider(Utf8JsonWriter w, Collider2D col)
+        static void WriteCollider(Utf8JsonWriter writer, Collider2D collider)
         {
-            w.WriteStartObject();
-            w.WriteNumber("instance_id", col.GetInstanceID());
-            var t = col.transform;
-            var box = col.TryCast<BoxCollider2D>();
-            var circle = col.TryCast<CircleCollider2D>();
-            var poly = col.TryCast<PolygonCollider2D>();
-            var edge = col.TryCast<EdgeCollider2D>();
+            writer.WriteStartObject();
+            writer.WriteNumber("instance_id", collider.GetInstanceID());
+            var currentTransform = collider.transform;
+            var boxCollider = collider.TryCast<BoxCollider2D>();
+            var circle = collider.TryCast<CircleCollider2D>();
+            var poly = collider.TryCast<PolygonCollider2D>();
+            var edge = collider.TryCast<EdgeCollider2D>();
             if (circle != null)
             {
-                w.WriteString("shape", "circle");
-                w.WritePropertyName("c"); Point(w, t.TransformPoint(circle.offset));
-                w.WriteNumber("r", circle.radius * Math.Max(Math.Abs(t.lossyScale.x), Math.Abs(t.lossyScale.y)));
+                writer.WriteString("shape", "circle");
+                writer.WritePropertyName("c"); Point(writer, currentTransform.TransformPoint(circle.offset));
+                writer.WriteNumber("r", circle.radius * Math.Max(Math.Abs(currentTransform.lossyScale.x), Math.Abs(currentTransform.lossyScale.y)));
             }
             else
             {
-                w.WriteString("shape", edge != null ? "edge" : box != null ? "box" : "poly");
-                w.WriteStartArray("paths");
+                writer.WriteString("shape", edge != null ? "edge" : boxCollider != null ? "box" : "poly");
+                writer.WriteStartArray("paths");
                 if (poly != null)
                 {
-                    for (int i = 0; i < poly.pathCount; i++)
+                    for (int index = 0; index < poly.pathCount; index++)
                     {
-                        w.WriteStartArray();
-                        foreach (var p in poly.GetPath(i)) Point(w, t.TransformPoint(p + poly.offset));
-                        w.WriteEndArray();
+                        writer.WriteStartArray();
+                        foreach (var position in poly.GetPath(index)) Point(writer, currentTransform.TransformPoint(position + poly.offset));
+                        writer.WriteEndArray();
                     }
                 }
                 else
                 {
-                    w.WriteStartArray();
-                    if (edge != null) foreach (var p in edge.points) Point(w, t.TransformPoint(p + edge.offset));
-                    else if (box != null)
+                    writer.WriteStartArray();
+                    if (edge != null) foreach (var positionP in edge.points) Point(writer, currentTransform.TransformPoint(positionP + edge.offset));
+                    else if (boxCollider != null)
                     {
-                        var o = box.offset; var h = box.size * .5f;
-                        Point(w, t.TransformPoint(new Vector3(o.x - h.x, o.y - h.y, 0)));
-                        Point(w, t.TransformPoint(new Vector3(o.x + h.x, o.y - h.y, 0)));
-                        Point(w, t.TransformPoint(new Vector3(o.x + h.x, o.y + h.y, 0)));
-                        Point(w, t.TransformPoint(new Vector3(o.x - h.x, o.y + h.y, 0)));
+                        var positionO = boxCollider.offset; var positionH = boxCollider.size * .5f;
+                        Point(writer, currentTransform.TransformPoint(new Vector3(positionO.x - positionH.x, positionO.y - positionH.y, 0)));
+                        Point(writer, currentTransform.TransformPoint(new Vector3(positionO.x + positionH.x, positionO.y - positionH.y, 0)));
+                        Point(writer, currentTransform.TransformPoint(new Vector3(positionO.x + positionH.x, positionO.y + positionH.y, 0)));
+                        Point(writer, currentTransform.TransformPoint(new Vector3(positionO.x - positionH.x, positionO.y + positionH.y, 0)));
                     }
-                    w.WriteEndArray();
+                    writer.WriteEndArray();
                 }
-                w.WriteEndArray();
-                if (box == null && poly == null && edge == null) w.WriteBoolean("unsupported", true);
+                writer.WriteEndArray();
+                if (boxCollider == null && poly == null && edge == null) writer.WriteBoolean("unsupported", true);
             }
-            w.WriteEndObject();
+            writer.WriteEndObject();
         }
     }
 }

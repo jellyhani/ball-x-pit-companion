@@ -3,6 +3,7 @@
 게임 업데이트 뒤 tools/regress.py 로 같은 스냅샷을 다시 돌려 추천이 바뀌었는지 확인하는 데 쓴다.
 30일이 지난 파일은 지운다.
 """
+
 from __future__ import annotations
 
 import json
@@ -33,23 +34,23 @@ class SnapshotLog:
         path = self._path()
         try:
             os.makedirs(self.folder, exist_ok=True)
-            with open(path, "a", encoding="utf-8") as f:
+            with open(path, "a", encoding="utf-8") as file_handle:
                 if self._catalog is not None and self._catalog_written_to != path:
-                    f.write(json.dumps(self._catalog, ensure_ascii=False) + "\n")
+                    file_handle.write(json.dumps(self._catalog, ensure_ascii=False) + "\n")
                     self._catalog_written_to = path
-                f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+                file_handle.write(json.dumps(obj, ensure_ascii=False) + "\n")
         except OSError:
             log.exception("스냅샷 저장 실패")
 
-    def add(self, snap: dict):
-        self._write(snap)
+    def add(self, snapshot: dict):
+        self._write(snapshot)
 
     def _cleanup(self):
         try:
             cutoff = time.time() - KEEP_DAYS * 86400
             for name in os.listdir(self.folder):
-                p = os.path.join(self.folder, name)
-                if name.endswith(".jsonl") and os.path.getmtime(p) < cutoff:
-                    os.remove(p)
+                path = os.path.join(self.folder, name)
+                if name.endswith(".jsonl") and os.path.getmtime(path) < cutoff:
+                    os.remove(path)
         except OSError:
             pass

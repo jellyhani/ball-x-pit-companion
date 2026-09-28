@@ -7,6 +7,7 @@
 
 게임 폴더를 생략하면 Steam 라이브러리에서 BALL x PIT(appid 2062430)를 찾는다.
 """
+
 from __future__ import annotations
 
 import datetime as _dt
@@ -18,37 +19,58 @@ import sys
 from typing import Dict, List, Optional, Tuple
 
 APP_ID = "2062430"
-LANG_COUNT = 16          # 현재 빌드의 언어 수. 다르면 구조가 바뀐 것이므로 중단한다.
+LANG_COUNT = 16  # 현재 빌드의 언어 수. 다르면 구조가 바뀐 것이므로 중단한다.
 LANG_EN, LANG_KO = 0, 3  # 언어 배열 순서: 영어, 중국어 간체, 일본어, 한국어 ... (resources.assets 확인)
 
 # 언어 배열 전체 순서 (resources.assets 안의 I2Loc 언어 이름 목록을 직접 찾아 확인한 것 — 게임이 지원하는
 # 16개 언어와 정확히 일치. 스페인어 두 개(6, 10) 중 어느 쪽이 스페인/중남미인지는 이름만으론 구분이 안 돼
 # 순서로 추정한 것 — 틀렸으면 실제로 텍스트 보고 바꿀 것).
 LANGS: List[Tuple[str, str]] = [
-    ("english", "English"), ("schinese", "Simplified Chinese"), ("japanese", "Japanese"),
-    ("koreana", "Korean"), ("french", "French"), ("german", "German"),
-    ("spanish", "Spanish (Spain)"), ("russian", "Russian"),
-    ("brazilian", "Portuguese (Brazil)"), ("tchinese", "Traditional Chinese"),
-    ("latam", "Spanish (Latin America)"), ("polish", "Polish"),
-    ("italian", "Italian"), ("thai", "Thai"), ("turkish", "Turkish"), ("ukrainian", "Ukrainian"),
+    ("english", "English"),
+    ("schinese", "Simplified Chinese"),
+    ("japanese", "Japanese"),
+    ("koreana", "Korean"),
+    ("french", "French"),
+    ("german", "German"),
+    ("spanish", "Spanish (Spain)"),
+    ("russian", "Russian"),
+    ("brazilian", "Portuguese (Brazil)"),
+    ("tchinese", "Traditional Chinese"),
+    ("latam", "Spanish (Latin America)"),
+    ("polish", "Polish"),
+    ("italian", "Italian"),
+    ("thai", "Thai"),
+    ("turkish", "Turkish"),
+    ("ukrainian", "Ukrainian"),
 ]  # 코드는 Steam 상점 페이지의 ?l= 값과 맞춤
 
 
 def detect_system_lang_index() -> int:
     """윈도우 UI 언어 → LANGS 인덱스. 게임이 지원 안 하는 언어면 영어(0)로."""
     import locale as _locale
+
     try:
         import ctypes
+
         lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
         code = _locale.windows_locale.get(lcid, "")
     except (AttributeError, OSError):
         code = _locale.getdefaultlocale()[0] or ""
     prefix = code.split("_")[0].lower()
     by_prefix = {
-        "ko": "koreana", "ja": "japanese", "zh": "schinese",  # zh_TW 는 아래서 따로 처리
-        "fr": "french", "de": "german", "es": "spanish", "ru": "russian",
-        "pt": "brazilian", "pl": "polish", "it": "italian", "th": "thai",
-        "tr": "turkish", "uk": "ukrainian",
+        "ko": "koreana",
+        "ja": "japanese",
+        "zh": "schinese",  # zh_TW 는 아래서 따로 처리
+        "fr": "french",
+        "de": "german",
+        "es": "spanish",
+        "ru": "russian",
+        "pt": "brazilian",
+        "pl": "polish",
+        "it": "italian",
+        "th": "thai",
+        "tr": "turkish",
+        "uk": "ukrainian",
     }
     if prefix == "zh" and code.lower() in ("zh_tw", "zh_hk", "zh_mo"):
         target = "tchinese"
@@ -57,27 +79,51 @@ def detect_system_lang_index() -> int:
     codes = [c for c, _ in LANGS]
     return codes.index(target) if target in codes else LANG_EN
 
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # 출력 폴더: 기본은 저장소 data/ (개발용). --user 면 사용자 자료 폴더 (공개판 설치 — 게임 자료는 배포하지 않음)
 OUT_DIR = os.path.join(ROOT, "data")
 if "--user" in sys.argv:
     sys.argv.remove("--user")
-    OUT_DIR = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion", "gamedata")
+    OUT_DIR = os.path.join(
+        os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion", "gamedata"
+    )
 
 # 레벨업 화면 판별과 파싱에 쓰는 UI 문구 키
 UI_KEYS = [
-    "select_upgrade_level_up", "Select an upgrade", "free_reroll", "Re-roll Upgrades",
-    "prompt_banish", "Banish", "skip_prompt", "Skip", "New Ball", "New Passive",
-    "Upgrade Ball", "Upgrade Passive", "level_num_oneline", "Level Up",
-    "Fusion Available", "Fuse!", "Fusion", "Evolution", "ignore_fuser_desc",
-    "Select Character", "char_none_selected", "Paused", "Pause",
-    "tut_evolution", "tut_fusion", "tut_fission",
+    "select_upgrade_level_up",
+    "Select an upgrade",
+    "free_reroll",
+    "Re-roll Upgrades",
+    "prompt_banish",
+    "Banish",
+    "skip_prompt",
+    "Skip",
+    "New Ball",
+    "New Passive",
+    "Upgrade Ball",
+    "Upgrade Passive",
+    "level_num_oneline",
+    "Level Up",
+    "Fusion Available",
+    "Fuse!",
+    "Fusion",
+    "Evolution",
+    "ignore_fuser_desc",
+    "Select Character",
+    "char_none_selected",
+    "Paused",
+    "Pause",
+    "tut_evolution",
+    "tut_fusion",
+    "tut_fission",
 ]
 
 
 def find_steam_game_dir() -> Optional[str]:
     try:
         import winreg
+
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as k:
             steam = winreg.QueryValueEx(k, "SteamPath")[0]
     except OSError:
@@ -85,15 +131,15 @@ def find_steam_game_dir() -> Optional[str]:
     libs = [steam]
     vdf = os.path.join(steam, "steamapps", "libraryfolders.vdf")
     if os.path.exists(vdf):
-        with open(vdf, encoding="utf-8", errors="replace") as f:
-            libs += [p.replace("\\\\", "\\") for p in re.findall(r'"path"\s+"([^"]+)"', f.read())]
+        with open(vdf, encoding="utf-8", errors="replace") as file_handle:
+            libs += [p.replace("\\\\", "\\") for p in re.findall(r'"path"\s+"([^"]+)"', file_handle.read())]
     for lib in libs:
         manifest = os.path.join(lib, "steamapps", f"appmanifest_{APP_ID}.acf")
         if os.path.exists(manifest):
-            with open(manifest, encoding="utf-8", errors="replace") as f:
-                m = re.search(r'"installdir"\s+"([^"]+)"', f.read())
-            if m:
-                return os.path.join(lib, "steamapps", "common", m.group(1))
+            with open(manifest, encoding="utf-8", errors="replace") as file_handle:
+                match = re.search(r'"installdir"\s+"([^"]+)"', file_handle.read())
+            if match:
+                return os.path.join(lib, "steamapps", "common", match.group(1))
     return None
 
 
@@ -102,9 +148,9 @@ def read_build_id(game_dir: str) -> Optional[str]:
     manifest = os.path.join(lib, f"appmanifest_{APP_ID}.acf")
     if not os.path.exists(manifest):
         return None
-    with open(manifest, encoding="utf-8", errors="replace") as f:
-        m = re.search(r'"buildid"\s+"(\d+)"', f.read())
-    return m.group(1) if m else None
+    with open(manifest, encoding="utf-8", errors="replace") as file_handle:
+        match = re.search(r'"buildid"\s+"(\d+)"', file_handle.read())
+    return match.group(1) if match else None
 
 
 def parse_terms(data: bytes) -> Dict[str, List[str]]:
@@ -112,18 +158,19 @@ def parse_terms(data: bytes) -> Dict[str, List[str]]:
 
     용어 구조: 이름 문자열, int32 TermType, int32 언어 수(16), 언어별 문자열 16개.
     """
+
     def read_str(p: int) -> Tuple[bytes, int]:
         n = struct.unpack_from("<i", data, p)[0]
         if n < 0 or n > 20000:
             raise ValueError("bad length")
-        s = data[p + 4:p + 4 + n]
+        s = data[p + 4 : p + 4 + n]
         p = (p + 4 + n + 3) & ~3
         return s, p
 
     terms: Dict[str, List[str]] = {}
-    for m in re.finditer(rb"[A-Za-z][A-Za-z0-9 _/\-\.'!?]{1,80}", data):
-        p = m.start() - 4
-        if p < 0 or struct.unpack_from("<i", data, p)[0] != m.end() - m.start():
+    for match in re.finditer(rb"[A-Za-z][A-Za-z0-9 _/\-\.'!?]{1,80}", data):
+        p = match.start() - 4
+        if p < 0 or struct.unpack_from("<i", data, p)[0] != match.end() - match.start():
             continue
         try:
             name, q = read_str(p)
@@ -153,10 +200,10 @@ def _template_values(template_en: str, text_en: str) -> Optional[Dict[str, str]]
             pattern += r"(.+?)"
         else:
             pattern += re.escape(part).replace(r"\ ", r"\s*")
-    m = re.match(pattern + r"\s*\.?\s*$", text_en.strip(), flags=re.IGNORECASE)
-    if m:
+    match = re.match(pattern + r"\s*\.?\s*$", text_en.strip(), flags=re.IGNORECASE)
+    if match:
         values: Dict[str, str] = {}
-        for name, val in zip(names, m.groups()):
+        for name, val in zip(names, match.groups()):
             if values.get(name, val) != val:
                 return None
             values[name] = val.strip()
@@ -177,16 +224,16 @@ def _ordered_number_values(template_en: str, text_en: str) -> Optional[Dict[str,
     if len(slots) != len(numbers):
         return None
     values: Dict[str, str] = {}
-    for (name, literal), num in zip(slots, numbers):
+    for (name, literal), number in zip(slots, numbers):
         if literal:
-            if literal.rstrip("%") != num.rstrip("%"):
+            if literal.rstrip("%") != number.rstrip("%"):
                 return None
             continue
         if re.search(r"\{\[" + name + r"\]\}\s*%", template_en):
-            num = num.rstrip("%")
-        if values.get(name, num) != num:
+            number = number.rstrip("%")
+        if values.get(name, number) != number:
             return None
-        values[name] = num
+        values[name] = number
     return values
 
 
@@ -197,7 +244,9 @@ def fill_template(template_ko: str, values: Dict[str, str]) -> str:
 
 def all_names(langs: List[str]) -> Dict[str, str]:
     """이름을 게임이 지원하는 모든 언어로 ({LANGS 코드: 이름}) — 백과사전 검색이 어느 언어로 쳐도 찾게 한다."""
-    return {code: langs[i] for i, (code, _) in enumerate(LANGS) if i < len(langs) and langs[i]}
+    return {
+        code: langs[index] for index, (code, _) in enumerate(LANGS) if index < len(langs) and langs[index]
+    }
 
 
 def build(game_dir: str, lang_idx: Optional[int] = None) -> dict:
@@ -206,28 +255,28 @@ def build(game_dir: str, lang_idx: Optional[int] = None) -> dict:
     감지된 언어를 넣는다 (키 이름은 예전 그대로 — gamedata.py 등 많은 곳이 이 이름을 그대로 읽는다)."""
     lk = lang_idx if lang_idx is not None else detect_system_lang_index()
     assets = os.path.join(game_dir, "Balls_Data", "resources.assets")
-    with open(assets, "rb") as f:
-        data = f.read()
+    with open(assets, "rb") as file_handle:
+        data = file_handle.read()
     terms = parse_terms(data)
     if len(terms) < 500:
         raise SystemExit(f"번역 용어를 {len(terms)}개만 찾았습니다. 게임 버전이 바뀌었을 수 있습니다.")
 
     wiki = {}
-    for fn in ("balls_db.json", "passives_db.json"):      # 선택 자료 (없으면 게임 문구만)
-        path = os.path.join(ROOT, "data", fn)
+    for function in ("balls_db.json", "passives_db.json"):  # 선택 자료 (없으면 게임 문구만)
+        path = os.path.join(ROOT, "data", function)
         if not os.path.exists(path):
             continue
-        with open(path, encoding="utf-8") as f:
-            for row in json.load(f):
+        with open(path, encoding="utf-8") as file_handle:
+            for row in json.load(file_handle):
                 wiki[row["name"]] = row
 
     items: Dict[str, dict] = {}
     unmatched_numbers = []
     for key, langs in terms.items():
-        m = re.fullmatch(r"Generated/(hupg|pass)_(\w+)_name", key)
-        if not m:
+        match = re.fullmatch(r"Generated/(hupg|pass)_(\w+)_name", key)
+        if not match:
             continue
-        prefix, slug = m.groups()
+        prefix, slug = match.groups()
         kind = "ball" if prefix == "hupg" else "passive"
         desc = terms.get(f"Generated/{prefix}_{slug}_desc", [""] * LANG_COUNT)
         name_en = langs[LANG_EN]
@@ -258,10 +307,10 @@ def build(game_dir: str, lang_idx: Optional[int] = None) -> dict:
 
     characters: Dict[str, dict] = {}
     for key, langs in terms.items():
-        m = re.fullmatch(r"Generated/char_(\w+)_name", key)
-        if not m:
+        match = re.fullmatch(r"Generated/char_(\w+)_name", key)
+        if not match:
             continue
-        slug = m.group(1)
+        slug = match.group(1)
         desc = terms.get(f"Generated/char_{slug}_desc", [""] * LANG_COUNT)
         characters[f"char:{slug}"] = {
             "id": f"char:{slug}",
@@ -275,10 +324,10 @@ def build(game_dir: str, lang_idx: Optional[int] = None) -> dict:
 
     buildings: Dict[str, dict] = {}
     for key, langs in terms.items():
-        m = re.fullmatch(r"Generated/bld_(\w+)_name", key)
-        if not m:
+        match = re.fullmatch(r"Generated/bld_(\w+)_name", key)
+        if not match:
             continue
-        slug = m.group(1)
+        slug = match.group(1)
         desc = terms.get(f"Generated/bld_{slug}_desc", [""] * LANG_COUNT)
         upg = terms.get(f"Generated/bld_{slug}_upgdesc", [""] * LANG_COUNT)
         buildings[slug] = {
@@ -316,9 +365,9 @@ def build(game_dir: str, lang_idx: Optional[int] = None) -> dict:
 def main(argv: List[str]) -> int:
     lang_idx = None
     if "--lang" in argv:
-        i = argv.index("--lang")
-        code = argv[i + 1]
-        argv = argv[:i] + argv[i + 2:]
+        index = argv.index("--lang")
+        code = argv[index + 1]
+        argv = argv[:index] + argv[index + 2 :]
         codes = [c for c, _ in LANGS]
         if code not in codes:
             print(f"모르는 언어 코드: {code} (가능: {', '.join(codes)})")
@@ -330,15 +379,19 @@ def main(argv: List[str]) -> int:
         return 1
     result = build(game_dir, lang_idx)
     os.makedirs(OUT_DIR, exist_ok=True)
-    out = os.path.join(OUT_DIR, "game_text_ko.json")
-    with open(out, "w", encoding="utf-8") as f:
-        json.dump(result, f, ensure_ascii=False, indent=1)
+    current_result = os.path.join(OUT_DIR, "game_text_ko.json")
+    with open(current_result, "w", encoding="utf-8") as file_handle:
+        json.dump(result, file_handle, ensure_ascii=False, indent=1)
     s = result["source"]
-    print(f"저장: {out} (언어: {s['language_name']})")
-    print(f"빌드 {s['steam_build_id']} · 볼 {sum(1 for i in result['items'].values() if i['kind'] == 'ball')}개 · "
-          f"패시브 {sum(1 for i in result['items'].values() if i['kind'] == 'passive')}개 · 캐릭터 {len(result['characters'])}명")
+    print(f"저장: {current_result} (언어: {s['language_name']})")
+    print(
+        f"빌드 {s['steam_build_id']} · 볼 {sum(1 for index in result['items'].values() if index['kind'] == 'ball')}개 · "
+        f"패시브 {sum(1 for index in result['items'].values() if index['kind'] == 'passive')}개 · 캐릭터 {len(result['characters'])}명"
+    )
     if s["desc_numbers_unmatched"]:
-        print(f"수치 대입 실패 {len(s['desc_numbers_unmatched'])}개: {', '.join(s['desc_numbers_unmatched'][:12])} ...")
+        print(
+            f"수치 대입 실패 {len(s['desc_numbers_unmatched'])}개: {', '.join(s['desc_numbers_unmatched'][:12])} ..."
+        )
     return 0
 
 

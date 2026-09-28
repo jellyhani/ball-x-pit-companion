@@ -8,6 +8,7 @@
 모든 위치는 '제목 중심'과 '카드 간격(P)'의 비율로 계산한다. 해상도가 달라도 UI가 같은 비율로
 커진다는 가정이며, 1920×1080 외의 해상도는 아직 실제 화면으로 확인하지 못했다.
 """
+
 from __future__ import annotations
 
 import re
@@ -21,22 +22,22 @@ from .text_match import normalize
 from ..i18n import tr
 
 # 1920×1080 스크린샷에서 잰 비율 (단위: 카드 간격 P, 원점: 제목 중심)
-LABEL_DY_RANGE = (0.6, 1.35)   # 카드 문구의 세로 위치 (버튼 수에 따라 0.84–1.14 관측)
-HEADER_H_TO_PITCH = 8.85       # 제목 글자 높이 34px ↔ 카드 간격 300px
+LABEL_DY_RANGE = (0.6, 1.35)  # 카드 문구의 세로 위치 (버튼 수에 따라 0.84–1.14 관측)
+HEADER_H_TO_PITCH = 8.85  # 제목 글자 높이 34px ↔ 카드 간격 300px
 CARD_ICON_DY = 0.44
 CARD_ICON_HALF = 0.30
 CARD_HALF_W = 0.43
-CARD_TOP_DY, CARD_BELOW_LABEL = 0.11, 0.13   # 카드 윗변(제목 기준), 아랫변(문구 중심 기준)
+CARD_TOP_DY, CARD_BELOW_LABEL = 0.11, 0.13  # 카드 윗변(제목 기준), 아랫변(문구 중심 기준)
 INV_COL_X0, INV_COL_PITCH = 0.109, 0.2985
 INV_ROWS = ((-1.337, -0.813), (-0.789, -0.368))
 INV_HALF_W = 0.13
-INV_ICON_HALF_W, INV_ICON_BOTTOM_PAD = 0.16, 0.013   # 아이콘 불꽃 등이 칸 밖으로 조금 나온다
+INV_ICON_HALF_W, INV_ICON_BOTTOM_PAD = 0.16, 0.013  # 아이콘 불꽃 등이 칸 밖으로 조금 나온다
 DIGIT_HALF_W, DIGIT_TOP, DIGIT_BOTTOM = 0.065, 0.063, 0.172
-GOLD_BOX = (0.12, -0.279, 0.55, -0.172)          # x0, y0, x1, y1
+GOLD_BOX = (0.12, -0.279, 0.55, -0.172)  # x0, y0, x1, y1
 PORTRAIT_BOX = (-1.486, -1.42, -0.226, -0.17)
 REROLL_HALF_W = 1.43
-PANEL_BOX = (-1.55, -1.8, 1.573, 1.7)            # 왼쪽 강화 패널 전체 (HUD를 피해서 둘 영역)
-CARD_SCALE = 1 / 100.5        # 원본 1픽셀이 화면 P/100.5 픽셀
+PANEL_BOX = (-1.55, -1.8, 1.573, 1.7)  # 왼쪽 강화 패널 전체 (HUD를 피해서 둘 영역)
+CARD_SCALE = 1 / 100.5  # 원본 1픽셀이 화면 P/100.5 픽셀
 INVENTORY_SCALE = 1 / 158.7
 PORTRAIT_SCALE = 1 / 100.5
 
@@ -44,7 +45,7 @@ _LEVEL_RE = re.compile(r"^(?:레벨|lvl|lv\.?)\s*(\d{1,2})", re.IGNORECASE)
 _LEFT_RE = re.compile(r"(\d+)\s*남음")
 _POINTS_RE = re.compile(r"(\d+)\s*포인트")
 _COST_RE = re.compile(r"\(\s*(\d+)")
-HOVER_LABELS = {"새로운볼", "볼강화", "새패시브", "패시브강화"}   # 게임 번역 'New Ball!' 등
+HOVER_LABELS = {"새로운볼", "볼강화", "새패시브", "패시브강화"}  # 게임 번역 'New Ball!' 등
 
 
 def _nfkc(text: str) -> str:
@@ -61,10 +62,10 @@ def label_of(line: OcrLine) -> Tuple[Optional[CardLabel], Optional[int]]:
     return None, None
 
 
-def _box(x0: float, y0: float, x1: float, y1: float, size: Tuple[int, int]) -> Rect:
-    x0, y0 = max(0, int(x0)), max(0, int(y0))
-    x1, y1 = min(size[0], int(x1)), min(size[1], int(y1))
-    return (x0, y0, max(0, x1 - x0), max(0, y1 - y0))
+def _box(left_x: float, bottom_y: float, right_x: float, top_y: float, size: Tuple[int, int]) -> Rect:
+    left_x, bottom_y = max(0, int(left_x)), max(0, int(bottom_y))
+    right_x, top_y = min(size[0], int(right_x)), min(size[1], int(top_y))
+    return (left_x, bottom_y, max(0, right_x - left_x), max(0, top_y - bottom_y))
 
 
 @dataclass(frozen=True)
@@ -98,7 +99,7 @@ class LevelUpLayout:
     skip_rect: Optional[Rect] = None
     points_left: Optional[int] = None
     panel_rect: Optional[Rect] = None
-    hover_title: str = ""          # 마우스를 올린 카드의 설명 패널 제목(항목 이름 원문)
+    hover_title: str = ""  # 마우스를 올린 카드의 설명 패널 제목(항목 이름 원문)
 
 
 @dataclass(frozen=True)
@@ -160,7 +161,7 @@ def parse_layout(lines: Sequence[OcrLine], frame: FrameInfo) -> ParsedScreen:
     pitch = HEADER_H_TO_PITCH * header.h
     if gaps:
         g = min(gaps)
-        pitch = g / max(1, round(g / pitch))   # 가운데 문구를 놓치면 간격이 두 배가 된다
+        pitch = g / max(1, round(g / pitch))  # 가운데 문구를 놓치면 간격이 두 배가 된다
     same_row = all(abs(t[0].cy - ly) < 0.15 * pitch for t in labels)
     near = all(abs(x - hx) < 2.2 * pitch for x in xs)
     below = LABEL_DY_RANGE[0] * pitch <= ly - hy <= LABEL_DY_RANGE[1] * pitch
@@ -181,26 +182,57 @@ def parse_layout(lines: Sequence[OcrLine], frame: FrameInfo) -> ParsedScreen:
     spots: List[CardSpot] = []
     names = [_position_name(o) for o in wanted]
     if len(set(names)) != len(names):
-        names = [tr("{v0}번째", v0=i + 1) for i in range(len(wanted))]
-    for i, off in enumerate(wanted):
-        found = next((t for t, oo in zip(labels, offsets) if abs(oo - off) < 0.3), None)
-        cx = found[0].cx if found else hx + off * P
-        rect = _box(cx - CARD_HALF_W * P, hy + CARD_TOP_DY * P, cx + CARD_HALF_W * P, ly + CARD_BELOW_LABEL * P, size)
+        names = [tr("{v0}번째", v0=index + 1) for index in range(len(wanted))]
+    for index, offset in enumerate(wanted):
+        found = next((t for t, oo in zip(labels, offsets) if abs(oo - offset) < 0.3), None)
+        center_x = found[0].cx if found else hx + offset * P
+        rect = _box(
+            center_x - CARD_HALF_W * P,
+            hy + CARD_TOP_DY * P,
+            center_x + CARD_HALF_W * P,
+            ly + CARD_BELOW_LABEL * P,
+            size,
+        )
         icy = hy + CARD_ICON_DY * P
-        icon = _box(cx - CARD_ICON_HALF * P, icy - CARD_ICON_HALF * P, cx + CARD_ICON_HALF * P,
-                    icy + CARD_ICON_HALF * P, size)
-        spots.append(CardSpot(i, names[i], rect, icon, found[1] if found else None, found[2] if found else None))
+        icon = _box(
+            center_x - CARD_ICON_HALF * P,
+            icy - CARD_ICON_HALF * P,
+            center_x + CARD_ICON_HALF * P,
+            icy + CARD_ICON_HALF * P,
+            size,
+        )
+        spots.append(
+            CardSpot(
+                index, names[index], rect, icon, found[1] if found else None, found[2] if found else None
+            )
+        )
 
     slots, icons, digits = [], [], []
     for top, bottom in INV_ROWS:
         for c in range(4):
-            cx = hx + P * (INV_COL_X0 + INV_COL_PITCH * c)
-            y0 = hy + top * P
-            slots.append(_box(cx - INV_HALF_W * P, y0, cx + INV_HALF_W * P, hy + bottom * P, size))
-            icons.append(_box(cx - INV_ICON_HALF_W * P, y0 + DIGIT_BOTTOM * P, cx + INV_ICON_HALF_W * P,
-                              hy + (bottom + INV_ICON_BOTTOM_PAD) * P, size))
-            digits.append(_box(cx - DIGIT_HALF_W * P, y0 + DIGIT_TOP * P, cx + DIGIT_HALF_W * P,
-                               y0 + DIGIT_BOTTOM * P, size))
+            center_x = hx + P * (INV_COL_X0 + INV_COL_PITCH * c)
+            bottom_y = hy + top * P
+            slots.append(
+                _box(center_x - INV_HALF_W * P, bottom_y, center_x + INV_HALF_W * P, hy + bottom * P, size)
+            )
+            icons.append(
+                _box(
+                    center_x - INV_ICON_HALF_W * P,
+                    bottom_y + DIGIT_BOTTOM * P,
+                    center_x + INV_ICON_HALF_W * P,
+                    hy + (bottom + INV_ICON_BOTTOM_PAD) * P,
+                    size,
+                )
+            )
+            digits.append(
+                _box(
+                    center_x - DIGIT_HALF_W * P,
+                    bottom_y + DIGIT_TOP * P,
+                    center_x + DIGIT_HALF_W * P,
+                    bottom_y + DIGIT_BOTTOM * P,
+                    size,
+                )
+            )
     gx0, gy0, gx1, gy1 = GOLD_BOX
     px0, py0, px1, py1 = PORTRAIT_BOX
 
@@ -214,8 +246,13 @@ def parse_layout(lines: Sequence[OcrLine], frame: FrameInfo) -> ParsedScreen:
         else:
             m = _COST_RE.search(raw)
             reroll_cost = int(m.group(1)) if m else None
-        reroll_rect = _box(hx - REROLL_HALF_W * P, reroll.y - 0.1 * P, hx + REROLL_HALF_W * P,
-                           reroll.y + reroll.h + 0.1 * P, size)
+        reroll_rect = _box(
+            hx - REROLL_HALF_W * P,
+            reroll.y - 0.1 * P,
+            hx + REROLL_HALF_W * P,
+            reroll.y + reroll.h + 0.1 * P,
+            size,
+        )
     banish_left = None
     if banish is not None:
         m = _LEFT_RE.search(_nfkc(banish.text))
@@ -226,8 +263,11 @@ def parse_layout(lines: Sequence[OcrLine], frame: FrameInfo) -> ParsedScreen:
     hover_title = ""
     for ln in lines:
         if normalize(ln.text) in HOVER_LABELS and ln.cx > hx + 1.6 * P:
-            below_lines = [o for o in lines if o is not ln and 0 < o.cy - ln.cy < 4.5 * header.h
-                           and abs(o.cx - ln.cx) < max(o.w, ln.w)]
+            below_lines = [
+                o
+                for o in lines
+                if o is not ln and 0 < o.cy - ln.cy < 4.5 * header.h and abs(o.cx - ln.cx) < max(o.w, ln.w)
+            ]
             if below_lines:
                 hover_title = min(below_lines, key=lambda o: o.cy - ln.cy).text
             break
@@ -235,17 +275,32 @@ def parse_layout(lines: Sequence[OcrLine], frame: FrameInfo) -> ParsedScreen:
     pad = int(0.05 * P)
     layout = LevelUpLayout(
         hover_title=hover_title,
-        header=header, pitch=P, cards=tuple(spots),
-        inventory_slots=tuple(slots), inventory_icon_boxes=tuple(icons), digit_boxes=tuple(digits),
+        header=header,
+        pitch=P,
+        cards=tuple(spots),
+        inventory_slots=tuple(slots),
+        inventory_icon_boxes=tuple(icons),
+        digit_boxes=tuple(digits),
         gold_box=_box(hx + gx0 * P, hy + gy0 * P, hx + gx1 * P, hy + gy1 * P, size),
         portrait_box=_box(hx + px0 * P, hy + py0 * P, hx + px1 * P, hy + py1 * P, size),
-        card_scale=P * CARD_SCALE, inventory_scale=P * INVENTORY_SCALE, portrait_scale=P * PORTRAIT_SCALE,
-        reroll_rect=reroll_rect, reroll_cost=reroll_cost, free_rerolls=free,
-        banish_rect=_box(banish.x - pad, banish.y - pad, banish.x + banish.w + pad, banish.y + banish.h + pad, size)
-        if banish else None,
+        card_scale=P * CARD_SCALE,
+        inventory_scale=P * INVENTORY_SCALE,
+        portrait_scale=P * PORTRAIT_SCALE,
+        reroll_rect=reroll_rect,
+        reroll_cost=reroll_cost,
+        free_rerolls=free,
+        banish_rect=_box(
+            banish.x - pad, banish.y - pad, banish.x + banish.w + pad, banish.y + banish.h + pad, size
+        )
+        if banish
+        else None,
         banish_left=banish_left,
-        skip_rect=_box(skip.x - pad, skip.y - pad, skip.x + skip.w + pad, skip.y + skip.h + pad, size) if skip else None,
+        skip_rect=_box(skip.x - pad, skip.y - pad, skip.x + skip.w + pad, skip.y + skip.h + pad, size)
+        if skip
+        else None,
         points_left=int(m.group(1)) if m else None,
-        panel_rect=_box(hx + PANEL_BOX[0] * P, hy + PANEL_BOX[1] * P, hx + PANEL_BOX[2] * P, hy + PANEL_BOX[3] * P, size),
+        panel_rect=_box(
+            hx + PANEL_BOX[0] * P, hy + PANEL_BOX[1] * P, hx + PANEL_BOX[2] * P, hy + PANEL_BOX[3] * P, size
+        ),
     )
     return ParsedScreen(ScreenKind.LEVEL_UP, layout)

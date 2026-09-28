@@ -11,6 +11,7 @@
 구현이다 — 여긴 우리가 실제로 번역해 둔 언어(en/ja/schinese/tchinese)만 지원하고, 그 밖의 언어는
 한국어 원문 그대로 (게임이 지원하는 16개 언어보다 훨씬 적다 — 번역을 다 못 채웠으니까).
 """
+
 from __future__ import annotations
 
 import json
@@ -20,11 +21,21 @@ from typing import Dict, Optional
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "i18n")
 SUPPORTED = {
-    "en": "English", "ja": "日本語", "schinese": "简体中文", "tchinese": "繁體中文",
-    "french": "Français", "german": "Deutsch", "russian": "Русский",
-    "brazilian": "Português (Brasil)", "italian": "Italiano", "polish": "Polski",
-    "turkish": "Türkçe", "ukrainian": "Українська",
-    "spanish": "Español", "latam": "Español (Latinoamérica)", "thai": "ไทย",
+    "en": "English",
+    "ja": "日本語",
+    "schinese": "简体中文",
+    "tchinese": "繁體中文",
+    "french": "Français",
+    "german": "Deutsch",
+    "russian": "Русский",
+    "brazilian": "Português (Brasil)",
+    "italian": "Italiano",
+    "polish": "Polski",
+    "turkish": "Türkçe",
+    "ukrainian": "Українська",
+    "spanish": "Español",
+    "latam": "Español (Latinoamérica)",
+    "thai": "ไทย",
 }
 
 _cache: Dict[str, Dict[str, str]] = {}
@@ -39,6 +50,7 @@ def detect_ui_lang() -> str:
         return forced if forced in SUPPORTED or forced == "ko" else "ko"
     try:
         import ctypes
+
         lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
         code = _locale.windows_locale.get(lcid, "")
     except (AttributeError, OSError):
@@ -94,16 +106,16 @@ def _table(code: str) -> Dict[str, str]:
     if code not in _cache:
         path = os.path.join(DATA_DIR, f"{code}.json")
         try:
-            with open(path, encoding="utf-8") as f:
-                _cache[code] = json.load(f)
+            with open(path, encoding="utf-8") as file_handle:
+                _cache[code] = json.load(file_handle)
         except (OSError, ValueError):
             _cache[code] = {}
     return _cache[code]
 
 
-def tr(text: str, /, **kwargs) -> str:
+def tr(text: str, /, **keyword_arguments) -> str:
     """text: 한국어 원문 (번역 키를 겸함). 번역이 있으면 그걸, 없으면 원문 그대로.
     kwargs 를 주면 str.format 으로 채운다 — 원문·번역 모두 같은 {이름} 자리표시자를 써야 한다."""
     lang = current_lang()
-    out = _table(lang).get(text, text) if lang != "ko" else text
-    return out.format(**kwargs) if kwargs else out
+    result = _table(lang).get(text, text) if lang != "ko" else text
+    return result.format(**keyword_arguments) if keyword_arguments else result

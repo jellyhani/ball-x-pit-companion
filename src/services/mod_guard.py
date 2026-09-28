@@ -2,6 +2,7 @@
 
 평소 10초, 설치 대기 중에는 1초마다 확인한다. 빠른 재시작의 종료 구간을 놓치지 않게 한다.
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,13 +17,13 @@ from ..i18n import tr
 
 log = logging.getLogger(__name__)
 
-NO_BRIDGE_WARN_S = 60.0   # 게임이 켜진 뒤 이만큼 연동이 없으면 경고 (첫 실행 때 BepInEx 준비가 오래 걸림)
+NO_BRIDGE_WARN_S = 60.0  # 게임이 켜진 뒤 이만큼 연동이 없으면 경고 (첫 실행 때 BepInEx 준비가 오래 걸림)
 
 
 class ModGuard(QObject):
-    status = Signal(str, str)     # (설명, 상태: ok | wait | warn | error)
-    notice = Signal(str)          # 트레이 알림
-    poll_interval = Signal(int)   # 작업 스레드에서 Qt 타이머를 직접 바꾸지 않는다.
+    status = Signal(str, str)  # (설명, 상태: ok | wait | warn | error)
+    notice = Signal(str)  # 트레이 알림
+    poll_interval = Signal(int)  # 작업 스레드에서 Qt 타이머를 직접 바꾸지 않는다.
 
     def __init__(self, settings, data_build: Optional[str], bridge_connected: Callable[[], bool]):
         super().__init__()
@@ -49,9 +50,10 @@ class ModGuard(QObject):
     def check_soon(self, force_install: bool = False):
         if self._busy.locked():
             return
-        connected = self.bridge_connected()   # Qt 스레드에서 읽어 둔다
-        threading.Thread(target=self._run, args=(force_install, connected), daemon=True,
-                         name="ModGuard").start()
+        connected = self.bridge_connected()  # Qt 스레드에서 읽어 둔다
+        threading.Thread(
+            target=self._run, args=(force_install, connected), daemon=True, name="ModGuard"
+        ).start()
 
     def install_now(self):
         self.check_soon(force_install=True)
@@ -82,7 +84,13 @@ class ModGuard(QObject):
             self._game_since = None
         notes = []
         if st.build_id and self.data_build and st.build_id != self.data_build:
-            notes.append(tr("게임이 업데이트됨 (빌드 {data_build} → {build_id}). 이름·아이콘은 이전 빌드 기준이고, 연동은 아래 상태로 확인합니다", data_build=self.data_build, build_id=st.build_id))
+            notes.append(
+                tr(
+                    "게임이 업데이트됨 (빌드 {data_build} → {build_id}). 이름·아이콘은 이전 빌드 기준이고, 연동은 아래 상태로 확인합니다",
+                    data_build=self.data_build,
+                    build_id=st.build_id,
+                )
+            )
             if not self._warned_build:
                 self._warned_build = True
                 log.warning("게임 빌드 변경: %s → %s", self.data_build, st.build_id)
@@ -93,30 +101,67 @@ class ModGuard(QObject):
             return
         if st.needs_install:
             if not (self.settings.auto_install_mod or force_install):
-                self._emit(tr("{summary} — 설정에서 자동 설치가 꺼져 있음{suffix}", summary=st.summary, suffix=suffix), "warn")
+                self._emit(
+                    tr(
+                        "{summary} — 설정에서 자동 설치가 꺼져 있음{suffix}",
+                        summary=st.summary,
+                        suffix=suffix,
+                    ),
+                    "warn",
+                )
                 return
             if not st.vendor_ok:
-                self._emit(tr("{summary} — 설치 파일(vendor/bepinex)이 없음{suffix}", summary=st.summary, suffix=suffix), "error")
+                self._emit(
+                    tr(
+                        "{summary} — 설치 파일(vendor/bepinex)이 없음{suffix}",
+                        summary=st.summary,
+                        suffix=suffix,
+                    ),
+                    "error",
+                )
                 return
             if st.running:
-                self._emit(tr("{summary} — 게임을 끄면 자동으로 설치합니다{suffix}", summary=st.summary, suffix=suffix), "wait")
+                self._emit(
+                    tr(
+                        "{summary} — 게임을 끄면 자동으로 설치합니다{suffix}",
+                        summary=st.summary,
+                        suffix=suffix,
+                    ),
+                    "wait",
+                )
                 return
             try:
                 new = mi.install(st, say=lambda m: log.info("설치: %s", m))
                 self.last = new
                 self.poll_interval.emit(10_000)
-                self.notice.emit(tr("게임 연동 {PLUGIN_VERSION} 설치 완료 — 다음 게임 실행부터 적용", PLUGIN_VERSION=mi.PLUGIN_VERSION))
+                self.notice.emit(
+                    tr(
+                        "게임 연동 {PLUGIN_VERSION} 설치 완료 — 다음 게임 실행부터 적용",
+                        PLUGIN_VERSION=mi.PLUGIN_VERSION,
+                    )
+                )
                 self._emit(new.summary + suffix, "ok")
-            except mi.InstallError as e:
-                self._emit(tr("설치 실패: {e}{suffix}", e=e, suffix=suffix), "error")
+            except mi.InstallError as error:
+                self._emit(tr("설치 실패: {e}{suffix}", e=error, suffix=suffix), "error")
             return
         if st.enabled is False:
             self._emit(st.summary + tr(" — 켜려면 tools\\bepinex\\bridge.ps1 enable") + suffix, "warn")
             return
         if st.running and not connected and self._game_since and now - self._game_since > NO_BRIDGE_WARN_S:
             problems = mi.bepinex_log_problems(st.game_dir)
-            why = (tr("플러그인 오류: ") + problems[-1]) if problems else \
-                tr("게임 업데이트 직후라면 첫 실행 준비(interop 생성)가 끝날 때까지 기다려 주세요")
-            self._emit(tr("{summary} · 게임은 켜져 있는데 연동이 안 됨 — {why}{suffix}", summary=st.summary, why=why, suffix=suffix), "warn")
+            why = (
+                (tr("플러그인 오류: ") + problems[-1])
+                if problems
+                else tr("게임 업데이트 직후라면 첫 실행 준비(interop 생성)가 끝날 때까지 기다려 주세요")
+            )
+            self._emit(
+                tr(
+                    "{summary} · 게임은 켜져 있는데 연동이 안 됨 — {why}{suffix}",
+                    summary=st.summary,
+                    why=why,
+                    suffix=suffix,
+                ),
+                "warn",
+            )
             return
         self._emit(st.summary + (tr(" · 연결됨") if connected else "") + suffix, "ok")

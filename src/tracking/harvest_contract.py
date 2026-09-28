@@ -7,7 +7,7 @@ import copy
 
 
 def capture(base, team, resources, *, game_version="", plugin_version="", sequence=None):
-    geo = base.get("geo") or {}
+    geometry = base.get("geo") or {}
     missing = []
     for field in (
         "game_time",
@@ -19,16 +19,16 @@ def capture(base, team, resources, *, game_version="", plugin_version="", sequen
         "world_tick_interval",
         "game_speed",
     ):
-        if field not in geo:
+        if field not in geometry:
             missing.append(field)
-    if geo.get("physics_error") or geo.get("team_error"):
+    if geometry.get("physics_error") or geometry.get("team_error"):
         missing.append("bridge_read_error")
-    for b in base.get("buildings", []):
+    for building in base.get("buildings", []):
         from ..engine.harvest_sim import resource_tile
 
-        if resource_tile(b) or b.get("is_idle_harvester"):
-            if not all(k in b for k in ("task_seconds", "task_target_seconds", "task_active")):
-                missing.append("building_task:" + str(b.get("id")))
+        if resource_tile(building) or building.get("is_idle_harvester"):
+            if not all(k in building for k in ("task_seconds", "task_target_seconds", "task_active")):
+                missing.append("building_task:" + str(building.get("id")))
     return copy.deepcopy(
         {
             "schema": 2,

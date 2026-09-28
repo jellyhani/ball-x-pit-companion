@@ -16,8 +16,8 @@ def physical_base(base, *, full=False):
     """화면 좌표·투영·날아가는 작업자 관측은 빼고, 모양·상태·범위·속도는 그대로 비교한다."""
     geo = base.get("geo") or {}
     geometry = {
-        k: v
-        for k, v in geo.items()
+        k: value
+        for k, value in geo.items()
         if k
         not in (
             "proj",
@@ -80,7 +80,10 @@ def physical_base(base, *, full=False):
         )
     )
     # 초 단위 진행은 10초 묶음에서 갱신한다. 매 초 바뀌는 입력으로 장시간 탐색을 영원히 버리지 않는다.
-    rows = [{k: v for k, v in b.items() if k in fields} for _, b in sorted(buildings.items())]
+    rows = [
+        {field_name: value for field_name, value in b.items() if field_name in fields}
+        for _, b in sorted(buildings.items())
+    ]
     for row, (_, b) in zip(rows, sorted(buildings.items())):
         if not full and "task_seconds" in b:
             row["task_bucket"] = int(b["task_seconds"]) // 10
@@ -91,18 +94,18 @@ def aim_signature(base, team, duration, need, targets, limits):
     return digest((physical_base(base), team, duration, need, targets, limits))
 
 
-def layout_signature(base, chars, options, resources, duration, need, limits):
+def layout_signature(base, characters, options, resources, duration, need, limits):
     # 소액의 자동 수입마다 무거운 배치를 다시 찾지 않는다. 구매 가능 수량이 바뀔 때 갱신하고,
     # 실제 표시 직전에는 각 행의 현재 비용을 다시 확인한다.
     budget = tuple(
         min(
             [8]
             + [
-                resources[i] // amount if i < len(resources) else 0
-                for i, amount in enumerate(option.get("cost") or ())
+                resources[index] // amount if index < len(resources) else 0
+                for index, amount in enumerate(option.get("cost") or ())
                 if amount > 0
             ]
         )
         for option in options
     )
-    return digest((physical_base(base, full=True), chars, options, budget, duration, need, limits))
+    return digest((physical_base(base, full=True), characters, options, budget, duration, need, limits))

@@ -8,6 +8,7 @@ exe 에서도 쓰도록 같은 프로세스 안에서 돈다 (별도 파이썬�
 
     .venv\\Scripts\\python.exe tools\\setup_data.py [게임 폴더]
 """
+
 from __future__ import annotations
 
 import os
@@ -24,33 +25,34 @@ def extract(game_dir: Optional[str] = None, say: Callable[[str], None] = print) 
     """게임 문구 + 아이콘을 사용자 자료 폴더로. (성공, 안내 문구)."""
     import src.gamedata as gd
     from tools import extract_game_text as egt
-    out = gd.USER_DATA_DIR
-    egt.OUT_DIR = out
+
+    result = gd.USER_DATA_DIR
+    egt.OUT_DIR = result
     argv = ["setup"] + ([game_dir] if game_dir else [])
     try:
         if egt.main(argv) != 0:
-            return False,tr("게임 설치를 찾지 못했습니다. Steam 설치를 확인해 주세요.")
-    except SystemExit as e:                      # 게임 버전이 바뀌어 번역 표 구조가 다를 때
-        return False, str(e)
-    gd.DATA_DIR = gd.resolve_data_dir()          # 이후에 불러오는 모듈이 새 자료 폴더를 쓰게
+            return False, tr("게임 설치를 찾지 못했습니다. Steam 설치를 확인해 주세요.")
+    except SystemExit as error:  # 게임 버전이 바뀌어 번역 표 구조가 다를 때
+        return False, str(error)
+    gd.DATA_DIR = gd.resolve_data_dir()  # 이후에 불러오는 모듈이 새 자료 폴더를 쓰게
     try:
         import UnityPy  # noqa: F401
         from tools import extract_icons as ei
     except ImportError:
-        return True,tr("게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.")
-    ei.OUT_DIR = out
+        return True, tr("게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.")
+    ei.OUT_DIR = result
     try:
         if ei.main(argv) != 0:
-            return True,tr("게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.")
-    except Exception as e:                       # noqa: BLE001 — 아이콘은 예비 경로라 실패해도 계속
-        say(f"아이콘 추출 실패: {e}")
-        return True,tr("게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.")
-    return True,tr("게임 자료를 준비했습니다.")
+            return True, tr("게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.")
+    except Exception as error:  # noqa: BLE001 — 아이콘은 예비 경로라 실패해도 계속
+        say(f"아이콘 추출 실패: {error}")
+        return True, tr("게임 문구를 준비했습니다. 아이콘은 사용할 수 없습니다.")
+    return True, tr("게임 자료를 준비했습니다.")
 
 
 def main(argv) -> int:
-    ok, msg = extract(argv[1] if len(argv) > 1 else None)
-    print(msg)
+    ok, message = extract(argv[1] if len(argv) > 1 else None)
+    print(message)
     return 0 if ok else 1
 
 

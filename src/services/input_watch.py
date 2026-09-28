@@ -4,6 +4,7 @@
 - 마우스 클릭은 선택 결과를 판단하는 보조 증거로만 쓴다. 좌표와 시각 외에는 저장하지 않는다.
 - pynput 콜백은 별도 스레드에서 오므로 Qt 시그널로 GUI 스레드에 넘긴다.
 """
+
 from __future__ import annotations
 
 import logging
@@ -37,11 +38,11 @@ class KeyDebouncer:
 
 
 class InputWatcher(QObject):
-    toggle_detail = Signal()   # F7 HUD 간단히 / 자세히
-    resync = Signal()          # F8
-    toggle_hud = Signal()      # F9
-    toggle_window = Signal()   # F10
-    clicked = Signal(int, int, float)   # 화면 물리 좌표, monotonic
+    toggle_detail = Signal()  # F7 HUD 간단히 / 자세히
+    resync = Signal()  # F8
+    toggle_hud = Signal()  # F9
+    toggle_window = Signal()  # F10
+    clicked = Signal(int, int, float)  # 화면 물리 좌표, monotonic
     status_changed = Signal(str)
     extend_aim = Signal(bool)  # Shift를 누르는 동안 경로 펼치기 (입력 전달은 건드리지 않음)
 
@@ -49,9 +50,14 @@ class InputWatcher(QObject):
         super().__init__(parent)
         self._kb = None
         self._mouse = None
-        self._debouncer = KeyDebouncer({
-            "f7": self.toggle_detail.emit, "f8": self.resync.emit, "f9": self.toggle_hud.emit, "f10": self.toggle_window.emit,
-        })
+        self._debouncer = KeyDebouncer(
+            {
+                "f7": self.toggle_detail.emit,
+                "f8": self.resync.emit,
+                "f9": self.toggle_hud.emit,
+                "f10": self.toggle_window.emit,
+            }
+        )
         self.keyboard_ok = False
         self.mouse_ok = False
         self._shift_down: Set[str] = set()
@@ -78,8 +84,8 @@ class InputWatcher(QObject):
     def start(self):
         try:
             from pynput import keyboard, mouse
-        except ImportError as e:
-            self.status_changed.emit(tr("단축키 사용 불가: {e}", e=e))
+        except ImportError as error:
+            self.status_changed.emit(tr("단축키 사용 불가: {e}", e=error))
             return
         try:
             self._kb = keyboard.Listener(
@@ -89,20 +95,22 @@ class InputWatcher(QObject):
             self._kb.daemon = True
             self._kb.start()
             self.keyboard_ok = True
-        except Exception as e:
+        except Exception as error:
             log.exception("키보드 후킹 실패")
-            self.status_changed.emit(tr("단축키 사용 불가: {e}", e=e))
+            self.status_changed.emit(tr("단축키 사용 불가: {e}", e=error))
         try:
+
             def on_click(x, y, button, pressed):
                 if not pressed and getattr(button, "name", "") == "left":
                     self.clicked.emit(int(x), int(y), time.monotonic())
+
             self._mouse = mouse.Listener(on_click=on_click)
             self._mouse.daemon = True
             self._mouse.start()
             self.mouse_ok = True
-        except Exception as e:
+        except Exception as error:
             log.exception("마우스 후킹 실패")
-            self.status_changed.emit(tr("클릭 기록 사용 불가: {e}", e=e))
+            self.status_changed.emit(tr("클릭 기록 사용 불가: {e}", e=error))
 
     def stop(self):
         for listener in (self._kb, self._mouse):

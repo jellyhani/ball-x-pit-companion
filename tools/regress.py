@@ -8,6 +8,7 @@
 
 스냅샷마다 런 상태를 새로 만든다(보유 목록·캐릭터는 스냅샷 값). 이전 선택 이력·내 기록은 쓰지 않는다.
 """
+
 from __future__ import annotations
 
 import glob
@@ -19,23 +20,25 @@ from typing import List
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
-os.environ.setdefault("BXP_CATALOG_FILE", os.path.join(ROOT, "tests", "fixtures", "game_recipes.json"))  # PC 마다 같게
+os.environ.setdefault(
+    "BXP_CATALOG_FILE", os.path.join(ROOT, "tests", "fixtures", "game_recipes.json")
+)  # PC 마다 같게
 FIXTURE = os.path.join(ROOT, "tests", "fixtures", "bridge_snapshots.jsonl")
 EXPECTED = os.path.join(ROOT, "tests", "fixtures", "bridge_snapshots.expected.json")
 
 
 def load(path: str) -> List[dict]:
-    out = []
-    with open(path, encoding="utf-8") as f:
-        for line in f:
+    result = []
+    with open(path, encoding="utf-8") as file_handle:
+        for line in file_handle:
             line = line.strip()
             if not line:
                 continue
             try:
-                out.append(json.loads(line))
+                result.append(json.loads(line))
             except ValueError:
                 continue
-    return out
+    return result
 
 
 def replay(msgs: List[dict]) -> List[dict]:
@@ -49,37 +52,45 @@ def replay(msgs: List[dict]) -> List[dict]:
     data = load_game_data()
     data.set_observed_max_level("ball", 3)
     data.set_observed_max_level("passive", 3)
-    out = []
+    result = []
     for m in msgs:
         if isinstance(m.get("catalog"), dict):
             apply_catalog(data, m["catalog"])
             continue
         if not isinstance(m.get("levelup"), dict):
             continue
-        snap = json.loads(json.dumps(m))
-        snap["levelup"]["page"] = "kSelect"
-        st = convert(snap, data, (0, 0), frame_id=1, at=0)
-        obs = st.observation
+        snapshot = json.loads(json.dumps(m))
+        snapshot["levelup"]["page"] = "kSelect"
+        st = convert(snapshot, data, (0, 0), frame_id=1, at=0)
+        observation = st.observation
         run = RunState()
         run.start_run()
-        if obs.inventory is not None:
-            run.apply_inventory(obs.inventory, data)
-        run.apply_character(obs.character_id, obs.extra_characters, "game")
+        if observation.inventory is not None:
+            run.apply_inventory(observation.inventory, data)
+        run.apply_character(observation.character_id, observation.extra_characters, "game")
         run.damage = dict(st.damage)
-        evs = [e for e in ChoiceTracker().observe(obs, time.monotonic(), immediate=True) if e.kind == "opened"]
+        evs = [
+            e
+            for e in ChoiceTracker().observe(observation, time.monotonic(), immediate=True)
+            if e.kind == "opened"
+        ]
         if not evs:
-            out.append({"seq": m.get("seq"), "error": "선택창으로 인식 안 됨"})
+            result.append({"seq": m.get("seq"), "error": "선택창으로 인식 안 됨"})
             continue
-        rec = Recommender(data).recommend(evs[0].session, run)
-        out.append({
-            "seq": m.get("seq"),
-            "status": rec.status,
-            "best": rec.best.card.item_id if rec.best else None,
-            "cards": [[e.card.item_id, card_verdict(rec, e)] for e in rec.evals],
-            "banish": rec.banish_card.item_id if rec.banish_card else None,
-            "reroll": rec.reroll_status,
-        })
-    return out
+        record = Recommender(data).recommend(evs[0].session, run)
+        result.append(
+            {
+                "seq": m.get("seq"),
+                "status": record.status,
+                "best": record.best.card.item_id if record.best else None,
+                "cards": [
+                    [evaluation.card.item_id, card_verdict(record, evaluation)] for evaluation in record.evals
+                ],
+                "banish": record.banish_card.item_id if record.banish_card else None,
+                "reroll": record.reroll_status,
+            }
+        )
+    return result
 
 
 def compare(expected: List[dict], got: List[dict]) -> List[str]:
@@ -105,19 +116,21 @@ def compare(expected: List[dict], got: List[dict]) -> List[str]:
             diffs.append(f"seq {g.get('seq')}: 기대 결과 없음 (--update 필요)")
         elif e != g:
             keys = [k for k in set(e) | set(g) if e.get(k) != g.get(k)]
-            diffs.append(f"seq {g.get('seq')}: " + "; ".join(f"{k} {e.get(k)} → {g.get(k)}" for k in sorted(keys)))
+            diffs.append(
+                f"seq {g.get('seq')}: " + "; ".join(f"{k} {e.get(k)} → {g.get(k)}" for k in sorted(keys))
+            )
     return diffs
 
 
 def main(argv: List[str]) -> int:
     got = replay(load(FIXTURE))
     if "--update" in argv:
-        with open(EXPECTED, "w", encoding="utf-8") as f:
-            json.dump(got, f, ensure_ascii=False, indent=1)
+        with open(EXPECTED, "w", encoding="utf-8") as file_handle:
+            json.dump(got, file_handle, ensure_ascii=False, indent=1)
         print(f"기대 결과 갱신: {len(got)}개")
         return 0
-    with open(EXPECTED, encoding="utf-8") as f:
-        expected = json.load(f)
+    with open(EXPECTED, encoding="utf-8") as file_handle:
+        expected = json.load(file_handle)
     diffs = compare(expected, got)
     print(f"기본 묶음 {len(got)}개 · 달라진 것 {len(diffs)}개")
     for d in diffs:

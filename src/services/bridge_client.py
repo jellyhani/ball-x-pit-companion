@@ -4,6 +4,7 @@
 0.2초마다 확인해 바뀔 때 JSON 한 줄로 보낸다. 화면 인식보다 정확하고 빠르다.
 연결이 없거나 끊기면(게임 업데이트로 플러그인이 동작하지 않는 경우 등) 앱은 화면 인식으로 돌아간다.
 """
+
 from __future__ import annotations
 
 import json
@@ -21,12 +22,12 @@ log = logging.getLogger(__name__)
 
 PROTOCOL_VERSION = 1
 PIPE_NAME = r"\\.\pipe\ballxpit-bridge-" + os.environ.get("USERNAME", "")
-STALE_AFTER_S = 5.0          # 플러그인은 최소 2초마다 신호를 보낸다
+STALE_AFTER_S = 5.0  # 플러그인은 최소 2초마다 신호를 보낸다
 MAX_LINE = 1_000_000
 
 
 class BridgeClient(QObject):
-    snapshot = Signal(object, float)     # dict, monotonic 수신 시각
+    snapshot = Signal(object, float)  # dict, monotonic 수신 시각
     status_changed = Signal(str)
 
     def __init__(self, pipe_name: str = PIPE_NAME, parent=None):
@@ -53,51 +54,53 @@ class BridgeClient(QObject):
     def _set_connected(self, on: bool, why: str = ""):
         if on != self.connected:
             self.connected = on
-            text = tr("게임 연동 연결됨") if on else tr("게임 연동 없음{v0}", v0=(' — ' + why) if why else '')
+            text = tr("게임 연동 연결됨") if on else tr("게임 연동 없음{v0}", v0=(" — " + why) if why else "")
             log.info(text)
             self.status_changed.emit(text)
 
     def _run(self):
         while not self._stop.is_set():
             try:
-                f = open(self.pipe_name, "rb", buffering=0)
+                file_handle = open(self.pipe_name, "rb", buffering=0)
             except OSError:
                 self._set_connected(False)
-                self._stop.wait(1.5)   # 게임이 꺼져 있거나 플러그인이 없음
+                self._stop.wait(1.5)  # 게임이 꺼져 있거나 플러그인이 없음
                 continue
             self._set_connected(True)
-            buf = b""
+            buffer = b""
             try:
                 while not self._stop.is_set():
-                    chunk = f.read(65536)
+                    chunk = file_handle.read(65536)
                     if not chunk:
                         break
-                    buf += chunk
-                    if len(buf) > MAX_LINE and b"\n" not in buf:
+                    buffer += chunk
+                    if len(buffer) > MAX_LINE and b"\n" not in buffer:
                         log.warning("브리지 메시지가 너무 김 — 버림")
-                        buf = b""
-                    while b"\n" in buf:
-                        line, buf = buf.split(b"\n", 1)
+                        buffer = b""
+                    while b"\n" in buffer:
+                        line, buffer = buffer.split(b"\n", 1)
                         self._handle(line)
             except OSError:
                 pass
             finally:
                 try:
-                    f.close()
+                    file_handle.close()
                 except OSError:
                     pass
                 self._set_connected(False, tr("연결 끊김"))
 
     def _handle(self, line: bytes):
         try:
-            msg = json.loads(line.decode("utf-8"))
+            message = json.loads(line.decode("utf-8"))
         except (UnicodeDecodeError, ValueError):
             log.warning("브리지 메시지를 읽지 못함 (%d바이트)", len(line))
             return
-        if not isinstance(msg, dict) or msg.get("v") != PROTOCOL_VERSION:
-            log.warning("브리지 프로토콜 버전이 다름: %s", msg.get("v") if isinstance(msg, dict) else "?")
+        if not isinstance(message, dict) or message.get("v") != PROTOCOL_VERSION:
+            log.warning(
+                "브리지 프로토콜 버전이 다름: %s", message.get("v") if isinstance(message, dict) else "?"
+            )
             return
         self.last_at = time.monotonic()
-        self.game_version = msg.get("game_version", "")
+        self.game_version = message.get("game_version", "")
         self.messages += 1
-        self.snapshot.emit(msg, self.last_at)
+        self.snapshot.emit(message, self.last_at)

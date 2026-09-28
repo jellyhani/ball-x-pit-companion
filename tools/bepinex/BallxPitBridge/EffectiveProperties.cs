@@ -10,7 +10,7 @@ namespace BallxPitBridge
     {
         // 게임의 targetLevel은 0부터, 도우미에 보내는 level은 1부터 시작한다.
         // 실패한 계산을 부분 JSON으로 보내지 않도록 임시 버퍼가 완성된 뒤에만 붙인다.
-        internal static void Write(Utf8JsonWriter w, UpgradeInfo info, int targetLevel, bool isNew, int equipmentIndex)
+        internal static void Write(Utf8JsonWriter writer, UpgradeInfo info, int targetLevel, bool isNew, int equipmentIndex)
         {
             try
             {
@@ -23,36 +23,36 @@ namespace BallxPitBridge
                     if (heroes == null || equipmentIndex < 0 || equipmentIndex >= heroes.Count || heroes[equipmentIndex].IsCombo())
                         return;
                 }
-                using var ms = new MemoryStream();
-                using (var ew = new Utf8JsonWriter(ms))
+                using var memoryStream = new MemoryStream();
+                using (var effectiveWriter = new Utf8JsonWriter(memoryStream))
                 {
-                    ew.WriteStartObject();
-                    ew.WriteString("scope", "current_run_uncombined");
-                    ew.WriteNumber("level", targetLevel + 1);
-                    Row(ew, "after", info, targetLevel);
+                    effectiveWriter.WriteStartObject();
+                    effectiveWriter.WriteString("scope", "current_run_uncombined");
+                    effectiveWriter.WriteNumber("level", targetLevel + 1);
+                    Row(effectiveWriter, "after", info, targetLevel);
                     if (!isNew && targetLevel > 0)
-                        Row(ew, "before", info, targetLevel - 1);
-                    ew.WriteEndObject();
+                        Row(effectiveWriter, "before", info, targetLevel - 1);
+                    effectiveWriter.WriteEndObject();
                 }
-                w.WritePropertyName("effective");
-                w.WriteRawValue(Encoding.UTF8.GetString(ms.ToArray()), true);
+                writer.WritePropertyName("effective");
+                writer.WriteRawValue(Encoding.UTF8.GetString(memoryStream.ToArray()), true);
             }
-            catch (Exception e)
+            catch (Exception error)
             {
-                w.WriteString("effective_error", e.GetType().Name);
+                writer.WriteString("effective_error", error.GetType().Name);
             }
         }
 
-        static void Row(Utf8JsonWriter w, string key, UpgradeInfo info, int level)
+        static void Row(Utf8JsonWriter writer, string key, UpgradeInfo info, int level)
         {
             var raw = info.PropertiesByLvl[Math.Min(level, info.PropertiesByLvl.Length - 1)];
-            w.WriteStartObject(key);
+            writer.WriteStartObject(key);
             if (raw != null)
             {
                 foreach (var pair in raw)
-                    w.WriteNumber(pair.Key.ToString(), info.GetPropertyByLvl(pair.Key, level, 0));
+                    writer.WriteNumber(pair.Key.ToString(), info.GetPropertyByLvl(pair.Key, level, 0));
             }
-            w.WriteEndObject();
+            writer.WriteEndObject();
         }
     }
 }

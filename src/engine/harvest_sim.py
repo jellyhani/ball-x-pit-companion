@@ -23,15 +23,15 @@ MAX_SPEED = 100.0
 LAUNCH_GAP = 0.3  # 1.301 _LaunchWorkers의 게임 시간 간격. 입력값을 우선한다.
 
 
-def reflected(dx, dy, nx, ny):
+def reflected(delta_x, delta_y, normal_x, normal_y):
     """MoveBalls 0x45A2DF: d - 2(d·n)n, 이후 Vector2.normalized."""
-    norm2 = nx * nx + ny * ny
+    norm2 = normal_x * normal_x + normal_y * normal_y
     if norm2 <= 0:
-        return dx, dy
-    scale = 2.0 * (dx * nx + dy * ny) / norm2
-    rx, ry = dx - scale * nx, dy - scale * ny
+        return delta_x, delta_y
+    scale = 2.0 * (delta_x * normal_x + delta_y * normal_y) / norm2
+    rx, ry = delta_x - scale * normal_x, delta_y - scale * normal_y
     length = math.sqrt(rx * rx + ry * ry)
-    return (rx / length, ry / length) if length > 0 else (dx, dy)
+    return (rx / length, ry / length) if length > 0 else (delta_x, delta_y)
 
 
 @dataclass
@@ -50,8 +50,8 @@ class Shape:
 
     def __post_init__(self):
         if self.kind in ("box", "wall") and any(
-            abs(ax - bx) > EPS and abs(ay - by) > EPS
-            for (ax, ay), (bx, by) in zip(self.pts, self.pts[1:] + self.pts[:1])
+            abs(start_x - end_x) > EPS and abs(start_y - end_y) > EPS
+            for (start_x, start_y), (end_x, end_y) in zip(self.pts, self.pts[1:] + self.pts[:1])
         ):
             # 회전한 BoxCollider의 AABB는 내부 판정에 쓸 수 없다. 실제 꼭짓점을 유지한다.
             self.environment = self.environment or self.kind == "wall"
@@ -96,8 +96,10 @@ def _chunk_walls(geo: dict) -> List[Shape]:
     raw = geo.get("chunks")
     if not raw:
         return []  # 구역 정보가 없는 구형 입력.
-    chunks = {tuple(c) for c in raw}
-    if any(len(c) != 2 or any(type(v) is not int or v < 0 for v in c) for c in chunks):
+    chunks = {tuple(chunk) for chunk in raw}
+    if any(
+        len(chunk) != 2 or any(type(value) is not int or value < 0 for value in chunk) for chunk in chunks
+    ):
         raise ValueError("잘못된 구역 좌표")
     width = geo.get("chunk_world_w")
     height = geo.get("chunk_world_h")
@@ -108,15 +110,15 @@ def _chunk_walls(geo: dict) -> List[Shape]:
     width, height = float(width), float(height)
     if not (math.isfinite(width) and math.isfinite(height) and width > 0 and height > 0):
         raise ValueError("구역 크기 없음")
-    x0, y0 = min(c[0] for c in chunks), min(c[1] for c in chunks)
-    x1, y1 = max(c[0] for c in chunks), max(c[1] for c in chunks)
+    left_x, bottom_y = min(chunk[0] for chunk in chunks), min(chunk[1] for chunk in chunks)
+    right_x, top_y = max(chunk[0] for chunk in chunks), max(chunk[1] for chunk in chunks)
     walls = []
-    for x in range(x0, x1 + 1):
-        for y in range(y0, y1 + 1):
+    for x in range(left_x, right_x + 1):
+        for y in range(bottom_y, top_y + 1):
             if (x, y) in chunks:
                 continue
-            left = float(geo["left"]) + (x - x0) * width
-            bottom = float(geo["bottom"]) + (y - y0) * height
+            left = float(geo["left"]) + (x - left_x) * width
+            bottom = float(geo["bottom"]) + (y - bottom_y) * height
             walls.append(
                 Shape(
                     -1000000 - len(walls),
@@ -137,16 +139,23 @@ def world_from_geo(geo: dict, radius: float = 0.0) -> Optional[World]:
         if geo.get("physics_error"):
             return None
         shapes = []
-        for c in geo.get("colliders") or []:
-            if c.get("trigger"):
+        for collider in geo.get("colliders") or []:
+            if collider.get("trigger"):
                 continue
-            if c.get("shape") == "circle":
+            if collider.get("shape") == "circle":
                 shapes.append(
-                    Shape(int(c["id"]), "circle", c=(float(c["c"][0]), float(c["c"][1])), r=float(c["r"]))
+                    Shape(
+                        int(collider["id"]),
+                        "circle",
+                        c=(float(collider["c"][0]), float(collider["c"][1])),
+                        r=float(collider["r"]),
+                    )
                 )
-            elif c.get("pts"):
-                kind = "box" if c.get("shape") in ("box", "bounds") else "poly"
-                shapes.append(Shape(int(c["id"]), kind, pts=[(float(x), float(y)) for x, y in c["pts"]]))
+            elif collider.get("pts"):
+                kind = "box" if collider.get("shape") in ("box", "bounds") else "poly"
+                shapes.append(
+                    Shape(int(collider["id"]), kind, pts=[(float(x), float(y)) for x, y in collider["pts"]])
+                )
         environment = geo.get("environment")
         if isinstance(environment, dict) and (
             environment.get("queries_start_in_colliders") is True
@@ -157,17 +166,32 @@ def world_from_geo(geo: dict, radius: float = 0.0) -> Optional[World]:
         if geo.get("physics_contract", 0) >= 2 and not exact:
             return None
         if exact:
-            for i, c in enumerate(environment["walls"]):
-                if c.get("unsupported"):
+            for index, collider in enumerate(environment["walls"]):
+                if collider.get("unsupported"):
                     raise ValueError("미지원 실제 벽 모양")
-                bid = -2000000 - i
-                if c.get("shape") == "circle":
-                    shapes.append(Shape(bid, "circle", c=tuple(c["c"]), r=float(c["r"]), environment=True))
+                building_id = -2000000 - index
+                if collider.get("shape") == "circle":
+                    shapes.append(
+                        Shape(
+                            building_id,
+                            "circle",
+                            c=tuple(collider["c"]),
+                            r=float(collider["r"]),
+                            environment=True,
+                        )
+                    )
                 else:
-                    for pts in c.get("paths", []):
-                        if len(pts) < 2:
+                    for points in collider.get("paths", []):
+                        if len(points) < 2:
                             raise ValueError("실제 벽 꼭짓점 없음")
-                        shapes.append(Shape(bid, c["shape"], pts=[tuple(p) for p in pts], environment=True))
+                        shapes.append(
+                            Shape(
+                                building_id,
+                                collider["shape"],
+                                pts=[tuple(p) for p in points],
+                                environment=True,
+                            )
+                        )
         else:
             shapes.extend(_chunk_walls(geo))
         speed_mult = float(geo.get("worker_speed_mult") or 1.0)
@@ -179,14 +203,14 @@ def world_from_geo(geo: dict, radius: float = 0.0) -> Optional[World]:
         gap = float(geo.get("ball_time_dist", LAUNCH_GAP))
         if not math.isfinite(gap) or gap <= 0:
             return None
-        roads = tuple(tuple(float(v) for v in box) for box in (environment or {}).get("roads", ()))
+        roads = tuple(tuple(float(value) for value in box) for box in (environment or {}).get("roads", ()))
         road_mult = float((environment or {}).get("road_speed_mult", 1.0))
         if (
             not math.isfinite(road_mult)
             or road_mult <= 0
             or any(
                 len(box) != 4
-                or not all(math.isfinite(v) for v in box)
+                or not all(math.isfinite(value) for value in box)
                 or box[0] >= box[2]
                 or box[1] >= box[3]
                 for box in roads
@@ -219,27 +243,29 @@ def world_from_geo(geo: dict, radius: float = 0.0) -> Optional[World]:
         return None
 
 
-def _ray_segment(ox, oy, dx, dy, ax, ay, bx, by) -> Optional[Tuple[float, float, float]]:
+def _ray_segment(
+    origin_x, origin_y, delta_x, delta_y, start_x, start_y, end_x, end_y
+) -> Optional[Tuple[float, float, float]]:
     """광선과 선분 교차: (거리 t, 법선 x, 법선 y)."""
-    ex, ey = bx - ax, by - ay
-    den = dx * ey - dy * ex
+    ex, ey = end_x - start_x, end_y - start_y
+    den = delta_x * ey - delta_y * ex
     if abs(den) < EPS:
         return None
-    t = ((ax - ox) * ey - (ay - oy) * ex) / den
-    u = ((ax - ox) * dy - (ay - oy) * dx) / den
-    if t <= EPS or u < -EPS or u > 1 + EPS:
+    distance = ((start_x - origin_x) * ey - (start_y - origin_y) * ex) / den
+    segment_fraction = ((start_x - origin_x) * delta_y - (start_y - origin_y) * delta_x) / den
+    if distance <= EPS or segment_fraction < -EPS or segment_fraction > 1 + EPS:
         return None
-    nx, ny = -ey, ex
-    if nx * dx + ny * dy > 0:
-        nx, ny = -nx, -ny
-    return t, nx, ny
+    normal_x, normal_y = -ey, ex
+    if normal_x * delta_x + normal_y * delta_y > 0:
+        normal_x, normal_y = -normal_x, -normal_y
+    return distance, normal_x, normal_y
 
 
-def _misses_box(bb, ox, oy, dx, dy, r) -> bool:
+def _misses_box(bb, origin_x, origin_y, delta_x, delta_y, r) -> bool:
     """광선이 (r 만큼 넓힌) 경계 상자를 앞쪽에서 만나지 않으면 True — 모양별 정밀 계산 전 빠른 제외."""
-    x0, y0, x1, y1 = bb[0] - r, bb[1] - r, bb[2] + r, bb[3] + r
+    left_x, bottom_y, right_x, top_y = bb[0] - r, bb[1] - r, bb[2] + r, bb[3] + r
     tmin, tmax = -1e18, 1e18
-    for o, d, lo, hi in ((ox, dx, x0, x1), (oy, dy, y0, y1)):
+    for o, d, lo, hi in ((origin_x, delta_x, left_x, right_x), (origin_y, delta_y, bottom_y, top_y)):
         if abs(d) < EPS:
             if o < lo or o > hi:
                 return True
@@ -253,78 +279,88 @@ def _misses_box(bb, ox, oy, dx, dy, r) -> bool:
     return tmax <= EPS
 
 
-def _hit_shape(s: Shape, ox, oy, dx, dy, r) -> Optional[Tuple[float, float, float]]:
-    if _misses_box(s.bb, ox, oy, dx, dy, r + 1e-3):
+def _hit_shape(shape: Shape, origin_x, origin_y, delta_x, delta_y, r) -> Optional[Tuple[float, float, float]]:
+    if _misses_box(shape.bb, origin_x, origin_y, delta_x, delta_y, r + 1e-3):
         return None
     # 게임 globalgamemanagers: Physics2D.queriesStartInColliders=false.
     # 건물 중심에서 생성되는 추가 작업자가 소유 건물에 즉시 반사하지 않는다.
-    if _inside_shape(s, ox, oy, r):
+    if _inside_shape(shape, origin_x, origin_y, r):
         return None
-    if s.kind == "circle":
-        cx, cy = s.c
-        R = s.r + r
-        fx, fy = ox - cx, oy - cy
-        b = fx * dx + fy * dy
-        c = fx * fx + fy * fy - R * R
-        disc = b * b - c
+    if shape.kind == "circle":
+        center_x, center_y = shape.c
+        expanded_radius = shape.r + r
+        offset_x, offset_y = origin_x - center_x, origin_y - center_y
+        projection = offset_x * delta_x + offset_y * delta_y
+        squared_offset = offset_x * offset_x + offset_y * offset_y - expanded_radius * expanded_radius
+        disc = projection * projection - squared_offset
         if disc < 0:
             return None
-        t = -b - math.sqrt(disc)
-        if t <= EPS:
+        hit_distance = -projection - math.sqrt(disc)
+        if hit_distance <= EPS:
             return None
-        hx, hy = ox + dx * t - cx, oy + dy * t - cy
-        return t, hx, hy
-    pts = s.pts
-    if s.kind in ("box", "wall") and r > 0:
-        x0, y0, x1, y1 = s.aabb()
+        hx, hy = origin_x + delta_x * hit_distance - center_x, origin_y + delta_y * hit_distance - center_y
+        return hit_distance, hx, hy
+    points = shape.pts
+    if shape.kind in ("box", "wall") and r > 0:
+        left_x, bottom_y, right_x, top_y = shape.aabb()
         # OverlapCircle의 모서리는 사각 확장이 아니라 원호다.
         hits = []
-        for ax, ay, bx, by in (
-            (x0, y0 - r, x1, y0 - r),
-            (x1 + r, y0, x1 + r, y1),
-            (x1, y1 + r, x0, y1 + r),
-            (x0 - r, y1, x0 - r, y0),
+        for start_x, start_y, end_x, end_y in (
+            (left_x, bottom_y - r, right_x, bottom_y - r),
+            (right_x + r, bottom_y, right_x + r, top_y),
+            (right_x, top_y + r, left_x, top_y + r),
+            (left_x - r, top_y, left_x - r, bottom_y),
         ):
-            h = _ray_segment(ox, oy, dx, dy, ax, ay, bx, by)
-            if h:
-                hits.append(h)
-        for cx, cy, sx, sy in ((x0, y0, -1, -1), (x1, y0, 1, -1), (x1, y1, 1, 1), (x0, y1, -1, 1)):
-            fx, fy = ox - cx, oy - cy
-            b = fx * dx + fy * dy
-            disc = b * b - (fx * fx + fy * fy - r * r)
+            intersection = _ray_segment(origin_x, origin_y, delta_x, delta_y, start_x, start_y, end_x, end_y)
+            if intersection:
+                hits.append(intersection)
+        for center_x, center_y, sx, sy in (
+            (left_x, bottom_y, -1, -1),
+            (right_x, bottom_y, 1, -1),
+            (right_x, top_y, 1, 1),
+            (left_x, top_y, -1, 1),
+        ):
+            offset_x, offset_y = origin_x - center_x, origin_y - center_y
+            projection = offset_x * delta_x + offset_y * delta_y
+            disc = projection * projection - (offset_x * offset_x + offset_y * offset_y - r * r)
             if disc < 0:
                 continue
-            t = -b - math.sqrt(disc)
-            nx, ny = ox + dx * t - cx, oy + dy * t - cy
-            if t > EPS and sx * nx >= -EPS and sy * ny >= -EPS:
-                hits.append((t, nx, ny))
+            hit_distance = -projection - math.sqrt(disc)
+            normal_x, normal_y = (
+                origin_x + delta_x * hit_distance - center_x,
+                origin_y + delta_y * hit_distance - center_y,
+            )
+            if hit_distance > EPS and sx * normal_x >= -EPS and sy * normal_y >= -EPS:
+                hits.append((hit_distance, normal_x, normal_y))
         return min(hits, key=lambda h: h[0]) if hits else None
     best = None
-    n = len(pts)
-    for i in range(n if s.kind != "edge" else n - 1):
-        ax, ay = pts[i]
-        bx, by = pts[(i + 1) % n]
-        h = _ray_segment(ox, oy, dx, dy, ax, ay, bx, by)
-        if h and (best is None or h[0] < best[0]):
-            best = h
+    item_count = len(points)
+    for index in range(item_count if shape.kind != "edge" else item_count - 1):
+        start_x, start_y = points[index]
+        end_x, end_y = points[(index + 1) % item_count]
+        intersection = _ray_segment(origin_x, origin_y, delta_x, delta_y, start_x, start_y, end_x, end_y)
+        if intersection and (best is None or intersection[0] < best[0]):
+            best = intersection
     return best
 
 
-def _inside_shape(s: Shape, x: float, y: float, radius: float) -> bool:
-    if s.kind == "edge":
+def _inside_shape(shape: Shape, x: float, y: float, radius: float) -> bool:
+    if shape.kind == "edge":
         return False
     """통과 타일의 출구를 새 채집으로 세지 않기 위한 내부 판정."""
-    if s.kind == "circle":
-        return (x - s.c[0]) ** 2 + (y - s.c[1]) ** 2 < (s.r + radius) ** 2
-    if s.kind in ("box", "wall"):
-        x0, y0, x1, y1 = s.bb
+    if shape.kind == "circle":
+        return (x - shape.c[0]) ** 2 + (y - shape.c[1]) ** 2 < (shape.r + radius) ** 2
+    if shape.kind in ("box", "wall"):
+        left_x, bottom_y, right_x, top_y = shape.bb
         if radius > 0:
-            dx, dy = max(x0 - x, 0.0, x - x1), max(y0 - y, 0.0, y - y1)
-            return dx * dx + dy * dy <= radius * radius
-        return x0 - radius < x < x1 + radius and y0 - radius < y < y1 + radius
+            delta_x, delta_y = max(left_x - x, 0.0, x - right_x), max(bottom_y - y, 0.0, y - top_y)
+            return delta_x * delta_x + delta_y * delta_y <= radius * radius
+        return left_x - radius < x < right_x + radius and bottom_y - radius < y < top_y + radius
     inside = False
-    for (ax, ay), (bx, by) in zip(s.pts, s.pts[1:] + s.pts[:1]):
-        if (ay > y) != (by > y) and x < (bx - ax) * (y - ay) / (by - ay) + ax:
+    for (start_x, start_y), (end_x, end_y) in zip(shape.pts, shape.pts[1:] + shape.pts[:1]):
+        if (start_y > y) != (end_y > y) and x < (end_x - start_x) * (y - start_y) / (
+            end_y - start_y
+        ) + start_x:
             inside = not inside
     return inside
 
@@ -361,20 +397,20 @@ def passable_ids(buildings: Dict[int, dict], upgrades: Optional[dict] = None) ->
     """MoveBalls의 자원 관통과 비자원 건물 관통은 서로 다른 분기다."""
     from .harvest import RES_BY_TYPE
 
-    ups = upgrades or {}
-    out = set()
-    for bid, b in buildings.items():
-        t = b.get("type", "")
-        res = resource_kind(b)
-        if ups.get("kPierceBuildings") and not resource_tile(b):
-            out.add(bid)
-        elif resource_tile(b) and (res == 1 or b.get("can_harvest") is False):
-            out.add(bid)
-        elif res == 3 and ups.get("kPierceStone") and resource_tile(b):
-            out.add(bid)
-        elif res == 2 and ups.get("kPierceWood") and resource_tile(b):
-            out.add(bid)
-    return out
+    current_upgrades = upgrades or {}
+    result = set()
+    for building_id, building in buildings.items():
+        t = building.get("type", "")
+        res = resource_kind(building)
+        if current_upgrades.get("kPierceBuildings") and not resource_tile(building):
+            result.add(building_id)
+        elif resource_tile(building) and (res == 1 or building.get("can_harvest") is False):
+            result.add(building_id)
+        elif res == 3 and current_upgrades.get("kPierceStone") and resource_tile(building):
+            result.add(building_id)
+        elif res == 2 and current_upgrades.get("kPierceWood") and resource_tile(building):
+            result.add(building_id)
+    return result
 
 
 def simulate(
@@ -386,61 +422,66 @@ def simulate(
     max_bounces: int = 400,
 ) -> PathResult:
     """발사대에서 angle_deg(0=오른쪽, 90=위) 로 쏜 작업자 한 명의 경로. pierce: 통과하는 건물 id."""
-    ox, oy = world.launcher
-    dx, dy = math.cos(math.radians(angle_deg)), math.sin(math.radians(angle_deg))
-    r = world.radius
+    origin_x, origin_y = world.launcher
+    delta_x, delta_y = math.cos(math.radians(angle_deg)), math.sin(math.radians(angle_deg))
+    radius = world.radius
     speed, t_now = speed0, 0.0
-    pts = [(ox, oy)]
+    points = [(origin_x, origin_y)]
     hits: List[Tuple[int, float]] = []
     pierce = set(pierce)
     walls = [
-        ((world.left + r, -1e3), (world.left + r, 1e3)),
-        ((world.right - r, -1e3), (world.right - r, 1e3)),
-        ((-1e3, world.top - r), (1e3, world.top - r)),
-        ((-1e3, world.bottom + r), (1e3, world.bottom + r)),
+        ((world.left + radius, -1e3), (world.left + radius, 1e3)),
+        ((world.right - radius, -1e3), (world.right - radius, 1e3)),
+        ((-1e3, world.top - radius), (1e3, world.top - radius)),
+        ((-1e3, world.bottom + radius), (1e3, world.bottom + radius)),
     ]
     if not world.use_bounds:
         walls = []
     for _ in range(max_bounces):
         best = None  # (t, nx, ny, shape or None)
-        for i, ((ax, ay), (bx, by)) in enumerate(walls):
+        for index, ((start_x, start_y), (end_x, end_y)) in enumerate(walls):
             # 벽은 안쪽에서 바깥으로 나갈 때만 튕긴다 (발사대는 아래 벽보다 아래에 있다 — 실제 궤적 확인)
-            inside = (ox >= ax - 1e-6, ox <= ax + 1e-6, oy <= ay + 1e-6, oy >= ay - 1e-6)[i]
-            toward = (dx < 0, dx > 0, dy > 0, dy < 0)[i]
+            inside = (
+                origin_x >= start_x - 1e-6,
+                origin_x <= start_x + 1e-6,
+                origin_y <= start_y + 1e-6,
+                origin_y >= start_y - 1e-6,
+            )[index]
+            toward = (delta_x < 0, delta_x > 0, delta_y > 0, delta_y < 0)[index]
             if not (inside and toward):
                 continue
-            h = _ray_segment(ox, oy, dx, dy, ax, ay, bx, by)
+            h = _ray_segment(origin_x, origin_y, delta_x, delta_y, start_x, start_y, end_x, end_y)
             if h and (best is None or h[0] < best[0]):
                 best = (h[0], h[1], h[2], None)
         passed = []
-        for s in world.shapes:
-            h = _hit_shape(s, ox, oy, dx, dy, r)
+        for shape in world.shapes:
+            h = _hit_shape(shape, origin_x, origin_y, delta_x, delta_y, radius)
             if not h:
                 continue
-            if not s.is_wall and s.bid in pierce:
-                passed.append((h[0], s.bid))
+            if not shape.is_wall and shape.bid in pierce:
+                passed.append((h[0], shape.bid))
             elif best is None or h[0] < best[0]:
-                best = (h[0], h[1], h[2], s)
+                best = (h[0], h[1], h[2], shape)
         if best is None:
             break
-        t, nx, ny, s = best
-        for tp, bid in sorted(passed):
+        t, normal_x, normal_y, shape = best
+        for tp, building_id in sorted(passed):
             if tp < t and t_now + tp / speed < duration:
-                hits.append((bid, t_now + tp / speed))
+                hits.append((building_id, t_now + tp / speed))
         dt = t / speed
         if t_now + dt >= duration:
             rest = (duration - t_now) * speed
-            pts.append((ox + dx * rest, oy + dy * rest))
+            points.append((origin_x + delta_x * rest, origin_y + delta_y * rest))
             break
         t_now += dt
-        ox, oy = ox + dx * t, oy + dy * t
-        pts.append((ox, oy))
-        if s is not None and not s.is_wall:
-            hits.append((s.bid, t_now))
-        dx, dy = reflected(dx, dy, nx, ny)
-        ox, oy = ox + dx * 1e-4, oy + dy * 1e-4
+        origin_x, origin_y = origin_x + delta_x * t, origin_y + delta_y * t
+        points.append((origin_x, origin_y))
+        if shape is not None and not shape.is_wall:
+            hits.append((shape.bid, t_now))
+        delta_x, delta_y = reflected(delta_x, delta_y, normal_x, normal_y)
+        origin_x, origin_y = origin_x + delta_x * 1e-4, origin_y + delta_y * 1e-4
         speed = min(MAX_SPEED, speed + SPEED_UP)
-    return PathResult(pts, hits)
+    return PathResult(points, hits)
 
 
 def yield_for(
@@ -449,18 +490,23 @@ def yield_for(
     """경로가 닿은 채집 가능 건물의 자원 합 [골드, 밀, 나무, 돌]. taken: 이미 다른 작업자가 가져간 건물."""
     from .harvest import building_resource
 
-    out = [0, 0, 0, 0]
+    result = [0, 0, 0, 0]
     taken = taken if taken is not None else set()
-    for bid, _t in path_hits:
-        b = buildings.get(bid)
-        if b is None or bid in taken or not b.get("can_harvest") or not (b.get("res") or 0):
+    for building_id, _t in path_hits:
+        building = buildings.get(building_id)
+        if (
+            building is None
+            or building_id in taken
+            or not building.get("can_harvest")
+            or not (building.get("res") or 0)
+        ):
             continue
-        res = building_resource(b)
+        res = building_resource(building)
         if res is None:
             continue
-        taken.add(bid)
-        out[res] += int(b["res"])
-    return out
+        taken.add(building_id)
+        result[res] += int(building["res"])
+    return result
 
 
 def sweep(
@@ -472,12 +518,12 @@ def sweep(
     speed0: float = 5.0,
 ) -> List[Tuple[float, List[int], PathResult]]:
     """각도마다 한 명이 얻는 자원. need 자원이 많은 순."""
-    out = []
+    result = []
     for a in angles:
         p = simulate(world, a, duration, speed0)
-        out.append((a, yield_for(p.hits, buildings), p))
-    out.sort(key=lambda t: (-t[1][need], -sum(t[1])))
-    return out
+        result.append((a, yield_for(p.hits, buildings), p))
+    result.sort(key=lambda t: (-t[1][need], -sum(t[1])))
+    return result
 
 
 @dataclass
@@ -568,18 +614,18 @@ def model_limitations(team: Sequence[dict], buildings: Dict[int, dict]) -> List[
         "kWheatRange",
     }
     # 게임은 매 프레임 원형 겹침을 검사한다. 여기서는 연속 이동 충돌을 계산하므로 모서리 오차가 남는다.
-    if any(b.get("type") in RESOURCE_TILE_TYPES for b in buildings.values()):
+    if any(building.get("type") in RESOURCE_TILE_TYPES for building in buildings.values()):
         missing.add("continuous_pickup_approximation")
-    for b in buildings.values():
-        if b.get("type") in HIT_EFFECT_TYPES:
-            if "effect_value" not in b or "hit_limit" not in b:
-                missing.add("missing_building_effect:" + b["type"])
-            if b["type"] in HOUSING_HIT_TYPES and "housing_effect_active" not in b:
-                missing.add("missing_housing_activation:" + b["type"])
+    for building in buildings.values():
+        if building.get("type") in HIT_EFFECT_TYPES:
+            if "effect_value" not in building or "hit_limit" not in building:
+                missing.add("missing_building_effect:" + building["type"])
+            if building["type"] in HOUSING_HIT_TYPES and "housing_effect_active" not in building:
+                missing.add("missing_housing_activation:" + building["type"])
         if (
-            b.get("state") in CONSTRUCTION_STATES
-            and b.get("type") in HIT_EFFECT_TYPES | {"kCobbler"}
-            and "completion_effect_value" not in b
+            building.get("state") in CONSTRUCTION_STATES
+            and building.get("type") in HIT_EFFECT_TYPES | {"kCobbler"}
+            and "completion_effect_value" not in building
         ):
             missing.add("completion_global_bonuses_not_projected")
     for member in team:
@@ -604,10 +650,10 @@ HIT_EFFECT_TYPES = HOUSING_HIT_TYPES | {"kBabyWorkerCross", "kBabyWorkerX", "kGo
 def needs_dynamic_simulation(buildings):
     """상태 전이와 추가 작업자는 시간순 Python 경로에서 처리한다."""
     return any(
-        b.get("state") in CONSTRUCTION_STATES
-        or ("task_target_seconds" in b and (resource_tile(b) or b.get("task_active")))
-        or (b.get("type") in HIT_EFFECT_TYPES and "effect_value" in b)
-        for b in buildings.values()
+        building.get("state") in CONSTRUCTION_STATES
+        or ("task_target_seconds" in building and (resource_tile(building) or building.get("task_active")))
+        or (building.get("type") in HIT_EFFECT_TYPES and "effect_value" in building)
+        for building in buildings.values()
     )
 
 
@@ -615,10 +661,13 @@ def _team_tables(buildings: Dict[int, dict]):
     from .harvest import RES_BY_TYPE, building_resource
 
     # CanHarvest(462A20)는 자원 종류와 보관량을 검사한다. 공사 상태만으로 재고를 지우지 않는다.
-    res_left = {bid: int(b.get("res") or 0) if b.get("can_harvest") else 0 for bid, b in buildings.items()}
-    rtype = {bid: resource_kind(b) for bid, b in buildings.items()}
-    is_tile = {bid: resource_tile(b) for bid, b in buildings.items()}
-    return res_left, rtype, is_tile
+    res_left = {
+        building_id: int(building.get("res") or 0) if building.get("can_harvest") else 0
+        for building_id, building in buildings.items()
+    }
+    resource_types = {building_id: resource_kind(building) for building_id, building in buildings.items()}
+    is_tile = {building_id: resource_tile(building) for building_id, building in buildings.items()}
+    return res_left, resource_types, is_tile
 
 
 def simulate_team(
@@ -638,22 +687,22 @@ def simulate_team(
     """
     from . import native
 
-    res_left, rtype, is_tile = _team_tables(buildings)
+    res_left, resource_types, is_tile = _team_tables(buildings)
 
-    def flags_of(bid: int):
-        b = buildings.get(bid) or {}
-        pickup = b.get("pickup_enabled", rtype.get(bid) == 1)
-        f = (native.F_WHEAT if pickup and is_tile.get(bid) else 0) | (
-            native.F_TILE if is_tile.get(bid) else 0
+    def flags_of(building_id: int):
+        building = buildings.get(building_id) or {}
+        pickup = building.get("pickup_enabled", resource_types.get(building_id) == 1)
+        f = (native.F_WHEAT if pickup and is_tile.get(building_id) else 0) | (
+            native.F_TILE if is_tile.get(building_id) else 0
         )
-        if b.get("state") in CONSTRUCTION_STATES:
+        if building.get("state") in CONSTRUCTION_STATES:
             f |= native.F_BUILD
-        if resource_tile(b):
+        if resource_tile(building):
             f |= native.F_RESOURCE
-        if b.get("raycast_enabled") is False and b.get("pickup_enabled") is not True:
+        if building.get("raycast_enabled") is False and building.get("pickup_enabled") is not True:
             f |= native.F_NO_RAY
-        k = rtype.get(bid)
-        return f, (-1 if k is None else int(k)), int(res_left.get(bid, 0))
+        k = resource_types.get(building_id)
+        return f, (-1 if k is None else int(k)), int(res_left.get(building_id, 0))
 
     total = (
         None
@@ -678,30 +727,33 @@ def simulate_team_py(
     collected: Optional[Dict[int, int]] = None,
 ) -> Tuple[List[int], List[Worker]]:
     """simulate_team 의 파이썬 구현 (네이티브 모듈이 없을 때, 그리고 결과 비교 기준)."""
-    buildings = {bid: dict(b) for bid, b in buildings.items()}
-    res_left, rtype, is_tile = _team_tables(buildings)
+    buildings = {building_id: dict(building) for building_id, building in buildings.items()}
+    res_left, resource_types, is_tile = _team_tables(buildings)
     total = [0, 0, 0, 0]
-    r = world.radius
+    radius = world.radius
     walls = [
-        ((world.left + r, -1e3), (world.left + r, 1e3)),
-        ((world.right - r, -1e3), (world.right - r, 1e3)),
-        ((-1e3, world.top - r), (1e3, world.top - r)),
-        ((-1e3, world.bottom + r), (1e3, world.bottom + r)),
+        ((world.left + radius, -1e3), (world.left + radius, 1e3)),
+        ((world.right - radius, -1e3), (world.right - radius, 1e3)),
+        ((-1e3, world.top - radius), (1e3, world.top - radius)),
+        ((-1e3, world.bottom + radius), (1e3, world.bottom + radius)),
     ]
     if not world.use_bounds:
         walls = []
 
     def moving_speed(w):
         x, y = w.x + w.dx * 1e-7, w.y + w.dy * 1e-7
-        on_road = any(x0 <= x < x1 and y0 <= y < y1 for x0, y0, x1, y1 in world.roads)
+        on_road = any(
+            left_x <= x < right_x and bottom_y <= y < top_y
+            for left_x, bottom_y, right_x, top_y in world.roads
+        )
         return w.speed * (world.road_speed_mult if on_road else 1.0)
 
-    for w in workers:
-        w.path = [(w.x, w.y, w.t)]
-    effects = {id(w): harvest_effects(w.upgrades, w.harvest_bonus) for w in workers}
-    clock_counts = {id(w): [0, 0, 0, 0] for w in workers}
-    touches = {bid: 0 for bid in buildings}
-    progress = {bid: 0 for bid in buildings}
+    for worker in workers:
+        worker.path = [(worker.x, worker.y, worker.t)]
+    effects = {id(worker): harvest_effects(worker.upgrades, worker.harvest_bonus) for worker in workers}
+    clock_counts = {id(worker): [0, 0, 0, 0] for worker in workers}
+    touches = {building_id: 0 for building_id in buildings}
+    progress = {building_id: 0 for building_id in buildings}
     spawned = set()
     launch_speed = world.worker_speed
     from .world_tasks import TaskClock
@@ -709,38 +761,38 @@ def simulate_team_py(
     tasks = TaskClock(world.task_clock, buildings, res_left, resource_kind, resource_tile, world.model_notes)
     world.automatic_gain = tasks.gain
 
-    def add_points(bid, amount, when):
+    def add_points(building_id, amount, when):
         nonlocal launch_speed
-        b = buildings[bid]
-        if b.get("state") not in CONSTRUCTION_STATES:
+        building = buildings[building_id]
+        if building.get("state") not in CONSTRUCTION_STATES:
             return False
         left = None
-        if type(b.get("upg_tgt")) is int and type(b.get("upg_pts")) is int:
-            left = max(0, b["upg_tgt"] - b["upg_pts"] - progress[bid])
+        if type(building.get("upg_tgt")) is int and type(building.get("upg_pts")) is int:
+            left = max(0, building["upg_tgt"] - building["upg_pts"] - progress[building_id])
         added = amount if left is None else min(amount, left)
-        progress[bid] += added
+        progress[building_id] += added
         if build_points is not None:
-            build_points[bid] = build_points.get(bid, 0) + added
+            build_points[building_id] = build_points.get(building_id, 0) + added
         if left is not None and amount >= left:
             # RefreshCollider(475E30)는 같은 Info 모양을 다시 등록한다. 상태·재고는 별도로 갱신한다.
-            old_state = b.get("state")
-            old_value = b.get("effect_value")
+            old_state = building.get("state")
+            old_value = building.get("effect_value")
             if old_state == "kUpgrading":
-                b["lvl"] = int(b.get("lvl", 0)) + 1
-            b["state"] = "kNormal"
-            if resource_tile(b):
-                is_tile[bid] = True
-                res_left[bid] = max(0, int(b.get("res") or 0))
-                if "completion_capacity" in b:
-                    b["cap"] = b["completion_capacity"]
-            if "task_target_seconds" in b:
+                building["lvl"] = int(building.get("lvl", 0)) + 1
+            building["state"] = "kNormal"
+            if resource_tile(building):
+                is_tile[building_id] = True
+                res_left[building_id] = max(0, int(building.get("res") or 0))
+                if "completion_capacity" in building:
+                    building["cap"] = building["completion_capacity"]
+            if "task_target_seconds" in building:
                 # 다음 레벨의 작업 주기를 게임 getter로 읽지 못했으므로 현재 값으로 확정하지 않는다.
                 world.model_notes.add("completion_task_period_not_projected")
-                tasks.elapsed[bid] = 0
-            value = b.get("completion_effect_value")
+                tasks.elapsed[building_id] = 0
+            value = building.get("completion_effect_value")
             if type(value) is int:
-                b["effect_value"] = value
-                if b.get("type") == "kCobbler":
+                building["effect_value"] = value
+                if building.get("type") == "kCobbler":
                     if old_state == "kScaffold" or type(old_value) is int:
                         delta = 5.0 * (value - (old_value if old_state == "kUpgrading" else 0)) / 100.0
                         launch_speed += delta
@@ -750,36 +802,40 @@ def simulate_team_py(
                                 member.speed += delta * (1.0 + bonus / 100.0)
                     else:
                         world.model_notes.add("completion_global_bonuses_not_projected")
-            elif b.get("type") in HIT_EFFECT_TYPES | {"kCobbler"}:
+            elif building.get("type") in HIT_EFFECT_TYPES | {"kCobbler"}:
                 world.model_notes.add("completion_global_bonuses_not_projected")
             return True
         return False
 
-    def contact_effect(bid, w):
+    def contact_effect(building_id, w):
         nonlocal duration
-        if bid not in buildings:
+        if building_id not in buildings:
             world.model_notes.add("missing_collision_owner")
             return False
-        b = buildings[bid]
-        kind = b.get("type")
+        building = buildings[building_id]
+        kind = building.get("type")
         changed = False
-        if b.get("state") in CONSTRUCTION_STATES:
-            changed = add_points(bid, 1 + (_game_bonus(w.harvest_bonus, "kMoreBuildPts") or 0), w.t)
-        n = touches[bid]
-        touches[bid] += 1
-        if b.get("state") == "kScaffold":
+        if building.get("state") in CONSTRUCTION_STATES:
+            changed = add_points(building_id, 1 + (_game_bonus(w.harvest_bonus, "kMoreBuildPts") or 0), w.t)
+        n = touches[building_id]
+        touches[building_id] += 1
+        if building.get("state") == "kScaffold":
             return changed
-        if kind in HOUSING_HIT_TYPES and b.get("housing_effect_active") is not True:
+        if kind in HOUSING_HIT_TYPES and building.get("housing_effect_active") is not True:
             return changed
-        value = b.get("effect_value")
-        limit = b.get("hit_limit")
+        value = building.get("effect_value")
+        limit = building.get("hit_limit")
         if type(value) not in (int, float) or not math.isfinite(value):
             return changed
         if kind == "kBrickHouse":
             from .game_range import row_in_range
 
             for other, row in buildings.items():
-                if other != bid and row.get("state") in CONSTRUCTION_STATES and row_in_range(b, row):
+                if (
+                    other != building_id
+                    and row.get("state") in CONSTRUCTION_STATES
+                    and row_in_range(building, row)
+                ):
                     changed = add_points(other, max(0, int(value)), w.t) or changed
         elif kind in ("kHauntedHouse", "kMonastery") and type(limit) is int and n < limit:
             if kind == "kHauntedHouse":
@@ -787,17 +843,25 @@ def simulate_team_py(
             else:
                 duration += value / 100.0
             changed = True
-        elif kind in ("kBabyWorkerCross", "kBabyWorkerX") and bid not in spawned and type(limit) is int:
-            spawned.add(bid)
+        elif (
+            kind in ("kBabyWorkerCross", "kBabyWorkerX") and building_id not in spawned and type(limit) is int
+        ):
+            spawned.add(building_id)
             directions = (
                 ((1, 0), (-1, 0), (0, 1), (0, -1))
                 if kind == "kBabyWorkerCross"
                 else ((1, 1), (1, -1), (-1, 1), (-1, -1))
             )
-            for dx, dy in directions:
-                length = math.sqrt(dx * dx + dy * dy)
+            for delta_x, delta_y in directions:
+                length = math.sqrt(delta_x * delta_x + delta_y * delta_y)
                 child = Worker(
-                    float(b["x"]), float(b["y"]), dx / length, dy / length, launch_speed, w.t, owner_id=bid
+                    float(building["x"]),
+                    float(building["y"]),
+                    delta_x / length,
+                    delta_y / length,
+                    launch_speed,
+                    w.t,
+                    owner_id=building_id,
                 )
                 child.path = [(child.x, child.y, child.t)]
                 workers.append(child)
@@ -809,96 +873,113 @@ def simulate_team_py(
             world.model_notes.add("random_gold_mine_yield_not_projected")
         return changed
 
-    def blocks(bid: int, w: Worker) -> bool:
-        b = buildings.get(bid) or {}
-        t = b.get("type", "")
-        if b.get("raycast_enabled") is False or (w.upgrades.get("kPierceBuildings") and not resource_tile(b)):
+    def blocks(building_id: int, worker: Worker) -> bool:
+        building = buildings.get(building_id) or {}
+        t = building.get("type", "")
+        if building.get("raycast_enabled") is False or (
+            worker.upgrades.get("kPierceBuildings") and not resource_tile(building)
+        ):
             return False
-        if is_tile.get(bid):
-            if b.get("pickup_enabled", rtype.get(bid) == 1):
+        if is_tile.get(building_id):
+            if building.get("pickup_enabled", resource_types.get(building_id) == 1):
                 return False
-            if res_left.get(bid, 0) <= 0:
+            if res_left.get(building_id, 0) <= 0:
                 return False
-        kind = rtype.get(bid)
-        if resource_tile(b) and (
-            (kind == 3 and w.upgrades.get("kPierceStone")) or (kind == 2 and w.upgrades.get("kPierceWood"))
+        kind = resource_types.get(building_id)
+        if resource_tile(building) and (
+            (kind == 3 and worker.upgrades.get("kPierceStone"))
+            or (kind == 2 and worker.upgrades.get("kPierceWood"))
         ):
             return False
         return True
 
-    def harvest(bid: int, w: Worker):
+    def harvest(building_id: int, worker: Worker):
         nonlocal duration
-        n = res_left.get(bid, 0)
-        kind = rtype.get(bid)
+        n = res_left.get(building_id, 0)
+        kind = resource_types.get(building_id)
         if n > 0 and kind is not None:
-            amounts, clock, _ = effects[id(w)]
+            amounts, clock, _ = effects[id(worker)]
             n = min(n, amounts[kind])
-            res_left[bid] -= n
-            if resource_tile(buildings.get(bid, {})):
-                b = buildings[bid]
-                b["res"] = res_left[bid]
-                b["raycast_enabled"] = res_left[bid] > 0 and kind != 1
-                b["pickup_enabled"] = res_left[bid] > 0 and kind == 1
-            w.gain[kind] += n
+            res_left[building_id] -= n
+            if resource_tile(buildings.get(building_id, {})):
+                building = buildings[building_id]
+                building["res"] = res_left[building_id]
+                building["raycast_enabled"] = res_left[building_id] > 0 and kind != 1
+                building["pickup_enabled"] = res_left[building_id] > 0 and kind == 1
+            worker.gain[kind] += n
             total[kind] += n
             if collected is not None:
-                collected[bid] = collected.get(bid, 0) + n  # 관통 채집도 건물별 접근 증거에 포함한다.
-            if clock[kind] and clock_counts[id(w)][kind] < 20:
+                collected[building_id] = (
+                    collected.get(building_id, 0) + n
+                )  # 관통 채집도 건물별 접근 증거에 포함한다.
+            if clock[kind] and clock_counts[id(worker)][kind] < 20:
                 duration += clock[kind] * 0.2
-                clock_counts[id(w)][kind] += 1
+                clock_counts[id(worker)][kind] += 1
 
-    def next_event(w: Worker):
-        if not w.active or w.t >= duration or w.speed <= 0:
+    def next_event(worker: Worker):
+        if not worker.active or worker.t >= duration or worker.speed <= 0:
             return None
         best = None
-        for i, ((ax, ay), (bx, by)) in enumerate(walls):
-            inside = (w.x >= ax - 1e-6, w.x <= ax + 1e-6, w.y <= ay + 1e-6, w.y >= ay - 1e-6)[i]
-            toward = (w.dx < 0, w.dx > 0, w.dy > 0, w.dy < 0)[i]
+        for index, ((start_x, start_y), (end_x, end_y)) in enumerate(walls):
+            inside = (
+                worker.x >= start_x - 1e-6,
+                worker.x <= start_x + 1e-6,
+                worker.y <= start_y + 1e-6,
+                worker.y >= start_y - 1e-6,
+            )[index]
+            toward = (worker.dx < 0, worker.dx > 0, worker.dy > 0, worker.dy < 0)[index]
             if inside and toward:
-                h = _ray_segment(w.x, w.y, w.dx, w.dy, ax, ay, bx, by)
+                h = _ray_segment(worker.x, worker.y, worker.dx, worker.dy, start_x, start_y, end_x, end_y)
                 if h and (best is None or h[0] < best[0]):
                     best = (h[0], h[1], h[2], None, True, False)
-        for sh in world.shapes:
-            b = buildings.get(sh.bid, {})
-            pickup = is_tile.get(sh.bid) and b.get("pickup_enabled", rtype.get(sh.bid) == 1)
-            if not sh.is_wall and not pickup and b.get("raycast_enabled") is False:
+        for shape in world.shapes:
+            building = buildings.get(shape.bid, {})
+            pickup = is_tile.get(shape.bid) and building.get(
+                "pickup_enabled", resource_types.get(shape.bid) == 1
+            )
+            if not shape.is_wall and not pickup and building.get("raycast_enabled") is False:
                 continue
-            solid = sh.is_wall or (not pickup and blocks(sh.bid, w))
-            pickup_r = effects[id(w)][2] if pickup else r
+            solid = shape.is_wall or (not pickup and blocks(shape.bid, worker))
+            pickup_r = effects[id(worker)][2] if pickup else radius
             # 빈 타일은 사건을 만들지 않는다. 통과 채집도 실제 접촉 시각의 사건으로 처리한다.
-            if not solid and is_tile.get(sh.bid) and res_left.get(sh.bid, 0) <= 0:
-                w.touching.discard(sh.bid)
+            if not solid and is_tile.get(shape.bid) and res_left.get(shape.bid, 0) <= 0:
+                worker.touching.discard(shape.bid)
                 continue
-            inside = _inside_shape(sh, w.x, w.y, pickup_r)
+            inside = _inside_shape(shape, worker.x, worker.y, pickup_r)
             if pickup and inside:
-                if sh.bid in w.touching and not w.just_bounced:
+                if shape.bid in worker.touching and not worker.just_bounced:
                     continue
-                h = (0.0, -w.dx, -w.dy)
+                h = (0.0, -worker.dx, -worker.dy)
             else:
                 if not inside:
-                    w.touching.discard(sh.bid)
+                    worker.touching.discard(shape.bid)
                 if not solid and inside:
                     continue
-                h = _hit_shape(sh, w.x, w.y, w.dx, w.dy, pickup_r)
+                h = _hit_shape(shape, worker.x, worker.y, worker.dx, worker.dy, pickup_r)
             if not h:
                 continue
             if best is None or h[0] < best[0]:
-                best = (h[0], h[1], h[2], sh, solid, bool(pickup))
-        for x0, y0, x1, y1 in world.roads:
-            for ax, ay, bx, by in ((x0, y0, x1, y0), (x1, y0, x1, y1), (x1, y1, x0, y1), (x0, y1, x0, y0)):
-                h = _ray_segment(w.x, w.y, w.dx, w.dy, ax, ay, bx, by)
+                best = (h[0], h[1], h[2], shape, solid, bool(pickup))
+        for left_x, bottom_y, right_x, top_y in world.roads:
+            for start_x, start_y, end_x, end_y in (
+                (left_x, bottom_y, right_x, bottom_y),
+                (right_x, bottom_y, right_x, top_y),
+                (right_x, top_y, left_x, top_y),
+                (left_x, top_y, left_x, bottom_y),
+            ):
+                h = _ray_segment(worker.x, worker.y, worker.dx, worker.dy, start_x, start_y, end_x, end_y)
                 if h and (best is None or h[0] < best[0]):
                     best = (h[0], h[1], h[2], None, False, False)  # 도로 경계는 반사·타격이 아닌 속도 변화다.
-        if best is None or w.t + best[0] / moving_speed(w) >= duration:
+        if best is None or worker.t + best[0] / moving_speed(worker) >= duration:
             return None
-        return (w.t + best[0] / moving_speed(w), *best)
+        return (worker.t + best[0] / moving_speed(worker), *best)
 
     # 사건 구조: (게임 시각, 이동 거리, 법선 x/y, 대상 모양, 반사 여부, 픽업 여부).
     # 접촉과 반사는 별개다. 관통도 공사 점수를 줄 수 있고 픽업은 벽 반사가 아니다.
-    events = [next_event(w) for w in workers]
+    events = [next_event(worker) for worker in workers]
     for _ in range(max_events):
-        ready = [i for i, event in enumerate(events) if event is not None]
-        if tasks.next < duration and (not ready or tasks.next < min(events[i][0] for i in ready)):
+        ready = [index for index, event in enumerate(events) if event is not None]
+        if tasks.next < duration and (not ready or tasks.next < min(events[index][0] for index in ready)):
             when = tasks.next
             for other in workers:
                 if other.active and other.t < when:
@@ -912,43 +993,53 @@ def simulate_team_py(
             events = [next_event(other) for other in workers]
             continue
         if not ready:
-            for w in workers:
-                if w.active and w.t < duration:
-                    rest = (duration - w.t) * moving_speed(w)
-                    w.x, w.y, w.t = w.x + w.dx * rest, w.y + w.dy * rest, duration
-                    w.path.append((w.x, w.y, w.t))
+            for worker in workers:
+                if worker.active and worker.t < duration:
+                    rest = (duration - worker.t) * moving_speed(worker)
+                    worker.x, worker.y, worker.t = (
+                        worker.x + worker.dx * rest,
+                        worker.y + worker.dy * rest,
+                        duration,
+                    )
+                    worker.path.append((worker.x, worker.y, worker.t))
             break
-        wi = min(ready, key=lambda i: (events[i][0], i))
-        when, dist, nx, ny, sh, solid, pickup = events[wi]
-        w = workers[wi]
-        w.x, w.y, w.t = w.x + w.dx * dist, w.y + w.dy * dist, when
-        changed = sh is not None and res_left.get(sh.bid, 0) > 0
-        if sh is not None and not sh.is_wall:
-            harvest(sh.bid, w)
+        worker_index = min(ready, key=lambda i: (events[i][0], i))
+        when, current_distance, normal_x, normal_y, shape, solid, pickup = events[worker_index]
+        worker = workers[worker_index]
+        worker.x, worker.y, worker.t = (
+            worker.x + worker.dx * current_distance,
+            worker.y + worker.dy * current_distance,
+            when,
+        )
+        changed = shape is not None and res_left.get(shape.bid, 0) > 0
+        if shape is not None and not shape.is_wall:
+            harvest(shape.bid, worker)
             if pickup:
-                w.touching.add(sh.bid)
-                w.just_bounced = False
+                worker.touching.add(shape.bid)
+                worker.just_bounced = False
             if not pickup and counts is not None:
-                counts[sh.bid] = counts.get(sh.bid, 0) + 1  # 건물에 부딪힌 횟수 (미완성 건물 건설용)
+                counts[shape.bid] = counts.get(shape.bid, 0) + 1  # 건물에 부딪힌 횟수 (미완성 건물 건설용)
             if not pickup:
-                changed = contact_effect(sh.bid, w) or changed
+                changed = contact_effect(shape.bid, worker) or changed
         if solid:
-            w.path.append((w.x, w.y, w.t))
-            w.dx, w.dy = reflected(w.dx, w.dy, nx, ny)
-            w.speed = min(MAX_SPEED, w.speed + SPEED_UP)
-            w.bounces += 1
-            w.just_bounced = True
-            if w.owner_id is not None and w.bounces >= buildings[w.owner_id]["hit_limit"]:
-                w.active = False
-        elif sh is None:
-            w.path.append((w.x, w.y, w.t))  # 시각 재생에는 도로 진입/이탈 지점도 필요하다.
-        w.x, w.y = w.x + w.dx * 1e-4, w.y + w.dy * 1e-4
+            worker.path.append((worker.x, worker.y, worker.t))
+            worker.dx, worker.dy = reflected(worker.dx, worker.dy, normal_x, normal_y)
+            worker.speed = min(MAX_SPEED, worker.speed + SPEED_UP)
+            worker.bounces += 1
+            worker.just_bounced = True
+            if worker.owner_id is not None and worker.bounces >= buildings[worker.owner_id]["hit_limit"]:
+                worker.active = False
+        elif shape is None:
+            worker.path.append(
+                (worker.x, worker.y, worker.t)
+            )  # 시각 재생에는 도로 진입/이탈 지점도 필요하다.
+        worker.x, worker.y = worker.x + worker.dx * 1e-4, worker.y + worker.dy * 1e-4
         if changed:
             # 타일을 비운 바로 그 시각까지만 다른 작업자를 진행시킨다. 그 이후의 반사 후보는 다시 계산한다.
             simultaneous = {}
-            for j, other in enumerate(workers):
-                old = events[j]
-                if j != wi and old is not None and old[0] == when:
+            for other_index, other in enumerate(workers):
+                old = events[other_index]
+                if other_index != worker_index and old is not None and old[0] == when:
                     _, _, onx, ony, target, was_solid, was_pickup = old
                     blocking = was_solid if target is None else target.is_wall or blocks(target.bid, other)
                     if (
@@ -957,8 +1048,8 @@ def simulate_team_py(
                         or not is_tile.get(target.bid)
                         or res_left.get(target.bid, 0) > 0
                     ):
-                        simultaneous[j] = (when, 0.0, onx, ony, target, blocking, was_pickup)
-                if j != wi and other.active and other.t < when:
+                        simultaneous[other_index] = (when, 0.0, onx, ony, target, blocking, was_pickup)
+                if other_index != worker_index and other.active and other.t < when:
                     distance = (when - other.t) * moving_speed(other)
                     other.x, other.y, other.t = (
                         other.x + other.dx * distance,
@@ -966,10 +1057,10 @@ def simulate_team_py(
                         when,
                     )
             events = [next_event(other) for other in workers]
-            for j, event in simultaneous.items():
-                events[j] = event
+            for other_index, event in simultaneous.items():
+                events[other_index] = event
         else:
-            events[wi] = next_event(w)
+            events[worker_index] = next_event(worker)
     else:
         world.model_notes.add("simulation_event_limit")
     return total, workers
@@ -983,17 +1074,17 @@ def homography(proj: Sequence[Sequence[float]]):
     if not proj or len(proj) < 4:
         return None
     rows = []
-    for wx, wy, sx, sy in proj:
-        rows.append([wx, wy, 1, 0, 0, 0, -sx * wx, -sx * wy, -sx])
-        rows.append([0, 0, 0, wx, wy, 1, -sy * wx, -sy * wy, -sy])
+    for world_x, world_y, screen_x, screen_y in proj:
+        rows.append([world_x, world_y, 1, 0, 0, 0, -screen_x * world_x, -screen_x * world_y, -screen_x])
+        rows.append([0, 0, 0, world_x, world_y, 1, -screen_y * world_x, -screen_y * world_y, -screen_y])
     _, _, vt = np.linalg.svd(np.array(rows, dtype=float))
-    h = vt[-1].reshape(3, 3)
-    return h / h[2, 2]
+    transform_matrix = vt[-1].reshape(3, 3)
+    return transform_matrix / transform_matrix[2, 2]
 
 
 def to_screen(h, x: float, y: float) -> Tuple[float, float]:
-    v = h @ [x, y, 1.0]
-    return v[0] / v[2], v[1] / v[2]
+    value = h @ [x, y, 1.0]
+    return value[0] / value[2], value[1] / value[2]
 
 
 # ---- 팀 구성과 각도 추천 ----
@@ -1003,29 +1094,32 @@ def team_from_chars(chars_raw: Sequence[dict], order: Optional[Sequence[str]] = 
     """게임 BaseMgr.SetUpActiveWorkers(45D090), CanBeSentToWork(47D090)와 같은 참가 조건.
     금광·자동 발사대 배정, 출전·회복 중, 영향력자는 제외한다. 일반 생산 건물 배정자는 참가한다.
     """
-    chars = [
-        c
-        for c in chars_raw
-        if c.get("type")
-        and c.get("type") != "kInfluencer"
-        and c.get("state") in (None, "kIdle", "kWorking")
-        and not (c.get("state") == "kWorking" and c.get("work") in (None, "kGoldMine", "kIdleLauncher"))
+    characters = [
+        character
+        for character in chars_raw
+        if character.get("type")
+        and character.get("type") != "kInfluencer"
+        and character.get("state") in (None, "kIdle", "kWorking")
+        and not (
+            character.get("state") == "kWorking"
+            and character.get("work") in (None, "kGoldMine", "kIdleLauncher")
+        )
     ]
     if order:
-        rank = {t: i for i, t in enumerate(order)}
-        chars.sort(key=lambda c: rank.get(c["type"], 99))
-    out = []
-    for c in chars:
-        ups = c.get("harvest") or {}
-        out.append(
+        rank = {t: index for index, t in enumerate(order)}
+        characters.sort(key=lambda c: rank.get(c["type"], 99))
+    result = []
+    for character in characters:
+        upgrades = character.get("harvest") or {}
+        result.append(
             {
-                "type": c["type"],
-                "upgrades": ups,
-                "speed": 5.0 + (1.0 if ups.get("kHarvestSpeed") else 0.0),
-                "harvest_bonus": dict(c.get("harvest_bonus") or {}),
+                "type": character["type"],
+                "upgrades": upgrades,
+                "speed": 5.0 + (1.0 if upgrades.get("kHarvestSpeed") else 0.0),
+                "harvest_bonus": dict(character.get("harvest_bonus") or {}),
             }
         )
-    return out
+    return result
 
 
 def team_from_base(base, chars_raw, order=None):
@@ -1058,10 +1152,10 @@ def run_angle(
     world.automatic_gain = [0, 0, 0, 0]
     if world.use_bounds:
         world.model_notes.add("reconstructed_walls")
-    lx, ly = world.launcher
-    dx, dy = math.cos(math.radians(angle)), math.sin(math.radians(angle))
-    ws = []
-    for i, m in enumerate(team):
+    launcher_x, launcher_y = world.launcher
+    delta_x, delta_y = math.cos(math.radians(angle)), math.sin(math.radians(angle))
+    workers = []
+    for index, m in enumerate(team):
         bonuses = dict(m.get("harvest_bonus") or {})
         speed_pct = _game_bonus(bonuses, "kHarvestSpeed")
         speed = (
@@ -1069,11 +1163,20 @@ def run_angle(
             if speed_pct is not None
             else world.worker_speed + (m["speed"] - 5.0) * world.worker_speed_mult
         )
-        ws.append(
-            Worker(lx, ly, dx, dy, speed, i * world.launch_gap, dict(m["upgrades"]), harvest_bonus=bonuses)
+        workers.append(
+            Worker(
+                launcher_x,
+                launcher_y,
+                delta_x,
+                delta_y,
+                speed,
+                index * world.launch_gap,
+                dict(m["upgrades"]),
+                harvest_bonus=bonuses,
+            )
         )
     return simulate_team(
-        world, buildings, ws, duration, counts=counts, build_points=build_points, collected=collected
+        world, buildings, workers, duration, counts=counts, build_points=build_points, collected=collected
     )
 
 
@@ -1107,23 +1210,27 @@ def rank_angles(
     """각도별 예상 결과. 미완성 건물 건설(targets: 건물 id → 더 필요한 공사 점수)이 먼저, 그다음 필요한 자원,
     다른 자원은 4분의 1 가중."""
     targets = targets or {}
-    out = []
-    for a in angles:
+    result = []
+    for angle in angles:
         counts: Dict[int, int] = {}
         points: Dict[int, int] = {}
-        total, _ = run_angle(world, buildings, team, a, duration, counts, points)
-        per = {bid: min(counts.get(bid, 0), cap) for bid, cap in targets.items() if counts.get(bid)}
+        total, _ = run_angle(world, buildings, team, angle, duration, counts, points)
+        per = {
+            building_id: min(counts.get(building_id, 0), capacity)
+            for building_id, capacity in targets.items()
+            if counts.get(building_id)
+        }
         per_points = {}
-        for bid, cap in targets.items():
-            progress = points.get(bid, 0)
-            if not buildings.get(bid, {}).get("state"):
+        for building_id, capacity in targets.items():
+            progress = points.get(building_id, 0)
+            if not buildings.get(building_id, {}).get("state"):
                 # 예전 플러그인·자료는 공사 상태가 없다. 호환용 1점/접촉이며 게임의 정확한 점수가 아니다.
-                progress = counts.get(bid, 0)
+                progress = counts.get(building_id, 0)
             if progress > 0:
-                per_points[bid] = min(progress, cap)
-        out.append(
+                per_points[building_id] = min(progress, capacity)
+        result.append(
             AngleResult(
-                a,
+                angle,
                 total,
                 sum(per.values()),
                 per,
@@ -1132,8 +1239,8 @@ def rank_angles(
                 tuple(sorted(world.model_notes)),
             )
         )
-    out.sort(key=lambda r: -angle_score(r, need))
-    return out
+    result.sort(key=lambda angle_result: -angle_score(angle_result, need))
+    return result
 
 
 def best_angles(
@@ -1145,4 +1252,7 @@ def best_angles(
     angles: Sequence[float] = tuple(range(12, 169, 3)),
 ) -> List[Tuple[float, List[int]]]:
     """각도별 팀 전체 예상 채집량. 필요한 자원 우선, 다른 자원은 4분의 1 가중."""
-    return [(r.angle, r.total) for r in rank_angles(world, buildings, team, duration, need, None, angles)]
+    return [
+        (angle_result.angle, angle_result.total)
+        for angle_result in rank_angles(world, buildings, team, duration, need, None, angles)
+    ]

@@ -4,6 +4,7 @@
 archetype detector). 여기서는 그 목록을 가져오지 않고, 게임 데이터의 볼 태그(상태 이상·피해 종류)로 직접 센다.
 점수 = 가진 볼마다 (1 + 레벨 보정) + 이번 런 피해 비율 보너스. 가장 큰 계열이 2점 이상이면 덱 계열로 본다.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -15,16 +16,33 @@ from ..i18n import tr
 
 # 게임 태그 → 계열 (여러 태그가 한 계열로)
 AXIS_OF_STATUS = {
-    "Burn": "burn", "Darkflame": "burn",
-    "Freeze": "freeze", "Slow": "freeze", "Time Snare": "freeze",
+    "Burn": "burn",
+    "Darkflame": "burn",
+    "Freeze": "freeze",
+    "Slow": "freeze",
+    "Time Snare": "freeze",
     "Bleed": "bleed",
-    "Poison": "poison", "Radiation": "poison",
-    "Curse": "curse", "Charm": "curse", "Blind": "curse",
-    "Baby Ball Spawn": "baby", "Mosquito Spawn": "baby", "Clone": "baby",
-    "Lifesteal": "sustain", "Heal": "sustain",
+    "Poison": "poison",
+    "Radiation": "poison",
+    "Curse": "curse",
+    "Charm": "curse",
+    "Blind": "curse",
+    "Baby Ball Spawn": "baby",
+    "Mosquito Spawn": "baby",
+    "Clone": "baby",
+    "Lifesteal": "sustain",
+    "Heal": "sustain",
 }
-AXIS_LABEL = {"burn": tr("화상"), "freeze": tr("빙결·둔화"), "bleed": tr("출혈"), "poison": tr("중독·방사능"), "curse": tr("저주·매혹·실명"),
-              "baby": tr("베이비볼"), "sustain": tr("흡혈·회복"), "aoe": tr("범위 피해")}
+AXIS_LABEL = {
+    "burn": tr("화상"),
+    "freeze": tr("빙결·둔화"),
+    "bleed": tr("출혈"),
+    "poison": tr("중독·방사능"),
+    "curse": tr("저주·매혹·실명"),
+    "baby": tr("베이비볼"),
+    "sustain": tr("흡혈·회복"),
+    "aoe": tr("범위 피해"),
+}
 # 계열과 맞는 패시브 역할 (passive_value.ROLE)
 AXIS_PASSIVE_ROLE = {"aoe": "aoe", "baby": "baby", "sustain": "defense"}
 MIN_SCORE = 2.0
@@ -32,14 +50,14 @@ MIN_SCORE = 2.0
 # (favor >= 3 이면 계열 1개)과 같은 문턱이라, 볼이 없을 때 결과는 그대로이고 볼이 쌓이면 볼 점수 옆에서
 # 작은 가중치로 계속 남는다. 값은 추정 (근거: favor 자체가 공식 설명에서 끌어낸 추정 가중치).
 CHAR_SEED_SCORE = 2.0
-CHAR_SEED_AXES = ("aoe", "baby", "sustain")          # favor 키 중 덱 계열과 1:1 로 대응하는 것만
+CHAR_SEED_AXES = ("aoe", "baby", "sustain")  # favor 키 중 덱 계열과 1:1 로 대응하는 것만
 CHAR_SEED_MIN_FAVOR = 3
 
 
 @dataclass
 class Archetype:
     scores: Dict[str, float] = field(default_factory=dict)
-    top: List[str] = field(default_factory=list)      # 덱 계열 (많아야 2개)
+    top: List[str] = field(default_factory=list)  # 덱 계열 (많아야 2개)
 
     @property
     def text(self) -> str:
@@ -51,16 +69,18 @@ def axes_of(data: GameData, item_id: str) -> List[str]:
     if it is None or it.kind != "ball":
         return []
     status, damage = data.status_tags(item_id)
-    out = {AXIS_OF_STATUS[s] for s in status if s in AXIS_OF_STATUS}
+    result = {AXIS_OF_STATUS[s] for s in status if s in AXIS_OF_STATUS}
     if "AOE" in damage:
-        out.add("aoe")
-    return sorted(out)
+        result.add("aoe")
+    return sorted(result)
 
 
-def detect(run: RunState, data: GameData) -> Archetype:
+def detect(run_state: RunState, data: GameData) -> Archetype:
     scores: Dict[str, float] = {}
-    total_dmg = sum(v for k, v in run.damage.items() if k.startswith("ball:")) or 0
-    for iid, owned in run.owned.items():
+    total_dmg = (
+        sum(value for field_name, value in run_state.damage.items() if field_name.startswith("ball:")) or 0
+    )
+    for item_id, owned in run_state.owned.items():
         axes = set()
         for c in owned.effect_ids:
             # 퓨전 리액터에서 합쳐 넣은 볼(피뢰침 등)은 인벤토리에서 사라졌지만 효과는 이 볼에 남는다 →
@@ -69,18 +89,18 @@ def detect(run: RunState, data: GameData) -> Archetype:
         if not axes:
             continue
         lvl = owned.level or 1
-        share = (run.damage.get(iid, 0) / total_dmg) if total_dmg else 0.0
+        share = (run_state.damage.get(item_id, 0) / total_dmg) if total_dmg else 0.0
         w = 1.0 + 0.3 * (lvl - 1) + 2.0 * share
         for a in axes:
             scores[a] = scores.get(a, 0.0) + w
     # 캐릭터(메인+동행) 성향: 순서와 무관하게 합산 (A+B == B+A)
-    for cid in sorted(set(run.character_ids)):
-        fav = data.character_rule(cid).get("strategy", {}).get("favor", {})
+    for character_id in sorted(set(run_state.character_ids)):
+        fav = data.character_rule(character_id).get("strategy", {}).get("favor", {})
         for a in CHAR_SEED_AXES:
             if fav.get(a, 0) >= CHAR_SEED_MIN_FAVOR:
                 scores[a] = scores.get(a, 0.0) + CHAR_SEED_SCORE
     ranked: List[Tuple[str, float]] = sorted(scores.items(), key=lambda kv: (-kv[1], kv[0]))
-    top = [a for a, v in ranked[:2] if v >= MIN_SCORE]
+    top = [a for a, value in ranked[:2] if value >= MIN_SCORE]
     if len(top) == 2 and ranked[1][1] < 0.6 * ranked[0][1]:
-        top = top[:1]                                  # 둘째가 한참 작으면 한 계열
+        top = top[:1]  # 둘째가 한참 작으면 한 계열
     return Archetype(dict(scores), top)

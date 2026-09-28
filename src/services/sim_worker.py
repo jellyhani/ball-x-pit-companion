@@ -4,6 +4,7 @@
   무거운 계산 중에도 조준 궤적이 바로 따라온다.
 - 결과는 Qt 시그널로 화면 스레드에 넘어온다. 프로세스를 못 만들면(드문 환경) 스레드로 대신 돌린다.
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,7 +23,7 @@ LANES = {"now": "fast", "sweep": "heavy", "layout": "layout"}
 
 
 class SimWorker(QObject):
-    done = Signal(str, object, object)     # (채널, 요청 키, 결과 — 실패하면 None)
+    done = Signal(str, object, object)  # (채널, 요청 키, 결과 — 실패하면 None)
 
     def __init__(self, use_process: bool = True):
         super().__init__()
@@ -100,13 +101,13 @@ class SimWorker(QObject):
         """제출 실패도 완료로 알린다. 화면의 '계산 중' 상태와 다음 요청을 함께 해제한다."""
         if self._closed:
             return
-        self.done.emit(channel, key, result)     # 다른 스레드에서 보내도 Qt 가 화면 스레드로 넘긴다
+        self.done.emit(channel, key, result)  # 다른 스레드에서 보내도 Qt 가 화면 스레드로 넘긴다
         with self._lock:
-            nxt = self._pending.pop(channel, None)
-            if nxt is None:
+            next_value = self._pending.pop(channel, None)
+            if next_value is None:
                 self._busy[channel] = False
-        if nxt is not None:
-            self._start(channel, *nxt)
+        if next_value is not None:
+            self._start(channel, *next_value)
 
     def busy(self, channel: str) -> bool:
         return bool(self._busy.get(channel))

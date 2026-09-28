@@ -4,6 +4,7 @@
 비추천 카드는 살짝 어둡게 덮어 추천 카드가 먼저 보이게 한다. 이름표는 카드 위쪽 가장자리에 걸친다.
 클릭은 게임으로 통과하고, 캡처 제외 여부는 HUD 설정을 따른다.
 """
+
 from __future__ import annotations
 
 import logging
@@ -22,12 +23,16 @@ log = logging.getLogger(__name__)
 class CardHighlight(QWidget):
     def __init__(self):
         super().__init__(None)
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
-                            | Qt.WindowType.Tool | Qt.WindowType.WindowDoesNotAcceptFocus
-                            | Qt.WindowType.WindowTransparentForInput)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowDoesNotAcceptFocus
+            | Qt.WindowType.WindowTransparentForInput
+        )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
-        self._marks: List[Tuple] = []   # (카드 영역, best | alt | banish | skip | neutral, 이름표)
+        self._marks: List[Tuple] = []  # (카드 영역, best | alt | banish | skip | neutral, 이름표)
         self._want_excluded = True
 
     def set_capture_excluded(self, on: bool):
@@ -47,12 +52,12 @@ class CardHighlight(QWidget):
         area = marks[0][0]
         for m in marks[1:]:
             area = area.united(m[0])
-        area = area.adjusted(-8, -24, 8, 8)     # 위쪽은 이름표 자리
+        area = area.adjusted(-8, -24, 8, 8)  # 위쪽은 이름표 자리
         self.setGeometry(area)
         self.update()
 
-    def showEvent(self, e):
-        super().showEvent(e)
+    def showEvent(self, event):
+        super().showEvent(event)
         try:
             hwnd = int(self.winId())
             gw.set_capture_exclusion(hwnd, self._want_excluded)
@@ -61,46 +66,46 @@ class CardHighlight(QWidget):
             log.exception("카드 강조 창 속성 적용 실패")
 
     def paintEvent(self, e):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         origin = self.geometry().topLeft()
         font = tk.base_font()
         font.setPixelSize(15)
         font.setWeight(QFont.Weight.Bold)
         fm = QFontMetricsF(font)
         for rect, kind, badge in self._marks:
-            r = QRectF(rect.translated(-origin)).adjusted(-3, -3, 3, 3)
+            rectangle = QRectF(rect.translated(-origin)).adjusted(-3, -3, 3, 3)
             color, label = tk.VERDICT.get(kind, (tk.TEXT_2, ""))
             label = badge or label
             c = tk.qcolor(color)
-            p.setBrush(Qt.BrushStyle.NoBrush)       # 이전 이름표의 바탕 붓이 남지 않게
+            painter.setBrush(Qt.BrushStyle.NoBrush)  # 이전 이름표의 바탕 붓이 남지 않게
             if kind == "skip":
-                p.fillRect(r.adjusted(3, 3, -3, -3), QColor(0, 0, 0, 70))    # 비추천: 살짝 어둡게
+                painter.fillRect(rectangle.adjusted(3, 3, -3, -3), QColor(0, 0, 0, 70))  # 비추천: 살짝 어둡게
             if kind == "best":
-                glow = QColor(c)
-                glow.setAlpha(70)
-                gp = QPen(glow)
-                gp.setWidthF(7.0)
-                p.setPen(gp)
-                p.drawRoundedRect(r, 9, 9)
+                current_color = QColor(c)
+                current_color.setAlpha(70)
+                current_pen = QPen(current_color)
+                current_pen.setWidthF(7.0)
+                painter.setPen(current_pen)
+                painter.drawRoundedRect(rectangle, 9, 9)
             pen = QPen(c)
             pen.setWidthF({"best": 3.0, "alt": 2.5}.get(kind, 2.0))
             if kind in ("skip", "neutral", "banish", "pick"):
                 pen.setStyle(Qt.PenStyle.DashLine)
-            p.setPen(pen)
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            p.drawRoundedRect(r, 8, 8)
+            painter.setPen(pen)
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(rectangle, 8, 8)
             if label:
-                self._badge(p, r, label, c, font, fm)
+                self._badge(painter, rectangle, label, c, font, fm)
 
     @staticmethod
     def _badge(p: QPainter, r: QRectF, text: str, color: QColor, font: QFont, fm: QFontMetricsF):
         """카드 위쪽 가장자리 가운데에 걸친 이름표 (진한 바탕 + 판정 색 글자·테두리)."""
         w, h = fm.horizontalAdvance(text) + 24, fm.height() + 8
-        b = QRectF(r.center().x() - w / 2, r.top() - h / 2, w, h)
+        rectangle = QRectF(r.center().x() - w / 2, r.top() - h / 2, w, h)
         p.setPen(QPen(color, 1.5))
         p.setBrush(QColor(20, 20, 24, 235))
-        p.drawRoundedRect(b, h / 2, h / 2)
+        p.drawRoundedRect(rectangle, h / 2, h / 2)
         p.setFont(font)
         p.setPen(color)
-        p.drawText(b, Qt.AlignmentFlag.AlignCenter, text)
+        p.drawText(rectangle, Qt.AlignmentFlag.AlignCenter, text)

@@ -5,6 +5,7 @@
   이전 결과는 컨트롤러가 버린다.
 - 화면이 계속 움직이는 전투 중에는 OCR 간격을 늘리고, 화면이 멈추면(선택창이 뜨면 게임이 멈춘다) 바로 읽는다.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,7 +33,7 @@ class ScanResult:
     ocr_ran: bool = False
     skipped: str = ""
     timings_ms: Dict[str, float] = field(default_factory=dict)
-    image: Optional[Image.Image] = None       # 진단용 저장 요청 때만 채운다
+    image: Optional[Image.Image] = None  # 진단용 저장 요청 때만 채운다
 
 
 class _Worker(QObject):
@@ -48,7 +49,7 @@ class _Worker(QObject):
         self._last_ocr_at = 0.0
         self._last_obs: Optional[ScreenObservation] = None
         self._frame_seq = 0
-        self.moving_interval = 1.2   # 움직이는 화면에서 OCR 최소 간격(초)
+        self.moving_interval = 1.2  # 움직이는 화면에서 OCR 최소 간격(초)
         self.static_threshold = 3.0  # 축소 흑백 이미지 평균 차이
 
     def _ensure_reader(self) -> bool:
@@ -59,15 +60,17 @@ class _Worker(QObject):
         try:
             from ..recognition.level_up_reader import LevelUpReader
             from ..recognition.ocr import OcrReader
+
             self._reader = OcrReader()
-            number_reader = OcrReader(target_height=100000)   # 작은 숫자 조각은 줄이지 않는다
+            number_reader = OcrReader(target_height=100000)  # 작은 숫자 조각은 줄이지 않는다
             from ..gamedata import load_game_data
             from ..recognition.text_match import NameIndex
-            names = NameIndex((i.id, i.name_ko) for i in load_game_data().items.values())
+
+            names = NameIndex((index.id, index.name_ko) for index in load_game_data().items.values())
             self._level_up = LevelUpReader(number_reader.read, names=names)
             return True
-        except Exception as e:
-            self._reader_error = str(e)
+        except Exception as error:
+            self._reader_error = str(error)
             log.exception("OCR 초기화 실패")
             return False
 
@@ -76,9 +79,9 @@ class _Worker(QObject):
         t0 = time.perf_counter()
         timings: Dict[str, float] = {}
 
-        def done(obs: ScreenObservation, **kw):
+        def done(observation: ScreenObservation, **kw):
             timings["total"] = (time.perf_counter() - t0) * 1000
-            self.finished.emit(ScanResult(job_id, generation, obs, timings_ms=timings, **kw))
+            self.finished.emit(ScanResult(job_id, generation, observation, timings_ms=timings, **kw))
 
         try:
             win = gw.find_game_window()
@@ -86,7 +89,9 @@ class _Worker(QObject):
             if win is None:
                 return done(ScreenObservation(ScreenKind.GAME_NOT_FOUND))
             if not forced and (win.minimized or not win.foreground):
-                return done(ScreenObservation(ScreenKind.OTHER), window=win, skipped=tr("게임이 앞에 있지 않음"))
+                return done(
+                    ScreenObservation(ScreenKind.OTHER), window=win, skipped=tr("게임이 앞에 있지 않음")
+                )
             t1 = time.perf_counter()
             img, backend = gw.capture_game(win)
             timings["capture"] = (time.perf_counter() - t1) * 1000
@@ -104,11 +109,19 @@ class _Worker(QObject):
                 if same_as_last_ocr and self._last_obs is not None:
                     return done(self._reuse(self._last_obs, frame), window=win, skipped="이전 화면과 같음")
                 if moving and now - self._last_ocr_at < self.moving_interval:
-                    return done(ScreenObservation(ScreenKind.OTHER, frame=frame), window=win, skipped="화면 움직임")
+                    return done(
+                        ScreenObservation(ScreenKind.OTHER, frame=frame), window=win, skipped="화면 움직임"
+                    )
 
             if not self._ensure_reader():
-                return done(ScreenObservation(ScreenKind.CAPTURE_FAILED, frame=frame,
-                                              error=tr("OCR 사용 불가: {v0}", v0=self._reader_error)), window=win)
+                return done(
+                    ScreenObservation(
+                        ScreenKind.CAPTURE_FAILED,
+                        frame=frame,
+                        error=tr("OCR 사용 불가: {v0}", v0=self._reader_error),
+                    ),
+                    window=win,
+                )
             t2 = time.perf_counter()
             lines = self._reader.read(img)
             timings["ocr"] = (time.perf_counter() - t2) * 1000
@@ -117,17 +130,17 @@ class _Worker(QObject):
             timings["parse"] = (time.perf_counter() - t3) * 1000
             if parsed.kind == ScreenKind.LEVEL_UP:
                 t4 = time.perf_counter()
-                obs = self._level_up.read(img, frame, parsed.layout)
+                observation = self._level_up.read(img, frame, parsed.layout)
                 timings["icons"] = (time.perf_counter() - t4) * 1000
             else:
-                obs = ScreenObservation(parsed.kind, frame=frame, error=parsed.note)
+                observation = ScreenObservation(parsed.kind, frame=frame, error=parsed.note)
             self._ocr_thumb = thumb
             self._last_ocr_at = now
-            self._last_obs = obs
-            return done(obs, window=win, ocr_ran=True, image=img if keep_image else None)
-        except Exception as e:
+            self._last_obs = observation
+            return done(observation, window=win, ocr_ran=True, image=img if keep_image else None)
+        except Exception as error:
             log.exception("인식 작업 실패")
-            return done(ScreenObservation(ScreenKind.CAPTURE_FAILED, error=tr("인식 오류: {e}", e=e)))
+            return done(ScreenObservation(ScreenKind.CAPTURE_FAILED, error=tr("인식 오류: {e}", e=error)))
 
     @staticmethod
     def _diff(a: Optional[Image.Image], b: Optional[Image.Image]) -> float:
@@ -136,9 +149,10 @@ class _Worker(QObject):
         return ImageStat.Stat(ImageChops.difference(a, b)).mean[0]
 
     @staticmethod
-    def _reuse(obs: ScreenObservation, frame: FrameInfo) -> ScreenObservation:
+    def _reuse(observation: ScreenObservation, frame: FrameInfo) -> ScreenObservation:
         from dataclasses import replace
-        return replace(obs, frame=frame)
+
+        return replace(observation, frame=frame)
 
     @Slot()
     def shutdown(self):
@@ -160,7 +174,7 @@ class RecognitionService(QObject):
         self.busy_since: Optional[float] = None
         self.inflight_job: Optional[int] = None
         self.restarts = 0
-        self._abandoned = []   # 멈춘 스레드는 강제로 없앨 수 없어 참조만 남긴다
+        self._abandoned = []  # 멈춘 스레드는 강제로 없앨 수 없어 참조만 남긴다
         self._spawn()
 
     def _spawn(self):
@@ -180,7 +194,9 @@ class RecognitionService(QObject):
         """
         if self.busy_for() < timeout_s:
             return False
-        log.warning("인식 작업 %s이(가) %.1f초 동안 응답 없음 → 작업 스레드 교체", self.inflight_job, self.busy_for())
+        log.warning(
+            "인식 작업 %s이(가) %.1f초 동안 응답 없음 → 작업 스레드 교체", self.inflight_job, self.busy_for()
+        )
         for sig, slot in ((self._request, self._worker.scan), (self._shutdown, self._worker.shutdown)):
             try:
                 sig.disconnect(slot)
@@ -209,7 +225,7 @@ class RecognitionService(QObject):
 
     def _on_finished(self, res: ScanResult):
         if res.job_id != self.inflight_job:
-            return                     # 스레드 교체 전에 큐에 들어온 이전 결과도 버린다.
+            return  # 스레드 교체 전에 큐에 들어온 이전 결과도 버린다.
         self.inflight_job = None
         self.busy_since = None
         self.result.emit(res)

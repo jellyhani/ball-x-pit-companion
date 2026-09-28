@@ -11,8 +11,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        native: ['0', '1']
-    name: Tests (BXP_NO_NATIVE=${{ matrix.native }})
+        include:
+          - backend: native
+            disable_native: ''
+          - backend: python
+            disable_native: '1'
+    name: Tests (${{ matrix.backend }})
     permissions:
       contents: read
     steps:
@@ -27,7 +31,7 @@ jobs:
         shell: pwsh
         env:
           QT_QPA_PLATFORM: offscreen
-          BXP_NO_NATIVE: ${{ matrix.native }}
+          BXP_NO_NATIVE: ${{ matrix.disable_native }}
           BXP_DATA_DIR: ${{ runner.temp }}/bxp-test-data
           BXP_APP_DIR: ${{ runner.temp }}/bxp-test-profile
         run: .venv\Scripts\python.exe -m unittest discover -s tests -t . -v

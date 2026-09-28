@@ -97,14 +97,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--download", action="store_true", help="누락된 공식 소스를 내려받습니다")
     parser.add_argument("--bundle-dir", type=Path, help="실행 파일 폴더의 Qt 모듈까지 대조합니다")
-    args = parser.parse_args()
+    arguments = parser.parse_args()
     sys.path.insert(0, str(ROOT))
     from src.version import APP_VERSION
 
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
-    validate_versions(manifest, args.bundle_dir)
+    validate_versions(manifest, arguments.bundle_dir)
     cache = ROOT / "build/dependency-sources"
-    sources = [source_file(row, cache, download=args.download) for row in manifest["libraries"]]
+    sources = [source_file(row, cache, download=arguments.download) for row in manifest["libraries"]]
     output = ROOT / "dist" / f"BallxPitCompanion-{APP_VERSION}-dependency-sources.zip"
     create_bundle(manifest, sources, output)
     print(json.dumps({"archive": output.name, "sha256": sha256(output), "bytes": output.stat().st_size}))

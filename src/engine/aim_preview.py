@@ -1,4 +1,5 @@
 """계산된 첫 작업자 경로의 표시 범위. 물리 계산이나 추천 점수는 바꾸지 않는다."""
+
 from __future__ import annotations
 
 # 표시 취향의 상한이다. 정확도나 게임의 반사 횟수 제한을 뜻하지 않는다.
@@ -14,19 +15,21 @@ def worker_preview(workers):
     if not workers:
         return []
     # 도로 경계의 속도 변화는 시간 재생에 필요하지만 반사 횟수를 차지하지 않는다.
-    points=[]
-    for x,y,_ in workers[0].path:
-        while len(points)>=2:
-            ax,ay=points[-2];bx,by=points[-1]
-            ux,uy=bx-ax,by-ay;vx,vy=x-bx,y-by
-            if abs(ux*vy-uy*vx)>1e-8 or ux*vx+uy*vy<0:
+    points = []
+    for x, y, _ in workers[0].path:
+        while len(points) >= 2:
+            start_x, start_y = points[-2]
+            end_x, end_y = points[-1]
+            ux, uy = end_x - start_x, end_y - start_y
+            vx, vy = x - end_x, y - end_y
+            if abs(ux * vy - uy * vx) > 1e-8 or ux * vx + uy * vy < 0:
                 break
             points.pop()
-        points.append((x,y))
-    return points[:MAX_REFLECTIONS+2]
+        points.append((x, y))
+    return points[: MAX_REFLECTIONS + 2]
 
 
 def visible_path(path, length="normal", *, recommended=False, extended=False):
     """긴 경로를 재계산하지 않고 잘라 표시한다. 보조키는 두 경로 모두 최대 길이로 펼친다."""
     count = MAX_REFLECTIONS if extended else (1 if recommended else LENGTHS.get(length, 3))
-    return list(path or [])[:count + 2]
+    return list(path or [])[: count + 2]

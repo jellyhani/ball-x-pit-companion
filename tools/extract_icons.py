@@ -5,6 +5,7 @@
 
     .venv\\Scripts\\python.exe tools\\extract_icons.py [게임 폴더]
 """
+
 from __future__ import annotations
 
 import json
@@ -19,21 +20,43 @@ from tools.extract_game_text import OUT_DIR, find_steam_game_dir, read_build_id 
 
 # 스프라이트 이름이 게임 내부 키와 다른 경우 (스프라이트 접미사 → 항목 slug)
 ITEM_ALIASES = {
-    "firefly": "lightningbug", "hearteater": "heartswallower", "timestop": "timefreeze",
-    "arrow": "arrowoffate", "detonator": "remotedetonator", "dumbbell": "platinumdumbbell",
-    "hammer": "inglorioushammer", "impaler": "deadeyesimpaler", "rapier": "fullmetalrapier",
-    "stopwatch": "argentstopwatch", "tire": "ardenttire",
+    "firefly": "lightningbug",
+    "hearteater": "heartswallower",
+    "timestop": "timefreeze",
+    "arrow": "arrowoffate",
+    "detonator": "remotedetonator",
+    "dumbbell": "platinumdumbbell",
+    "hammer": "inglorioushammer",
+    "impaler": "deadeyesimpaler",
+    "rapier": "fullmetalrapier",
+    "stopwatch": "argentstopwatch",
+    "tire": "ardenttire",
 }
 # 초상화 스프라이트 이름 → 캐릭터 slug
 PORTRAITS = {
-    "warrior": "default", "itchy_finger": "itchyfinger", "cohabitants": "cohabitants",
-    "empty_nester_portrait": "emptynester", "flagellant": "flagellant", "cogitator": "cogitator",
-    "repentant": "recaller", "shade_portrait": "shade", "shield_bearer": "brickhead", "sisyphus": "sisyphus",
-    "spendthrift_portrait": "spendthrift", "tactician_portrait": "tactician",
-    "the_embedded_portrait": "embedded", "the_radical_portrait": "radicalai", "wimp_portrait": "wimp",
-    "influencer_portrait": "influencer", "mad_scientist": "physicist",
-    "portrait_ballbearer": "backpacker", "portrait_carouser": "carouser", "portrait_falconer": "falconer",
-    "portrait_hoarder": "packrat", "portrait_tiptoer": "tiptoer", "portrait_tunneller": "tunneller",
+    "warrior": "default",
+    "itchy_finger": "itchyfinger",
+    "cohabitants": "cohabitants",
+    "empty_nester_portrait": "emptynester",
+    "flagellant": "flagellant",
+    "cogitator": "cogitator",
+    "repentant": "recaller",
+    "shade_portrait": "shade",
+    "shield_bearer": "brickhead",
+    "sisyphus": "sisyphus",
+    "spendthrift_portrait": "spendthrift",
+    "tactician_portrait": "tactician",
+    "the_embedded_portrait": "embedded",
+    "the_radical_portrait": "radicalai",
+    "wimp_portrait": "wimp",
+    "influencer_portrait": "influencer",
+    "mad_scientist": "physicist",
+    "portrait_ballbearer": "backpacker",
+    "portrait_carouser": "carouser",
+    "portrait_falconer": "falconer",
+    "portrait_hoarder": "packrat",
+    "portrait_tiptoer": "tiptoer",
+    "portrait_tunneller": "tunneller",
 }
 
 
@@ -48,8 +71,8 @@ def main(argv) -> int:
     if not game_dir:
         print("게임 폴더를 찾지 못했습니다.")
         return 1
-    with open(os.path.join(OUT_DIR, "game_text_ko.json"), encoding="utf-8") as f:
-        text = json.load(f)
+    with open(os.path.join(OUT_DIR, "game_text_ko.json"), encoding="utf-8") as file_handle:
+        text = json.load(file_handle)
     by_key = {}
     for it in text["items"].values():
         by_key.setdefault(_key(it["name_en"]), it["id"])
@@ -70,9 +93,9 @@ def main(argv) -> int:
         except Exception:
             continue
         name = sp.m_Name
-        m = re.match(r"^(ball_icon_|postlaunch_balls_|passive_icon_|passive_)(.+)$", name)
-        if m:
-            prefix, rest = m.groups()
+        match = re.match(r"^(ball_icon_|postlaunch_balls_|passive_icon_|passive_)(.+)$", name)
+        if match:
+            prefix, rest = match.groups()
             k = _key(rest)
             item_id = by_key.get(ITEM_ALIASES.get(k, k))
             if item_id is None:
@@ -83,9 +106,9 @@ def main(argv) -> int:
             sp.image.save(os.path.join(icon_dir, item_id.replace(":", "_") + ".png"))
             icons[item_id] = name
         elif name in PORTRAITS and f"char:{PORTRAITS[name]}" not in portraits:
-            cid = f"char:{PORTRAITS[name]}"
-            sp.image.save(os.path.join(portrait_dir, cid.replace(":", "_") + ".png"))
-            portraits[cid] = name
+            character_id = f"char:{PORTRAITS[name]}"
+            sp.image.save(os.path.join(portrait_dir, character_id.replace(":", "_") + ".png"))
+            portraits[character_id] = name
 
     missing_items = sorted(set(text["items"]) - set(icons))
     missing_chars = sorted(set(text["characters"]) - set(portraits))
@@ -96,8 +119,8 @@ def main(argv) -> int:
         "missing_icons": missing_items,
         "missing_portraits": missing_chars,
     }
-    with open(os.path.join(OUT_DIR, "icon_manifest.json"), "w", encoding="utf-8") as f:
-        json.dump(manifest, f, ensure_ascii=False, indent=1)
+    with open(os.path.join(OUT_DIR, "icon_manifest.json"), "w", encoding="utf-8") as file_handle:
+        json.dump(manifest, file_handle, ensure_ascii=False, indent=1)
     print(f"아이콘 {len(icons)}개, 초상화 {len(portraits)}개 저장")
     if missing_items or missing_chars:
         print("빠진 항목:", missing_items, missing_chars)

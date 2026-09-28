@@ -24,7 +24,7 @@ namespace BallxPitBridge
     [BepInPlugin("dev.ballxpit.bridge", "BALL x PIT Bridge", Plugin.Version)]
     public class Plugin : BasePlugin
     {
-        public const string Version = "1.18.1";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
+        public const string Version = "1.18.2";   // 도우미 앱이 이 값으로 설치된 플러그인이 최신인지 확인한다
         internal static ManualLogSource L;
 
         public override void Load()
@@ -109,9 +109,9 @@ namespace BallxPitBridge
                 return NamedPipeServerStreamAcl.Create(PipeName, PipeDirection.Out, 1, PipeTransmissionMode.Byte,
                     PipeOptions.Asynchronous, 0, 0, sec);
             }
-            catch (Exception e)
+            catch (Exception error)
             {
-                Plugin.L?.LogWarning("파이프 권한 지정 실패, 기본 권한 사용: " + e.Message);
+                Plugin.L?.LogWarning("파이프 권한 지정 실패, 기본 권한 사용: " + error.Message);
                 return new NamedPipeServerStream(PipeName, PipeDirection.Out, 1, PipeTransmissionMode.Byte,
                     PipeOptions.Asynchronous);
             }
@@ -158,9 +158,9 @@ namespace BallxPitBridge
                 {
                     // 앱이 연결을 끊음 → 다시 기다린다
                 }
-                catch (Exception e)
+                catch (Exception error)
                 {
-                    Plugin.L?.LogWarning("파이프 오류: " + e.Message);
+                    Plugin.L?.LogWarning("파이프 오류: " + error.Message);
                     Thread.Sleep(1000);
                 }
                 finally
@@ -196,7 +196,7 @@ namespace BallxPitBridge
             if (PipeServer.Catalog == null)
             {
                 try { PipeServer.Catalog = Snapshot.BuildCatalog(); }
-                catch (Exception e) { if (_loggedErrors.Add("catalog" + e.Message)) Plugin.L.LogWarning("레시피 표 실패: " + e); }
+                catch (Exception error) { if (_loggedErrors.Add("catalog" + error.Message)) Plugin.L.LogWarning("레시피 표 실패: " + error); }
             }
             if (now >= _nextMeta)
             {
@@ -210,9 +210,9 @@ namespace BallxPitBridge
                         PipeServer.PublishMeta(meta);
                     }
                 }
-                catch (Exception e)
+                catch (Exception errorE)
                 {
-                    if (_loggedErrors.Add("meta" + e.GetType().Name + e.Message)) Plugin.L.LogWarning("기지 정보 읽기 실패: " + e);
+                    if (_loggedErrors.Add("meta" + errorE.GetType().Name + errorE.Message)) Plugin.L.LogWarning("기지 정보 읽기 실패: " + errorE);
                 }
             }
             try
@@ -234,10 +234,10 @@ namespace BallxPitBridge
                                        "," + body + "}");
                 }
             }
-            catch (Exception e)
+            catch (Exception errorE)
             {
-                if (_loggedErrors.Add(e.GetType().Name + e.Message))
-                    Plugin.L.LogWarning("상태 읽기 실패: " + e);
+                if (_loggedErrors.Add(errorE.GetType().Name + errorE.Message))
+                    Plugin.L.LogWarning("상태 읽기 실패: " + errorE);
             }
         }
     }
@@ -247,195 +247,195 @@ namespace BallxPitBridge
     {
         public static string Build()
         {
-            using var ms = new MemoryStream();
-            using (var w = new Utf8JsonWriter(ms))
+            using var memoryStream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(memoryStream))
             {
-                w.WriteStartObject();
-                w.WriteString("game_version", Application.version);
-                w.WriteNumber("screen_w", Screen.width);
-                w.WriteNumber("screen_h", Screen.height);
-                WriteGameState(w);
-                WriteBattle(w);
-                WriteLevelUp(w);
-                WriteGameOver(w);
-                WriteField(w);
-                WriteBase(w);
-                WriteUiAvoid(w);
-                w.WriteEndObject();
+                writer.WriteStartObject();
+                writer.WriteString("game_version", Application.version);
+                writer.WriteNumber("screen_w", Screen.width);
+                writer.WriteNumber("screen_h", Screen.height);
+                WriteGameState(writer);
+                WriteBattle(writer);
+                WriteLevelUp(writer);
+                WriteGameOver(writer);
+                WriteField(writer);
+                WriteBase(writer);
+                WriteUiAvoid(writer);
+                writer.WriteEndObject();
             }
-            var json = Encoding.UTF8.GetString(ms.ToArray());
+            var json = Encoding.UTF8.GetString(memoryStream.ToArray());
             return json.Substring(1, json.Length - 2);   // 바깥 중괄호 제거 (머리 필드와 합치기 위해)
         }
 
-        static void WriteGameState(Utf8JsonWriter w)
+        static void WriteGameState(Utf8JsonWriter writer)
         {
             var gm = GameMgr.I;
-            w.WriteString("game_state", gm != null ? gm.CurState.ToString() : null);
+            writer.WriteString("game_state", gm != null ? gm.CurState.ToString() : null);
         }
 
         /// <summary>런이 끝난 화면(보스 격퇴 후 '원정 계속' 버튼 포함). 계속/복귀 판단용.</summary>
-        static void WriteGameOver(Utf8JsonWriter w)
+        static void WriteGameOver(Utf8JsonWriter writer)
         {
             var ui = GameUIMgr.I != null ? GameUIMgr.I.GameOver : null;
             bool open = ui != null && ui.gameObject.activeInHierarchy && ui.IsActiveOverlay();
             if (!open)
             {
-                w.WriteNull("game_over");
+                writer.WriteNull("game_over");
                 return;
             }
-            w.WriteStartObject("game_over");
-            var b = BattleSaveData.I;
-            if (b != null) w.WriteBoolean("completed", b.CompletedLevel);
-            try { w.WriteBoolean("endless_btn", ui.BtnEndless != null && ui.BtnEndless.gameObject.activeInHierarchy); } catch { }
-            try { w.WriteBoolean("endless_unlocked", BuildingMgr.I != null && BuildingMgr.I.EndlessModeUnlocked); } catch { }
-            w.WriteEndObject();
+            writer.WriteStartObject("game_over");
+            var battleData = BattleSaveData.I;
+            if (battleData != null) writer.WriteBoolean("completed", battleData.CompletedLevel);
+            try { writer.WriteBoolean("endless_btn", ui.BtnEndless != null && ui.BtnEndless.gameObject.activeInHierarchy); } catch { }
+            try { writer.WriteBoolean("endless_unlocked", BuildingMgr.I != null && BuildingMgr.I.EndlessModeUnlocked); } catch { }
+            writer.WriteEndObject();
         }
 
-        static void WriteBattle(Utf8JsonWriter w)
+        static void WriteBattle(Utf8JsonWriter writer)
         {
-            var b = BattleSaveData.I;
-            if (b == null)
+            var battleData = BattleSaveData.I;
+            if (battleData == null)
             {
-                w.WriteNull("battle");
+                writer.WriteNull("battle");
                 return;
             }
-            w.WriteStartObject("battle");
-            var ch = b.CurChar;
-            if (ch != null)
+            writer.WriteStartObject("battle");
+            var character = battleData.CurChar;
+            if (character != null)
             {
-                w.WriteString("char", ch.Type.ToString());
-                var extra = ch.CombinedTypes;
-                w.WriteStartArray("chars_combined");
+                writer.WriteString("char", character.Type.ToString());
+                var extra = character.CombinedTypes;
+                writer.WriteStartArray("chars_combined");
                 if (extra != null)
-                    for (int i = 0; i < extra.Count; i++) w.WriteStringValue(extra[i].ToString());
-                w.WriteEndArray();
+                    for (int index = 0; index < extra.Count; index++) writer.WriteStringValue(extra[index].ToString());
+                writer.WriteEndArray();
             }
-            w.WriteString("level", b.CurLevel.ToString());
-            w.WriteNumber("turn", b.CurTurn);
-            var res = b.NumResources;
-            if (res != null)
+            writer.WriteString("level", battleData.CurLevel.ToString());
+            writer.WriteNumber("turn", battleData.CurTurn);
+            var currentCost = battleData.NumResources;
+            if (currentCost != null)
             {
-                w.WriteNumber("gold", res.GetTotalAmount());
-                w.WriteString("resources", res.ToString());
+                writer.WriteNumber("gold", currentCost.GetTotalAmount());
+                writer.WriteString("resources", currentCost.ToString());
             }
-            w.WriteNumber("health", b.CurHealth);
-            w.WriteNumber("upgrade_lvl", b.UpgradeLvl);
-            w.WriteNumber("level_ups_avail", b.NumLevelUpsAvail);
-            w.WriteNumber("free_rerolls", b.NumFreeRerolls);
-            w.WriteNumber("banishes", b.NumBanishes);
-            w.WriteNumber("rerolls", b.NumLvlUpRerolls);
+            writer.WriteNumber("health", battleData.CurHealth);
+            writer.WriteNumber("upgrade_lvl", battleData.UpgradeLvl);
+            writer.WriteNumber("level_ups_avail", battleData.NumLevelUpsAvail);
+            writer.WriteNumber("free_rerolls", battleData.NumFreeRerolls);
+            writer.WriteNumber("banishes", battleData.NumBanishes);
+            writer.WriteNumber("rerolls", battleData.NumLvlUpRerolls);
             // 진행 상황 (판단 근거용)
-            try { if (UpgradeMgr.I != null) w.WriteNumber("max_health", UpgradeMgr.I.MaxHealth); } catch { }
-            w.WriteNumber("final_boss_turn", b.FinalBossTurn);
-            w.WriteNumber("difficulty", b.CurDifficulty);
-            w.WriteNumber("ng_plus", b.CurNGPlusLvl);
-            w.WriteBoolean("endless", b.IsEndless);
-            w.WriteNumber("endless_start_turn", b.EndlessStartTurn);
-            w.WriteBoolean("completed_level", b.CompletedLevel);
-            w.WriteNumber("revives", b.NumRevives);
-            w.WriteNumber("kills", b.NumKills);
-            w.WriteNumber("elapsed", Math.Round(b.ElapsedTime, 1));
-            w.WriteNumber("evos_fused", b.NumEvosFused);
-            w.WriteNumber("combos_fused", b.NumCombosFused);
-            w.WriteNumber("baby_dmg", b.BabyDamageDealt);
-            try { if (BuildingMgr.I != null) w.WriteNumber("revives_max", BuildingMgr.I.NumRevives); } catch { }
-            WriteBattleExtra(w, b);
-            try { w.WriteNumber("max_balls", StatUtl.GetMaxHeroes()); } catch { }
-            try { w.WriteNumber("max_passives", StatUtl.GetMaxPassives()); } catch { }
-            w.WriteStartArray("banished");
-            var banished = b.BanishedItems;
+            try { if (UpgradeMgr.I != null) writer.WriteNumber("max_health", UpgradeMgr.I.MaxHealth); } catch { }
+            writer.WriteNumber("final_boss_turn", battleData.FinalBossTurn);
+            writer.WriteNumber("difficulty", battleData.CurDifficulty);
+            writer.WriteNumber("ng_plus", battleData.CurNGPlusLvl);
+            writer.WriteBoolean("endless", battleData.IsEndless);
+            writer.WriteNumber("endless_start_turn", battleData.EndlessStartTurn);
+            writer.WriteBoolean("completed_level", battleData.CompletedLevel);
+            writer.WriteNumber("revives", battleData.NumRevives);
+            writer.WriteNumber("kills", battleData.NumKills);
+            writer.WriteNumber("elapsed", Math.Round(battleData.ElapsedTime, 1));
+            writer.WriteNumber("evos_fused", battleData.NumEvosFused);
+            writer.WriteNumber("combos_fused", battleData.NumCombosFused);
+            writer.WriteNumber("baby_dmg", battleData.BabyDamageDealt);
+            try { if (BuildingMgr.I != null) writer.WriteNumber("revives_max", BuildingMgr.I.NumRevives); } catch { }
+            WriteBattleExtra(writer, battleData);
+            try { writer.WriteNumber("max_balls", StatUtl.GetMaxHeroes()); } catch { }
+            try { writer.WriteNumber("max_passives", StatUtl.GetMaxPassives()); } catch { }
+            writer.WriteStartArray("banished");
+            var banished = battleData.BanishedItems;
             if (banished != null)
-                for (int i = 0; i < banished.Count; i++) WriteInfoTypeValue(w, banished[i]);
-            w.WriteEndArray();
+                for (int loopIndex = 0; loopIndex < banished.Count; loopIndex++) WriteInfoTypeValue(writer, banished[loopIndex]);
+            writer.WriteEndArray();
 
-            w.WriteStartArray("balls");
-            var heroes = b.Heroes;
+            writer.WriteStartArray("balls");
+            var heroes = battleData.Heroes;
             if (heroes != null)
             {
-                for (int i = 0; i < heroes.Count; i++)
+                for (int loopIndex = 0; loopIndex < heroes.Count; loopIndex++)
                 {
-                    var h = heroes[i];
+                    var h = heroes[loopIndex];
                     if (h == null) continue;
-                    w.WriteStartObject();
-                    w.WriteNumber("idx", i);
-                    w.WriteString("type", h.Type.ToString());
-                    w.WriteNumber("lvl", h.Lvl);
-                    w.WriteBoolean("max", h.IsAtMaxSolo());
-                    WriteHeroStats(w, h);
+                    writer.WriteStartObject();
+                    writer.WriteNumber("idx", loopIndex);
+                    writer.WriteString("type", h.Type.ToString());
+                    writer.WriteNumber("lvl", h.Lvl);
+                    writer.WriteBoolean("max", h.IsAtMaxSolo());
+                    WriteHeroStats(writer, h);
                     var combo = h.CombinedHeroes;
                     if (combo != null && combo.Count > 0)
                     {
-                        w.WriteStartArray("combined");
-                        for (int j = 0; j < combo.Count; j++)
+                        writer.WriteStartArray("combined");
+                        for (int otherIndex = 0; otherIndex < combo.Count; otherIndex++)
                         {
-                            w.WriteStringValue(combo[j].ToString());
+                            writer.WriteStringValue(combo[otherIndex].ToString());
                         }
-                        w.WriteEndArray();
+                        writer.WriteEndArray();
                     }
-                    w.WriteEndObject();
+                    writer.WriteEndObject();
                 }
             }
-            w.WriteEndArray();
+            writer.WriteEndArray();
 
-            w.WriteStartArray("passives");
-            var passives = b.Passives;
+            writer.WriteStartArray("passives");
+            var passives = battleData.Passives;
             if (passives != null)
             {
-                for (int i = 0; i < passives.Count; i++)
+                for (int loopIndex = 0; loopIndex < passives.Count; loopIndex++)
                 {
-                    var p = passives[i];
+                    var p = passives[loopIndex];
                     if (p == null) continue;
-                    w.WriteStartObject();
-                    w.WriteNumber("idx", i);
-                    w.WriteString("type", p.Type.ToString());
-                    w.WriteNumber("lvl", p.Lvl);
-                    try { w.WriteBoolean("max", p.IsAtMaxSolo()); } catch { }
+                    writer.WriteStartObject();
+                    writer.WriteNumber("idx", loopIndex);
+                    writer.WriteString("type", p.Type.ToString());
+                    writer.WriteNumber("lvl", p.Lvl);
+                    try { writer.WriteBoolean("max", p.IsAtMaxSolo()); } catch { }
                     try
                     {
                         var sd = p.StatData;
                         long bonus = 0;
-                        if (sd != null) for (int k = 0; k < sd.Count; k++) if (sd[k] != null) bonus += sd[k].BonusDamage;
-                        w.WriteNumber("dmg", bonus);
+                        if (sd != null) for (int componentIndex = 0; componentIndex < sd.Count; componentIndex++) if (sd[componentIndex] != null) bonus += sd[componentIndex].BonusDamage;
+                        writer.WriteNumber("dmg", bonus);
                     }
                     catch { }
-                    w.WriteEndObject();
+                    writer.WriteEndObject();
                 }
             }
-            w.WriteEndArray();
-            w.WriteEndObject();
+            writer.WriteEndArray();
+            writer.WriteEndObject();
         }
 
         /// <summary>게임 월드 좌표 → 게임 클라이언트 화면 좌표(왼쪽 위 원점). 카메라가 없으면 false.</summary>
         static bool ToScreen(Vector3 world, out float x, out float y)
         {
             x = y = 0;
-            var cam = Camera.main;
-            if (cam == null) return false;
-            var p = cam.WorldToScreenPoint(world);
-            if (p.z < 0) return false;
-            x = p.x;
-            y = Screen.height - p.y;
+            var camera = Camera.main;
+            if (camera == null) return false;
+            var currentPosition = camera.WorldToScreenPoint(world);
+            if (currentPosition.z < 0) return false;
+            x = currentPosition.x;
+            y = Screen.height - currentPosition.y;
             return true;
         }
 
         /// <summary>전투 필드: 적 위치(화면 좌표, 가까운 순), 플레이어 위치, 적이 공격하는 선. 읽기만 한다.</summary>
-        static void WriteField(Utf8JsonWriter w)
+        static void WriteField(Utf8JsonWriter writer)
         {
             var gm = GridMgr.I;
             if (gm == null || BattleSaveData.I == null || GameMgr.I == null)
             {
-                w.WriteNull("field");
+                writer.WriteNull("field");
                 return;
             }
-            w.WriteStartObject("field");
+            writer.WriteStartObject("field");
             try
             {
-                w.WriteNumber("attack_y", Math.Round(gm.AttackY, 2));
-                w.WriteNumber("front_enemy_y", Math.Round(gm.FrontEnemyY, 2));
-                w.WriteNumber("bottom_y", Math.Round(gm.BottomBorderY, 2));
-                w.WriteNumber("top_y", Math.Round(gm.TopBorderY, 2));
-                w.WriteNumber("left_x", Math.Round(gm.LeftBorderX, 2));
-                w.WriteNumber("right_x", Math.Round(gm.RightBorderX, 2));
+                writer.WriteNumber("attack_y", Math.Round(gm.AttackY, 2));
+                writer.WriteNumber("front_enemy_y", Math.Round(gm.FrontEnemyY, 2));
+                writer.WriteNumber("bottom_y", Math.Round(gm.BottomBorderY, 2));
+                writer.WriteNumber("top_y", Math.Round(gm.TopBorderY, 2));
+                writer.WriteNumber("left_x", Math.Round(gm.LeftBorderX, 2));
+                writer.WriteNumber("right_x", Math.Round(gm.RightBorderX, 2));
             }
             catch { }
             try
@@ -443,13 +443,13 @@ namespace BallxPitBridge
                 var pl = Player.I;
                 if (pl != null)
                 {
-                    var pos = pl.transform.position;
-                    w.WriteStartArray("player");
-                    if (ToScreen(pos, out var sx, out var sy)) { w.WriteNumberValue((int)sx); w.WriteNumberValue((int)sy); }
-                    else { w.WriteNumberValue(-1); w.WriteNumberValue(-1); }
-                    w.WriteNumberValue(pos.x);
-                    w.WriteNumberValue(pos.y);
-                    w.WriteEndArray();
+                    var currentPosition = pl.transform.position;
+                    writer.WriteStartArray("player");
+                    if (ToScreen(currentPosition, out var screenX, out var screenY)) { writer.WriteNumberValue((int)screenX); writer.WriteNumberValue((int)screenY); }
+                    else { writer.WriteNumberValue(-1); writer.WriteNumberValue(-1); }
+                    writer.WriteNumberValue(currentPosition.x);
+                    writer.WriteNumberValue(currentPosition.y);
+                    writer.WriteEndArray();
                 }
             }
             catch { }
@@ -458,36 +458,36 @@ namespace BallxPitBridge
                 var list = new List<(float wy, float wx, float sx, float sy, int hp, int max, bool boss)>();
                 var dict = gm.PieceColDict;
                 if (dict != null)
-                    foreach (var kv in dict)
+                    foreach (var colliders in dict)
                     {
-                        var obj = kv.Value;
+                        var obj = colliders.Value;
                         if (obj == null || !obj.IsActive) continue;
                         var inst = obj.Inst;
                         if (inst == null || inst.CurHealth <= 0) continue;
-                        var pos = obj.transform.position;
-                        if (!ToScreen(pos, out var sx, out var sy)) continue;
+                        var currentPositionPos = obj.transform.position;
+                        if (!ToScreen(currentPositionPos, out var screenXSx, out var screenYSy)) continue;
                         bool boss = false;
                         try { boss = StatUtl.IsBoss(inst.Type); } catch { }
-                        list.Add((pos.y, pos.x, sx, sy, inst.CurHealth, inst.MaxHealth, boss));
+                        list.Add((currentPositionPos.y, currentPositionPos.x, screenXSx, screenYSy, inst.CurHealth, inst.MaxHealth, boss));
                     }
                 list.Sort((a, b) => a.wy.CompareTo(b.wy));
-                w.WriteStartArray("enemies");   // [화면x, 화면y, 월드y, 체력, 최대, 보스] — 월드 y 가 작을수록 플레이어에 가깝다
-                for (int i = 0; i < list.Count && i < 40; i++)
+                writer.WriteStartArray("enemies");   // [화면x, 화면y, 월드y, 체력, 최대, 보스] — 월드 y 가 작을수록 플레이어에 가깝다
+                for (int index = 0; index < list.Count && index < 40; index++)
                 {
-                    var e = list[i];
-                    w.WriteStartArray();
-                    w.WriteNumberValue((int)e.sx);
-                    w.WriteNumberValue((int)e.sy);
-                    w.WriteNumberValue(Math.Round(e.wy, 2));
-                    w.WriteNumberValue(e.hp);
-                    w.WriteNumberValue(e.max);
-                    w.WriteNumberValue(e.boss ? 1 : 0);
-                    w.WriteEndArray();
+                    var e = list[index];
+                    writer.WriteStartArray();
+                    writer.WriteNumberValue((int)e.sx);
+                    writer.WriteNumberValue((int)e.sy);
+                    writer.WriteNumberValue(Math.Round(e.wy, 2));
+                    writer.WriteNumberValue(e.hp);
+                    writer.WriteNumberValue(e.max);
+                    writer.WriteNumberValue(e.boss ? 1 : 0);
+                    writer.WriteEndArray();
                 }
-                w.WriteEndArray();
+                writer.WriteEndArray();
             }
             catch { }
-            w.WriteEndObject();
+            writer.WriteEndObject();
         }
 
         /// <summary>기지 화면: 상태, 수확 남은 시간, 건물 화면 위치·보관 자원·작업자, 조준 방향. 읽기만 한다.</summary>
@@ -514,9 +514,9 @@ namespace BallxPitBridge
         static long _rangeSig = long.MinValue;
         static float _rangeAt = -10f;
 
-        static void WriteInRange(Utf8JsonWriter w, BuildingInst b)
+        static void WriteInRange(Utf8JsonWriter writer, BuildingInst building)
         {
-            string key = b.Type.ToString();
+            string key = building.Type.ToString();
             if (!RangeTargets.TryGetValue(key, out var targets))
             {
                 if (key != "kBrickHouse" && key != "kVeteranHut" && key != "kCaptainQuarters" && key != "kMansion") return;
@@ -524,60 +524,60 @@ namespace BallxPitBridge
             }
             if (_rangeSig != _colSig || Time.realtimeSinceStartup - _rangeAt >= 1f)
             { _rangeJson.Clear(); _rangeIdsJson.Clear(); _rangeSig = _colSig; _rangeAt = Time.realtimeSinceStartup; }
-            if (!_rangeJson.TryGetValue(b.Id, out var js))
+            if (!_rangeJson.TryGetValue(building.Id, out var currentJson))
             {
-                using var ms = new MemoryStream();
-                using (var rw = new Utf8JsonWriter(ms))
+                using var memoryStream = new MemoryStream();
+                using (var rangeWriter = new Utf8JsonWriter(memoryStream))
                 {
-                    rw.WriteStartObject();
-                    float r = b.GetRange();
-                    foreach (var t in targets)
+                    rangeWriter.WriteStartObject();
+                    float r = building.GetRange();
+                    foreach (var typeName in targets)
                     {
                         try
                         {
-                            var bt = (BuildingType)Enum.Parse(typeof(BuildingType), t);
-                            rw.WriteNumber(t, b.GetNumBuildingsInRange(bt, r));
+                            var bt = (BuildingType)Enum.Parse(typeof(BuildingType), typeName);
+                            rangeWriter.WriteNumber(typeName, building.GetNumBuildingsInRange(bt, r));
                         }
                         catch { }
                     }
-                    rw.WriteEndObject();
+                    rangeWriter.WriteEndObject();
                 }
-                js = Encoding.UTF8.GetString(ms.ToArray());
-                _rangeJson[b.Id] = js;
+                currentJson = Encoding.UTF8.GetString(memoryStream.ToArray());
+                _rangeJson[building.Id] = currentJson;
             }
-            w.WritePropertyName("in_range");
-            w.WriteRawValue(js, true);
-            if (!_rangeIdsJson.TryGetValue(b.Id, out var observed))
+            writer.WritePropertyName("in_range");
+            writer.WriteRawValue(currentJson, true);
+            if (!_rangeIdsJson.TryGetValue(building.Id, out var observed))
             {
-                using var ms = new MemoryStream();
-                using (var rw = new Utf8JsonWriter(ms))
+                using var rangeBuffer = new MemoryStream();
+                using (var rangeWriter = new Utf8JsonWriter(rangeBuffer))
                 {
-                    rw.WriteStartArray();
-                    var all = MetaSaveData.I?.Buildings;
-                    if (all != null) for (int i = 0; i < all.Count; i++)
+                    rangeWriter.WriteStartArray();
+                    var buildings = MetaSaveData.I?.Buildings;
+                    if (buildings != null) for (int index = 0; index < buildings.Count; index++)
                     {
-                        var target = all[i];
-                        if (target != null && target.Id != b.Id && b.IsInRange(target)) rw.WriteNumberValue(target.Id);
+                        var target = buildings[index];
+                        if (target != null && target.Id != building.Id && building.IsInRange(target)) rangeWriter.WriteNumberValue(target.Id);
                     }
-                    rw.WriteEndArray();
+                    rangeWriter.WriteEndArray();
                 }
-                observed = Encoding.UTF8.GetString(ms.ToArray()); _rangeIdsJson[b.Id] = observed;
+                observed = Encoding.UTF8.GetString(rangeBuffer.ToArray()); _rangeIdsJson[building.Id] = observed;
             }
-            w.WritePropertyName("in_range_ids"); w.WriteRawValue(observed, true);
+            writer.WritePropertyName("in_range_ids"); writer.WriteRawValue(observed, true);
         }
 
-        static void WriteBase(Utf8JsonWriter w)
+        static void WriteBase(Utf8JsonWriter writer)
         {
-            var bm = BaseMgr.I;
-            var m = MetaSaveData.I;
-            if (bm == null || m == null || !bm.gameObject.activeInHierarchy)
+            var baseManager = BaseMgr.I;
+            var saveData = MetaSaveData.I;
+            if (baseManager == null || saveData == null || !baseManager.gameObject.activeInHierarchy)
             {
                 Aiming = false;
-                w.WriteNull("base");
+                writer.WriteNull("base");
                 return;
             }
-            w.WriteStartObject("base");
-            try { var st = bm.CurState.ToString(); Aiming = st == "kAimWorkers"; w.WriteString("state", st); } catch { }
+            writer.WriteStartObject("base");
+            try { var st = baseManager.CurState.ToString(); Aiming = st == "kAimWorkers"; writer.WriteString("state", st); } catch { }
             // BaseMgr.LaunchWorkers가 확인하는 실제 입력 허용 상태. 추정 충돌이나 색으로 대신하지 않는다.
             try
             {
@@ -586,11 +586,11 @@ namespace BallxPitBridge
                 {
                     bool allowed = preview.IsInputEnabled();
                     var direction = preview.GetAimDir();
-                    w.WriteBoolean("launch_allowed", allowed);
-                    w.WriteStartArray("launch_aim");
-                    w.WriteNumberValue(direction.x);
-                    w.WriteNumberValue(direction.y);
-                    w.WriteEndArray();
+                    writer.WriteBoolean("launch_allowed", allowed);
+                    writer.WriteStartArray("launch_aim");
+                    writer.WriteNumberValue(direction.x);
+                    writer.WriteNumberValue(direction.y);
+                    writer.WriteEndArray();
                 }
             }
             catch { } // 확인 실패를 발사 가능으로 간주하지 않는다.
@@ -598,163 +598,163 @@ namespace BallxPitBridge
             // (kSelectingChar 로 캐릭터 고르는 화면이 열려 있는 동안에도 로드아웃 화면은 뒤에 그대로 있다).
             try
             {
-                var lo = LoadoutUI.I;
-                if (lo != null && lo.gameObject.activeInHierarchy)
+                var loadout = LoadoutUI.I;
+                if (loadout != null && loadout.gameObject.activeInHierarchy)
                 {
-                    w.WriteStartObject("loadout");
-                    try { w.WriteString("char1", lo.CharPanel?._tgtChar?.Type.ToString()); } catch { }
-                    try { w.WriteString("char2", lo.Char2Panel?._tgtChar?.Type.ToString()); } catch { }
-                    w.WriteEndObject();
+                    writer.WriteStartObject("loadout");
+                    try { writer.WriteString("char1", loadout.CharPanel?._tgtChar?.Type.ToString()); } catch { }
+                    try { writer.WriteString("char2", loadout.Char2Panel?._tgtChar?.Type.ToString()); } catch { }
+                    writer.WriteEndObject();
                 }
             }
             catch { }
-            try { w.WriteNumber("harvest_secs_left", Math.Round(bm.RemainingHarvestSecs, 1)); } catch { }
-            try { w.WriteBoolean("harvested_today", m.DidHarvestToday); } catch { }
+            try { writer.WriteNumber("harvest_secs_left", Math.Round(baseManager.RemainingHarvestSecs, 1)); } catch { }
+            try { writer.WriteBoolean("harvested_today", saveData.DidHarvestToday); } catch { }
             // 스파(목욕탕): 골드를 내고 바로 한 번 더 채집 — 비용·오늘 쓴 횟수 (앱이 지난 채집량과 비교해 손익을 보여 준다)
             try
             {
-                var bmg = BuildingMgr.I;
-                if (bmg != null)
+                var buildingManager = BuildingMgr.I;
+                if (buildingManager != null)
                 {
-                    w.WriteStartObject("spa");
-                    try { w.WriteNumber("cost", bmg.GetMasseuseCost()); } catch { }
-                    try { w.WriteNumber("lvl", bmg.MasseuseLvl); } catch { }
-                    try { w.WriteNumber("used_today", m.NumMasseuseToday); } catch { }
-                    try { w.WriteNumber("harvests", m.NumHarvests); } catch { }
-                    try { w.WriteBoolean("built", bmg.IsBuildingBuilt(BuildingType.kMasseuse)); } catch { }
-                    w.WriteEndObject();
+                    writer.WriteStartObject("spa");
+                    try { writer.WriteNumber("cost", buildingManager.GetMasseuseCost()); } catch { }
+                    try { writer.WriteNumber("lvl", buildingManager.MasseuseLvl); } catch { }
+                    try { writer.WriteNumber("used_today", saveData.NumMasseuseToday); } catch { }
+                    try { writer.WriteNumber("harvests", saveData.NumHarvests); } catch { }
+                    try { writer.WriteBoolean("built", buildingManager.IsBuildingBuilt(BuildingType.kMasseuse)); } catch { }
+                    writer.WriteEndObject();
                 }
             }
             catch { }
-            try { w.WriteNumber("day", m.CurDay); } catch { }
+            try { writer.WriteNumber("day", saveData.CurDay); } catch { }
             try
             {
                 var bp = BasePlayer.I;
                 if (bp != null)
                 {
-                    w.WriteStartArray("player");
-                    if (ToScreen(bp.transform.position, out var sx, out var sy)) { w.WriteNumberValue((int)sx); w.WriteNumberValue((int)sy); }
-                    else { w.WriteNumberValue(-1); w.WriteNumberValue(-1); }
-                    var aim = bp.GetAimDir();
-                    w.WriteNumberValue(aim.x);
-                    w.WriteNumberValue(aim.y);
-                    w.WriteEndArray();
+                    writer.WriteStartArray("player");
+                    if (ToScreen(bp.transform.position, out var screenX, out var screenY)) { writer.WriteNumberValue((int)screenX); writer.WriteNumberValue((int)screenY); }
+                    else { writer.WriteNumberValue(-1); writer.WriteNumberValue(-1); }
+                    var currentPosition = bp.GetAimDir();
+                    writer.WriteNumberValue(currentPosition.x);
+                    writer.WriteNumberValue(currentPosition.y);
+                    writer.WriteEndArray();
                 }
             }
             catch { }
-            WriteBaseGeometry(w, bm, m);
-            w.WriteStartArray("buildings");
-            var list = m.Buildings;
+            WriteBaseGeometry(writer, baseManager, saveData);
+            writer.WriteStartArray("buildings");
+            var list = saveData.Buildings;
             if (list != null)
-                for (int i = 0; i < list.Count; i++)
+                for (int index = 0; index < list.Count; index++)
                 {
-                    var b = list[i];
-                    if (b == null) continue;
-                    w.WriteStartObject();
-                    w.WriteNumber("id", b.Id);
-                    w.WriteString("type", b.Type.ToString());
-                    w.WriteNumber("lvl", b.UpgradeLvl);
-                    w.WriteNumber("x", b.X);
-                    w.WriteNumber("y", b.Y);
+                    var building = list[index];
+                    if (building == null) continue;
+                    writer.WriteStartObject();
+                    writer.WriteNumber("id", building.Id);
+                    writer.WriteString("type", building.Type.ToString());
+                    writer.WriteNumber("lvl", building.UpgradeLvl);
+                    writer.WriteNumber("x", building.X);
+                    writer.WriteNumber("y", building.Y);
                     try
                     {
-                        if (b.Obj != null && ToScreen(b.Obj.transform.position, out var sx, out var sy))
+                        if (building.Obj != null && ToScreen(building.Obj.transform.position, out var screenXSx, out var screenYSy))
                         {
-                            w.WriteNumber("sx", (int)sx);
-                            w.WriteNumber("sy", (int)sy);
+                            writer.WriteNumber("sx", (int)screenXSx);
+                            writer.WriteNumber("sy", (int)screenYSy);
                         }
                     }
                     catch { }
-                    try { w.WriteNumber("res", b.GetNumResources()); } catch { }
-                    try { w.WriteNumber("cap", b.GetResourceCapacity()); } catch { }
-                    try { w.WriteBoolean("can_harvest", b.CanHarvest()); } catch { }
-                    try { if (b.HeldResources != null) { w.WriteStartArray("held"); for (int k = 0; k < b.HeldResources.Num.Length; k++) w.WriteNumberValue(b.HeldResources.Num[k]); w.WriteEndArray(); } } catch { }
-                    try { w.WriteNumber("worker", b.WorkerChar); } catch { }
-                    try { if (b.HasActiveTask()) w.WriteNumber("task", Math.Round(b.GetTaskProgress(), 2)); } catch { }
-                    try { w.WriteNumber("upgrade_pct", Math.Round(b.GetUpgradePct(), 2)); } catch { }
+                    try { writer.WriteNumber("res", building.GetNumResources()); } catch { }
+                    try { writer.WriteNumber("cap", building.GetResourceCapacity()); } catch { }
+                    try { writer.WriteBoolean("can_harvest", building.CanHarvest()); } catch { }
+                    try { if (building.HeldResources != null) { writer.WriteStartArray("held"); for (int componentIndex = 0; componentIndex < building.HeldResources.Num.Length; componentIndex++) writer.WriteNumberValue(building.HeldResources.Num[componentIndex]); writer.WriteEndArray(); } } catch { }
+                    try { writer.WriteNumber("worker", building.WorkerChar); } catch { }
+                    try { if (building.HasActiveTask()) writer.WriteNumber("task", Math.Round(building.GetTaskProgress(), 2)); } catch { }
+                    try { writer.WriteNumber("upgrade_pct", Math.Round(building.GetUpgradePct(), 2)); } catch { }
                     // 미완성(공사장 kScaffold·강화 공사 kUpgrading): 작업자가 맞힐 때마다 UpgradePts 가 쌓여 목표에 닿으면 완성
-                    try { w.WriteString("state", b.CurState.ToString()); } catch { }
-                    try { w.WriteNumber("upg_pts", b.UpgradePts); w.WriteNumber("upg_tgt", b.GetUpgradeTgt()); } catch { }
-                    try { w.WriteNumber("range", b.GetRange()); } catch { }
-                    try { WriteInRange(w, b); } catch { }
-                    w.WriteNumber("rot", b.Rotation);
-                    PhysicsSnapshot.WriteBuilding(w, b);
+                    try { writer.WriteString("state", building.CurState.ToString()); } catch { }
+                    try { writer.WriteNumber("upg_pts", building.UpgradePts); writer.WriteNumber("upg_tgt", building.GetUpgradeTgt()); } catch { }
+                    try { writer.WriteNumber("range", building.GetRange()); } catch { }
+                    try { WriteInRange(writer, building); } catch { }
+                    writer.WriteNumber("rot", building.Rotation);
+                    PhysicsSnapshot.WriteBuilding(writer, building);
                     try
                     {
-                        var info = b.GetInfo();
+                        var info = building.GetInfo();
                         if (info != null)
                         {
-                            w.WriteNumber("tw", info.TileSize.x);
-                            w.WriteNumber("th", info.TileSize.y);
-                            w.WriteString("col", info.ColType.ToString());
-                            try { w.WriteString("stat", info.GetStatBonus().ToString()); } catch { }   // 능력치 보너스 건물이면 그 능력치
+                            writer.WriteNumber("tw", info.TileSize.x);
+                            writer.WriteNumber("th", info.TileSize.y);
+                            writer.WriteString("col", info.ColType.ToString());
+                            try { writer.WriteString("stat", info.GetStatBonus().ToString()); } catch { }   // 능력치 보너스 건물이면 그 능력치
                         }
                     }
                     catch { }
-                    w.WriteEndObject();
+                    writer.WriteEndObject();
                 }
-            w.WriteEndArray();
-            w.WriteEndObject();
+            writer.WriteEndArray();
+            writer.WriteEndObject();
         }
 
-        static void Pt(Utf8JsonWriter w, Vector3 v)
+        static void Pt(Utf8JsonWriter writer, Vector3 currentPosition)
         {
-            w.WriteStartArray();
-            w.WriteNumberValue(v.x);
-            w.WriteNumberValue(v.y);
-            w.WriteEndArray();
+            writer.WriteStartArray();
+            writer.WriteNumberValue(currentPosition.x);
+            writer.WriteNumberValue(currentPosition.y);
+            writer.WriteEndArray();
         }
 
         /// <summary>기지 물리 모양: 벽, 청크, 발사대, 작업자 속도, 건물 충돌 모양(월드 좌표), 화면 대응점, 날아가는 작업자.
         /// 채집 궤적·배치 계산용. 읽기만 한다 (물리 질의도 하지 않는다).</summary>
-        static void WriteBaseGeometry(Utf8JsonWriter w, BaseMgr bm, MetaSaveData m)
+        static void WriteBaseGeometry(Utf8JsonWriter writer, BaseMgr baseManager, MetaSaveData saveData)
         {
-            var g = BaseGridMgr.I;
-            if (g == null) return;
-            w.WriteStartObject("geo");
-            PhysicsSnapshot.Write(w, g, bm, m);
+            var gridManager = BaseGridMgr.I;
+            if (gridManager == null) return;
+            writer.WriteStartObject("geo");
+            PhysicsSnapshot.Write(writer, gridManager, baseManager, saveData);
             try
             {
-                w.WriteNumber("left", g.LeftBorderX);
-                w.WriteNumber("right", g.RightBorderX);
-                w.WriteNumber("top", g.TopBorderY);
-                w.WriteNumber("bottom", g.BottomBorderY);
-                w.WriteNumber("player_y", g.PlayerY);
-                w.WriteNumber("space_w", BaseGridMgr.kSpaceWidth);
-                w.WriteNumber("space_h", BaseGridMgr.kSpaceHeight);
-                w.WriteNumber("chunk_w", BaseGridMgr.kChunkWidth);
-                w.WriteNumber("chunk_h", BaseGridMgr.kChunkHeight);
-                w.WriteNumber("chunk_world_w", BaseGridMgr.kChunkWorldWidth);
-                w.WriteNumber("chunk_world_h", BaseGridMgr.kChunkWorldHeight);
-                w.WriteNumber("chunk_cols", BaseGridMgr.kChunkCols);
-                w.WriteNumber("chunk_rows", BaseGridMgr.kChunkRows);
+                writer.WriteNumber("left", gridManager.LeftBorderX);
+                writer.WriteNumber("right", gridManager.RightBorderX);
+                writer.WriteNumber("top", gridManager.TopBorderY);
+                writer.WriteNumber("bottom", gridManager.BottomBorderY);
+                writer.WriteNumber("player_y", gridManager.PlayerY);
+                writer.WriteNumber("space_w", BaseGridMgr.kSpaceWidth);
+                writer.WriteNumber("space_h", BaseGridMgr.kSpaceHeight);
+                writer.WriteNumber("chunk_w", BaseGridMgr.kChunkWidth);
+                writer.WriteNumber("chunk_h", BaseGridMgr.kChunkHeight);
+                writer.WriteNumber("chunk_world_w", BaseGridMgr.kChunkWorldWidth);
+                writer.WriteNumber("chunk_world_h", BaseGridMgr.kChunkWorldHeight);
+                writer.WriteNumber("chunk_cols", BaseGridMgr.kChunkCols);
+                writer.WriteNumber("chunk_rows", BaseGridMgr.kChunkRows);
             }
             catch { }
             try
             {
-                w.WriteStartArray("chunks");
-                var ch = m.BaseChunks;
+                writer.WriteStartArray("chunks");
+                var ch = saveData.BaseChunks;
                 if (ch != null)
                     for (int x = 0; x < ch.Length; x++)
                         if (ch[x] != null)
                             for (int y = 0; y < ch[x].Length; y++)
                             {
                                 var c = ch[x][y];
-                                if (c != null && c.IsPurchased) { w.WriteStartArray(); w.WriteNumberValue(c.X); w.WriteNumberValue(c.Y); w.WriteEndArray(); }
+                                if (c != null && c.IsPurchased) { writer.WriteStartArray(); writer.WriteNumberValue(c.X); writer.WriteNumberValue(c.Y); writer.WriteEndArray(); }
                             }
-                w.WriteEndArray();
+                writer.WriteEndArray();
             }
             catch { }
             // 게임의 입구 청크 좌표를 읽는다. IsEntrance 는 타일이 아닌 청크 좌표를 받는다.
             try
             {
-                int ex = g.GetEntranceX(), ey = g.GetEntranceY();
-                if (g.IsEntrance(ex, ey))
+                int ex = gridManager.GetEntranceX(), ey = gridManager.GetEntranceY();
+                if (gridManager.IsEntrance(ex, ey))
                 {
-                    w.WriteStartArray("entrance_chunk");
-                    w.WriteNumberValue(ex);
-                    w.WriteNumberValue(ey);
-                    w.WriteEndArray();
+                    writer.WriteStartArray("entrance_chunk");
+                    writer.WriteNumberValue(ex);
+                    writer.WriteNumberValue(ey);
+                    writer.WriteEndArray();
                 }
             }
             catch { }
@@ -763,188 +763,188 @@ namespace BallxPitBridge
                 var bmgr = BuildingMgr.I;
                 if (bmgr != null)
                 {
-                    w.WriteNumber("worker_speed", bmgr.WorkerMoveSpeed);
-                    w.WriteNumber("worker_speed_mult", bmgr.WorkerMoveSpeedMult);
-                    w.WriteNumber("harvest_len", bmgr.HarvestLength);
+                    writer.WriteNumber("worker_speed", bmgr.WorkerMoveSpeed);
+                    writer.WriteNumber("worker_speed_mult", bmgr.WorkerMoveSpeedMult);
+                    writer.WriteNumber("harvest_len", bmgr.HarvestLength);
                 }
-                w.WriteNumber("ball_time_dist", BaseMgr.kBallTimeDist);
+                writer.WriteNumber("ball_time_dist", BaseMgr.kBallTimeDist);
             }
             catch { }
             try
             {
                 var bp = BasePlayer.I;
-                if (bp != null) { w.WritePropertyName("launcher"); Pt(w, bp.transform.position); }
+                if (bp != null) { writer.WritePropertyName("launcher"); Pt(writer, bp.transform.position); }
             }
             catch { }
             // 화면 대응점: 기지 네 모서리의 화면 좌표 (앱이 월드 ↔ 화면 변환을 만든다)
             try
             {
-                w.WriteStartArray("proj");
-                foreach (var (x, y) in new[] { (g.LeftBorderX, g.BottomBorderY), (g.RightBorderX, g.BottomBorderY),
-                                               (g.LeftBorderX, g.TopBorderY), (g.RightBorderX, g.TopBorderY),
-                                               ((g.LeftBorderX + g.RightBorderX) / 2, (g.BottomBorderY + g.TopBorderY) / 2) })
+                writer.WriteStartArray("proj");
+                foreach (var (x, y) in new[] { (gridManager.LeftBorderX, gridManager.BottomBorderY), (gridManager.RightBorderX, gridManager.BottomBorderY),
+                                               (gridManager.LeftBorderX, gridManager.TopBorderY), (gridManager.RightBorderX, gridManager.TopBorderY),
+                                               ((gridManager.LeftBorderX + gridManager.RightBorderX) / 2, (gridManager.BottomBorderY + gridManager.TopBorderY) / 2) })
                 {
-                    if (!ToScreen(new Vector3(x, y, 0), out var sx, out var sy)) continue;
-                    w.WriteStartArray();
-                    w.WriteNumberValue(Math.Round(x, 3)); w.WriteNumberValue(Math.Round(y, 3));
-                    w.WriteNumberValue((int)sx); w.WriteNumberValue((int)sy);
-                    w.WriteEndArray();
+                    if (!ToScreen(new Vector3(x, y, 0), out var screenX, out var screenY)) continue;
+                    writer.WriteStartArray();
+                    writer.WriteNumberValue(Math.Round(x, 3)); writer.WriteNumberValue(Math.Round(y, 3));
+                    writer.WriteNumberValue((int)screenX); writer.WriteNumberValue((int)screenY);
+                    writer.WriteEndArray();
                 }
-                w.WriteEndArray();
+                writer.WriteEndArray();
             }
             catch { }
             // 건물 충돌 모양 (월드 좌표). 60여 개 모양을 매번 읽으면 게임 프레임 시간을 먹으므로
             // 배치 지문(건물 id·위치·방향·상태)이 같으면 지난 결과를 쓰고, 1초마다 한 번은 새로 읽는다.
             try
             {
-                long sig = 17;
-                var bl = m.Buildings;
-                if (bl != null)
-                    for (int i = 0; i < bl.Count; i++)
+                long signature = 17;
+                var buildings = saveData.Buildings;
+                if (buildings != null)
+                    for (int index = 0; index < buildings.Count; index++)
                     {
-                        var b = bl[i];
-                        if (b == null) continue;
-                        sig = sig * 31 + b.Id;
-                        sig = sig * 31 + (long)Math.Round(b.X * 100);
-                        sig = sig * 31 + (long)Math.Round(b.Y * 100);
-                        sig = sig * 31 + b.Rotation;
-                        sig = sig * 31 + b.UpgradeLvl;
-                        try { sig = sig * 31 + (int)b.CurState; } catch { }
+                        var building = buildings[index];
+                        if (building == null) continue;
+                        signature = signature * 31 + building.Id;
+                        signature = signature * 31 + (long)Math.Round(building.X * 100);
+                        signature = signature * 31 + (long)Math.Round(building.Y * 100);
+                        signature = signature * 31 + building.Rotation;
+                        signature = signature * 31 + building.UpgradeLvl;
+                        try { signature = signature * 31 + (int)building.CurState; } catch { }
                     }
                 float t = Time.realtimeSinceStartup;
-                if (sig != _colSig || t - _colAt > 1f || _colJson.Length == 0)
+                if (signature != _colSig || t - _colAt > 1f || _colJson.Length == 0)
                 {
-                    using var cms = new MemoryStream();
-                    using (var cw = new Utf8JsonWriter(cms))
-                        WriteColliders(cw);
-                    _colJson = Encoding.UTF8.GetString(cms.ToArray());
-                    _colSig = sig;
+                    using var memoryStream = new MemoryStream();
+                    using (var colliderWriter = new Utf8JsonWriter(memoryStream))
+                        WriteColliders(colliderWriter);
+                    _colJson = Encoding.UTF8.GetString(memoryStream.ToArray());
+                    _colSig = signature;
                     _colAt = t;
                 }
-                w.WritePropertyName("colliders");
-                w.WriteRawValue(_colJson, true);
+                writer.WritePropertyName("colliders");
+                writer.WriteRawValue(_colJson, true);
             }
             catch { }
             // 날아가는 작업자 (채집 중): 실제 궤적 검증용
             try
             {
-                var balls = bm.ActiveBalls;
-                w.WriteStartArray("workers");
+                var balls = baseManager.ActiveBalls;
+                writer.WriteStartArray("workers");
                 if (balls != null)
-                    for (int i = 0; i < balls.Count; i++)
+                    for (int loopIndex = 0; loopIndex < balls.Count; loopIndex++)
                     {
-                        var b = balls[i];
+                        var b = balls[loopIndex];
                         if (b == null || !b.IsActive) continue;
-                        var pos = b.transform.position;
-                        w.WriteStartArray();
-                        w.WriteNumberValue(pos.x);
-                        w.WriteNumberValue(pos.y);
-                        w.WriteNumberValue(b.AimDir.x);
-                        w.WriteNumberValue(b.AimDir.y);
-                        w.WriteNumberValue(b.Speed);
+                        var currentPosition = b.transform.position;
+                        writer.WriteStartArray();
+                        writer.WriteNumberValue(currentPosition.x);
+                        writer.WriteNumberValue(currentPosition.y);
+                        writer.WriteNumberValue(b.AimDir.x);
+                        writer.WriteNumberValue(b.AimDir.y);
+                        writer.WriteNumberValue(b.Speed);
                         float r = -1;
-                        try { var cc = b.GetComponent<CircleCollider2D>(); if (cc != null) r = cc.radius * Math.Abs(b.transform.lossyScale.x); } catch { }
-                        w.WriteNumberValue(r);
-                        w.WriteNumberValue(b.NumBounces);
-                        w.WriteNumberValue(b.HeldResources != null ? b.HeldResources.GetTotalAmount() : 0);
-                        w.WriteNumberValue(b.WInst != null ? (int)b.WInst.Type : -1);
-                        w.WriteEndArray();
+                        try { var colliders = b.GetComponent<CircleCollider2D>(); if (colliders != null) r = colliders.radius * Math.Abs(b.transform.lossyScale.x); } catch { }
+                        writer.WriteNumberValue(r);
+                        writer.WriteNumberValue(b.NumBounces);
+                        writer.WriteNumberValue(b.HeldResources != null ? b.HeldResources.GetTotalAmount() : 0);
+                        writer.WriteNumberValue(b.WInst != null ? (int)b.WInst.Type : -1);
+                        writer.WriteEndArray();
                     }
-                w.WriteEndArray();
+                writer.WriteEndArray();
             }
             catch { }
-            w.WriteEndObject();
+            writer.WriteEndObject();
         }
 
-        static void WriteColliders(Utf8JsonWriter w)
+        static void WriteColliders(Utf8JsonWriter writer)
         {
-            var g = BaseGridMgr.I;
-            w.WriteStartArray();
-            var dict = g != null ? g.BuildingColDict : null;
+            var gridManager = BaseGridMgr.I;
+            writer.WriteStartArray();
+            var dict = gridManager != null ? gridManager.BuildingColDict : null;
             if (dict != null)
-                foreach (var kv in dict)
+                foreach (var colliders in dict)
                 {
-                    var col = kv.Key;
-                    var obj = kv.Value;
-                    if (col == null || obj == null || obj.Inst == null || !col.enabled || !col.gameObject.activeInHierarchy) continue;
-                    var t = col.transform;
-                    w.WriteStartObject();
-                    w.WriteNumber("id", obj.Inst.Id);
-                    w.WriteBoolean("trigger", col.isTrigger);
-                    var box = col.TryCast<BoxCollider2D>();
-                    var circ = col.TryCast<CircleCollider2D>();
-                    var poly = col.TryCast<PolygonCollider2D>();
-                    if (box != null)
+                    var collider = colliders.Key;
+                    var buildingObject = colliders.Value;
+                    if (collider == null || buildingObject == null || buildingObject.Inst == null || !collider.enabled || !collider.gameObject.activeInHierarchy) continue;
+                    var currentTransform = collider.transform;
+                    writer.WriteStartObject();
+                    writer.WriteNumber("id", buildingObject.Inst.Id);
+                    writer.WriteBoolean("trigger", collider.isTrigger);
+                    var boxCollider = collider.TryCast<BoxCollider2D>();
+                    var circ = collider.TryCast<CircleCollider2D>();
+                    var poly = collider.TryCast<PolygonCollider2D>();
+                    if (boxCollider != null)
                     {
-                        w.WriteString("shape", "box");
-                        var o = box.offset; var h = box.size * 0.5f;
-                        w.WriteStartArray("pts");
-                        Pt(w, t.TransformPoint(new Vector3(o.x - h.x, o.y - h.y, 0)));
-                        Pt(w, t.TransformPoint(new Vector3(o.x + h.x, o.y - h.y, 0)));
-                        Pt(w, t.TransformPoint(new Vector3(o.x + h.x, o.y + h.y, 0)));
-                        Pt(w, t.TransformPoint(new Vector3(o.x - h.x, o.y + h.y, 0)));
-                        w.WriteEndArray();
+                        writer.WriteString("shape", "box");
+                        var currentPosition = boxCollider.offset; var currentPositionH = boxCollider.size * 0.5f;
+                        writer.WriteStartArray("pts");
+                        Pt(writer, currentTransform.TransformPoint(new Vector3(currentPosition.x - currentPositionH.x, currentPosition.y - currentPositionH.y, 0)));
+                        Pt(writer, currentTransform.TransformPoint(new Vector3(currentPosition.x + currentPositionH.x, currentPosition.y - currentPositionH.y, 0)));
+                        Pt(writer, currentTransform.TransformPoint(new Vector3(currentPosition.x + currentPositionH.x, currentPosition.y + currentPositionH.y, 0)));
+                        Pt(writer, currentTransform.TransformPoint(new Vector3(currentPosition.x - currentPositionH.x, currentPosition.y + currentPositionH.y, 0)));
+                        writer.WriteEndArray();
                     }
                     else if (circ != null)
                     {
-                        w.WriteString("shape", "circle");
-                        w.WritePropertyName("c");
-                        Pt(w, t.TransformPoint(new Vector3(circ.offset.x, circ.offset.y, 0)));
-                        var sc = t.lossyScale;
-                        w.WriteNumber("r", circ.radius * Math.Max(Math.Abs(sc.x), Math.Abs(sc.y)));
+                        writer.WriteString("shape", "circle");
+                        writer.WritePropertyName("c");
+                        Pt(writer, currentTransform.TransformPoint(new Vector3(circ.offset.x, circ.offset.y, 0)));
+                        var currentPositionSc = currentTransform.lossyScale;
+                        writer.WriteNumber("r", circ.radius * Math.Max(Math.Abs(currentPositionSc.x), Math.Abs(currentPositionSc.y)));
                     }
                     else if (poly != null)
                     {
-                        w.WriteString("shape", "poly");
-                        w.WriteStartArray("pts");
+                        writer.WriteString("shape", "poly");
+                        writer.WriteStartArray("pts");
                         var pts = poly.points;
-                        for (int k = 0; k < pts.Length; k++) Pt(w, t.TransformPoint(new Vector3(pts[k].x + poly.offset.x, pts[k].y + poly.offset.y, 0)));
-                        w.WriteEndArray();
+                        for (int componentIndex = 0; componentIndex < pts.Length; componentIndex++) Pt(writer, currentTransform.TransformPoint(new Vector3(pts[componentIndex].x + poly.offset.x, pts[componentIndex].y + poly.offset.y, 0)));
+                        writer.WriteEndArray();
                     }
                     else
                     {
-                        w.WriteString("shape", "bounds");
-                        var bd = col.bounds;
-                        w.WriteStartArray("pts");
-                        Pt(w, new Vector3(bd.min.x, bd.min.y, 0)); Pt(w, new Vector3(bd.max.x, bd.min.y, 0));
-                        Pt(w, new Vector3(bd.max.x, bd.max.y, 0)); Pt(w, new Vector3(bd.min.x, bd.max.y, 0));
-                        w.WriteEndArray();
+                        writer.WriteString("shape", "bounds");
+                        var bd = collider.bounds;
+                        writer.WriteStartArray("pts");
+                        Pt(writer, new Vector3(bd.min.x, bd.min.y, 0)); Pt(writer, new Vector3(bd.max.x, bd.min.y, 0));
+                        Pt(writer, new Vector3(bd.max.x, bd.max.y, 0)); Pt(writer, new Vector3(bd.min.x, bd.max.y, 0));
+                        writer.WriteEndArray();
                     }
-                    w.WriteEndObject();
+                    writer.WriteEndObject();
                 }
-            w.WriteEndArray();
+            writer.WriteEndArray();
         }
 
         /// <summary>전투 상황: 경험치, 적·보스, 보스·융합기 일정 진행, 캐릭터 능력치, 상태 효과. 모두 읽기만 한다.</summary>
-        static void WriteBattleExtra(Utf8JsonWriter w, BattleSaveData b)
+        static void WriteBattleExtra(Utf8JsonWriter writer, BattleSaveData battleData)
         {
             try
             {
-                w.WriteNumber("xp", Math.Round(b.CurXP, 1));
-                w.WriteNumber("xp_next", StatUtl.GetBattleTgtXP(b.UpgradeLvl));
+                writer.WriteNumber("xp", Math.Round(battleData.CurXP, 1));
+                writer.WriteNumber("xp_next", StatUtl.GetBattleTgtXP(battleData.UpgradeLvl));
             }
             catch { }
-            w.WriteNumber("boss_turns_elapsed", b.NumBossTurnsElapsed);
-            w.WriteNumber("fuser_turns_elapsed", b.NumFuserTurnsElapsed);
-            w.WriteNumber("treasures", b.NumTreasures);
-            w.WriteNumber("baby_kills", b.BabyKills);
-            w.WriteNumber("endless_kills", b.NumEndlessKills);
-            w.WriteNumber("fissions", b.NumFissionsDone);
-            w.WriteNumber("rows", b.NumRows);
-            w.WriteNumber("cols", b.NumCols);
-            w.WriteNumber("player_x", Math.Round(b.PlayerX, 2));
-            try { w.WriteNumber("enemies", b.GetNumActiveEnemies()); } catch { }
-            try { w.WriteNumber("lowest_enemy_y", Math.Round(b.GetLowestEnemyY(), 2)); } catch { }
+            writer.WriteNumber("boss_turns_elapsed", battleData.NumBossTurnsElapsed);
+            writer.WriteNumber("fuser_turns_elapsed", battleData.NumFuserTurnsElapsed);
+            writer.WriteNumber("treasures", battleData.NumTreasures);
+            writer.WriteNumber("baby_kills", battleData.BabyKills);
+            writer.WriteNumber("endless_kills", battleData.NumEndlessKills);
+            writer.WriteNumber("fissions", battleData.NumFissionsDone);
+            writer.WriteNumber("rows", battleData.NumRows);
+            writer.WriteNumber("cols", battleData.NumCols);
+            writer.WriteNumber("player_x", Math.Round(battleData.PlayerX, 2));
+            try { writer.WriteNumber("enemies", battleData.GetNumActiveEnemies()); } catch { }
+            try { writer.WriteNumber("lowest_enemy_y", Math.Round(battleData.GetLowestEnemyY(), 2)); } catch { }
             try
             {
-                var pieces = b.Pieces;
-                if (pieces != null && b.HasBossPiece())
+                var pieces = battleData.Pieces;
+                if (pieces != null && battleData.HasBossPiece())
                 {
                     long hp = 0, max = 0;
                     string type = null;
-                    for (int i = 0; i < pieces.Count; i++)
+                    for (int index = 0; index < pieces.Count; index++)
                     {
-                        var pc = pieces[i];
+                        var pc = pieces[index];
                         if (pc == null || !StatUtl.IsBoss(pc.Type)) continue;
                         hp += Math.Max(0, pc.CurHealth);
                         max += Math.Max(0, pc.MaxHealth);
@@ -952,83 +952,83 @@ namespace BallxPitBridge
                     }
                     if (max > 0)
                     {
-                        w.WriteStartObject("boss");
-                        w.WriteString("type", type);
-                        w.WriteNumber("hp", hp);
-                        w.WriteNumber("max", max);
-                        w.WriteEndObject();
+                        writer.WriteStartObject("boss");
+                        writer.WriteString("type", type);
+                        writer.WriteNumber("hp", hp);
+                        writer.WriteNumber("max", max);
+                        writer.WriteEndObject();
                     }
                 }
             }
             catch { }
             try
             {
-                var um = UpgradeMgr.I;
-                if (um != null)
+                var upgradeManager = UpgradeMgr.I;
+                if (upgradeManager != null)
                 {
-                    w.WriteStartObject("stats");
-                    w.WriteNumber("crit_chance", Math.Round(um.CritChance, 3));
-                    w.WriteNumber("crit_mult", Math.Round(um.CritMultiplier, 3));
-                    w.WriteNumber("fire_rate", Math.Round(um.FireRate, 3));
-                    w.WriteNumber("reload", Math.Round(um.ReloadTime, 3));
-                    w.WriteNumber("ball_speed", Math.Round(um.BaseSpeed, 3));
-                    w.WriteNumber("move_speed", Math.Round(um.MoveSpeed, 3));
-                    w.WriteNumber("damage_reduction", Math.Round(um.DamageReduction, 3));
-                    w.WriteNumber("dodge", Math.Round(um.DodgeChance, 3));
-                    w.WriteNumber("thorns", um.ThornsAmt);
-                    w.WriteNumber("health_per_kill", um.HealthPerKill);
-                    w.WriteNumber("pickup_range", Math.Round(um.PickupRange, 3));
-                    w.WriteNumber("bonus_xp", Math.Round(um.BonusXPDropped, 3));
-                    w.WriteNumber("bonus_gold", Math.Round(um.BonusGoldDropped, 3));
-                    w.WriteNumber("ball_damage_mult", Math.Round(um.BallDamageMult, 3));
-                    w.WriteNumber("bonus_ball_damage", um.BonusHeroDamage);
-                    w.WriteNumber("babies", um.NumFollowers);
-                    w.WriteNumber("multi_balls", um.NumMultiHeroes);
-                    w.WriteEndObject();
+                    writer.WriteStartObject("stats");
+                    writer.WriteNumber("crit_chance", Math.Round(upgradeManager.CritChance, 3));
+                    writer.WriteNumber("crit_mult", Math.Round(upgradeManager.CritMultiplier, 3));
+                    writer.WriteNumber("fire_rate", Math.Round(upgradeManager.FireRate, 3));
+                    writer.WriteNumber("reload", Math.Round(upgradeManager.ReloadTime, 3));
+                    writer.WriteNumber("ball_speed", Math.Round(upgradeManager.BaseSpeed, 3));
+                    writer.WriteNumber("move_speed", Math.Round(upgradeManager.MoveSpeed, 3));
+                    writer.WriteNumber("damage_reduction", Math.Round(upgradeManager.DamageReduction, 3));
+                    writer.WriteNumber("dodge", Math.Round(upgradeManager.DodgeChance, 3));
+                    writer.WriteNumber("thorns", upgradeManager.ThornsAmt);
+                    writer.WriteNumber("health_per_kill", upgradeManager.HealthPerKill);
+                    writer.WriteNumber("pickup_range", Math.Round(upgradeManager.PickupRange, 3));
+                    writer.WriteNumber("bonus_xp", Math.Round(upgradeManager.BonusXPDropped, 3));
+                    writer.WriteNumber("bonus_gold", Math.Round(upgradeManager.BonusGoldDropped, 3));
+                    writer.WriteNumber("ball_damage_mult", Math.Round(upgradeManager.BallDamageMult, 3));
+                    writer.WriteNumber("bonus_ball_damage", upgradeManager.BonusHeroDamage);
+                    writer.WriteNumber("babies", upgradeManager.NumFollowers);
+                    writer.WriteNumber("multi_balls", upgradeManager.NumMultiHeroes);
+                    writer.WriteEndObject();
                 }
             }
             catch { }
             try
             {
-                var ch = b.CurChar;
-                if (ch != null && ch.Stats != null)
+                var character = battleData.CurChar;
+                if (character != null && character.Stats != null)
                 {
-                    w.WriteStartArray("char_stats");   // 게임 StatType 순서: 체력·힘·통솔·속도·민첩·지능
-                    for (int i = 0; i < ch.Stats.Length; i++) w.WriteNumberValue(ch.Stats[i]);
-                    w.WriteEndArray();
+                    writer.WriteStartArray("char_stats");   // 게임 StatType 순서: 체력·힘·통솔·속도·민첩·지능
+                    for (int loopIndex = 0; loopIndex < character.Stats.Length; loopIndex++) writer.WriteNumberValue(character.Stats[loopIndex]);
+                    writer.WriteEndArray();
                 }
             }
             catch { }
             try
             {
-                var eff = b.PlayerStatusEffects;
-                w.WriteStartArray("effects");
+                var eff = battleData.PlayerStatusEffects;
+                writer.WriteStartArray("effects");
                 if (eff != null)
-                    for (int i = 0; i < eff.Count; i++)
+                    for (int loopIndex = 0; loopIndex < eff.Count; loopIndex++)
                     {
-                        var e = eff[i];
+                        var e = eff[loopIndex];
                         if (e == null) continue;
-                        w.WriteStartObject();
-                        w.WriteString("type", e.Type.ToString());
-                        w.WriteNumber("left", Math.Round(e.RemainingLen, 1));
-                        w.WriteEndObject();
+                        writer.WriteStartObject();
+                        writer.WriteString("type", e.Type.ToString());
+                        writer.WriteNumber("left", Math.Round(e.RemainingLen, 1));
+                        writer.WriteEndObject();
                     }
-                w.WriteEndArray();
+                writer.WriteEndArray();
             }
             catch { }
         }
 
         /// <summary>이번 런에서 이 볼이 준 피해·처치 (게임의 런 종료 통계와 같은 값).</summary>
-        static void WriteHeroStats(Utf8JsonWriter w, HeroInst h)
+        static void WriteHeroStats(Utf8JsonWriter writer, HeroInst h)
         {
             try
             {
                 var sd = h.StatData;
                 if (sd == null) return;
                 long dmg = 0, kills = 0, launches = 0, bounce = 0, status = 0, alt = 0, aoe = 0;
-                for (int k = 0; k < sd.Count; k++)
+                for (int componentIndex = 0; componentIndex < sd.Count; componentIndex++)
                 {
-                    var s = sd[k];
+                    var s = sd[componentIndex];
                     if (s == null) continue;
                     bounce += s.BounceDmgDealt;
                     status += s.StatusEffectDmgDealt;
@@ -1038,178 +1038,178 @@ namespace BallxPitBridge
                     launches += s.NumLaunches;
                 }
                 dmg = bounce + status + alt + aoe;
-                w.WriteNumber("dmg", dmg);
-                w.WriteStartObject("dmg_by");
-                w.WriteNumber("bounce", bounce);
-                w.WriteNumber("status", status);
-                w.WriteNumber("other", alt);
-                w.WriteNumber("aoe", aoe);
-                w.WriteEndObject();
-                w.WriteNumber("kills", kills);
-                w.WriteNumber("launches", launches);
+                writer.WriteNumber("dmg", dmg);
+                writer.WriteStartObject("dmg_by");
+                writer.WriteNumber("bounce", bounce);
+                writer.WriteNumber("status", status);
+                writer.WriteNumber("other", alt);
+                writer.WriteNumber("aoe", aoe);
+                writer.WriteEndObject();
+                writer.WriteNumber("kills", kills);
+                writer.WriteNumber("launches", launches);
             }
             catch { }
         }
 
-        static void WriteChoiceList(Utf8JsonWriter w, string name, Il2CppSystem.Collections.Generic.List<UpgradeChoice> list)
+        static void WriteChoiceList(Utf8JsonWriter writer, string name, Il2CppSystem.Collections.Generic.List<UpgradeChoice> list)
         {
-            w.WriteStartArray(name);
+            writer.WriteStartArray(name);
             if (list != null)
-                for (int i = 0; i < list.Count; i++) WriteInfoTypeValue(w, list[i].Info);
-            w.WriteEndArray();
+                for (int index = 0; index < list.Count; index++) WriteInfoTypeValue(writer, list[index].Info);
+            writer.WriteEndArray();
         }
 
-        static void WriteLevelUp(Utf8JsonWriter w)
+        static void WriteLevelUp(Utf8JsonWriter writer)
         {
-            var ui = LevelUpUI.I;
-            bool open = ui != null && ui.gameObject.activeInHierarchy && ui.IsActiveOverlay();
+            var levelUpUI = LevelUpUI.I;
+            bool open = levelUpUI != null && levelUpUI.gameObject.activeInHierarchy && levelUpUI.IsActiveOverlay();
             if (!open)
             {
-                w.WriteNull("levelup");
+                writer.WriteNull("levelup");
                 return;
             }
-            w.WriteStartObject("levelup");
-            w.WriteString("type", ui.Type.ToString());
-            w.WriteString("page", ui.CurPage.ToString());
-            w.WriteNumber("reroll_cost", ui._rerollCost);
-            WriteRect(w, "panel", ui.PanelMain);
+            writer.WriteStartObject("levelup");
+            writer.WriteString("type", levelUpUI.Type.ToString());
+            writer.WriteString("page", levelUpUI.CurPage.ToString());
+            writer.WriteNumber("reroll_cost", levelUpUI._rerollCost);
+            WriteRect(writer, "panel", levelUpUI.PanelMain);
 
-            w.WriteStartArray("choices");
-            var choices = ui._choices;
-            var btns = ui.Btns;
+            writer.WriteStartArray("choices");
+            var choices = levelUpUI._choices;
+            var btns = levelUpUI.Btns;
             if (choices != null)
             {
-                for (int i = 0; i < choices.Count; i++)
+                for (int index = 0; index < choices.Count; index++)
                 {
-                    var c = choices[i];
-                    w.WriteStartObject();
-                    w.WriteNumber("idx", i);
-                    w.WriteString("kind", c.Type.ToString());
-                    w.WriteBoolean("is_new", c.IsNew);
-                    w.WriteNumber("equip_idx", c.EquipmentIdx);
+                    var c = choices[index];
+                    writer.WriteStartObject();
+                    writer.WriteNumber("idx", index);
+                    writer.WriteString("kind", c.Type.ToString());
+                    writer.WriteBoolean("is_new", c.IsNew);
+                    writer.WriteNumber("equip_idx", c.EquipmentIdx);
                     var info = c.Info;
                     if (info != null)
                     {
-                        w.WriteString("slug", info.Slug);
+                        writer.WriteString("slug", info.Slug);
                         var hero = info.TryCast<HeroInfo>();
                         var passive = info.TryCast<PassiveInfo>();
-                        if (hero != null) w.WriteString("type", hero.Type.ToString());
-                        else if (passive != null) w.WriteString("type", passive.Type.ToString());
-                        try { w.WriteBoolean("ai_pick", info.ShouldAIPick()); } catch { }
-                        if (hero != null) WriteSynergy(w, hero);
+                        if (hero != null) writer.WriteString("type", hero.Type.ToString());
+                        else if (passive != null) writer.WriteString("type", passive.Type.ToString());
+                        try { writer.WriteBoolean("ai_pick", info.ShouldAIPick()); } catch { }
+                        if (hero != null) WriteSynergy(writer, hero);
                         if (hero == null && passive == null)
                         {
                             // 펫 강화 등: 게임 번역 표에서 현재 언어 이름·설명을 그대로 가져온다
                             var pet = info.TryCast<PetUpgradeInfo>();
-                            if (pet != null) w.WriteString("type", pet.Type.ToString());
-                            w.WriteString("name_loc", Loc(info.GetNameSlug()));
-                            w.WriteString("desc_loc", Loc(info.GetDescSlug()));
+                            if (pet != null) writer.WriteString("type", pet.Type.ToString());
+                            writer.WriteString("name_loc", Loc(info.GetNameSlug()));
+                            writer.WriteString("desc_loc", Loc(info.GetDescSlug()));
                         }
                     }
-                    var btn = FindButton(btns, i);
-                    if (btn != null)
+                    var choiceButton = FindButton(btns, index);
+                    if (choiceButton != null)
                     {
-                        w.WriteNumber("tgt_lvl", btn.TgtLvl);
-                        EffectiveProperties.Write(w, info, btn.TgtLvl, c.IsNew, c.EquipmentIdx);
-                        WriteRect(w, "rect", btn.Xfm);
+                        writer.WriteNumber("tgt_lvl", choiceButton.TgtLvl);
+                        EffectiveProperties.Write(writer, info, choiceButton.TgtLvl, c.IsNew, c.EquipmentIdx);
+                        WriteRect(writer, "rect", choiceButton.Xfm);
                     }
-                    w.WriteEndObject();
+                    writer.WriteEndObject();
                 }
             }
-            w.WriteEndArray();
+            writer.WriteEndArray();
             // 다음 선택지가 뽑히는 후보 (새로고침 확률 추정용). 직전 선택지는 다음 새로고침에서 빠진다.
-            w.WriteStartObject("pool");
+            writer.WriteStartObject("pool");
             try
             {
-                WriteChoiceList(w, "new_balls", ui._availNewHeroes);
-                WriteChoiceList(w, "ball_upgrades", ui._availHeroUpgrades);
-                WriteChoiceList(w, "new_passives", ui._availNewPassives);
-                WriteChoiceList(w, "passive_upgrades", ui._availPassiveUpgrades);
-                WriteChoiceList(w, "prev", ui._prevChoices);
-                w.WriteNumber("num_choices", ui._numUpgradeChoices);
-                w.WriteBoolean("banishing", ui._isBanishing);
+                WriteChoiceList(writer, "new_balls", levelUpUI._availNewHeroes);
+                WriteChoiceList(writer, "ball_upgrades", levelUpUI._availHeroUpgrades);
+                WriteChoiceList(writer, "new_passives", levelUpUI._availNewPassives);
+                WriteChoiceList(writer, "passive_upgrades", levelUpUI._availPassiveUpgrades);
+                WriteChoiceList(writer, "prev", levelUpUI._prevChoices);
+                writer.WriteNumber("num_choices", levelUpUI._numUpgradeChoices);
+                writer.WriteBoolean("banishing", levelUpUI._isBanishing);
             }
             catch { }
-            w.WriteEndObject();
-            WriteFuser(w, ui);
-            w.WriteEndObject();
+            writer.WriteEndObject();
+            WriteFuser(writer, levelUpUI);
+            writer.WriteEndObject();
         }
 
         /// <summary>선택지 볼과 게임이 '시너지'로 판정하는 보유 볼 (게임의 카드 설명 '시너지 장비'와 같은 판정).</summary>
-        static void WriteSynergy(Utf8JsonWriter w, HeroInfo choice)
+        static void WriteSynergy(Utf8JsonWriter writer, HeroInfo choice)
         {
-            var b = BattleSaveData.I;
-            if (b == null || b.Heroes == null) return;
-            w.WriteStartArray("synergy");
-            for (int i = 0; i < b.Heroes.Count; i++)
+            var battleData = BattleSaveData.I;
+            if (battleData == null || battleData.Heroes == null) return;
+            writer.WriteStartArray("synergy");
+            for (int index = 0; index < battleData.Heroes.Count; index++)
             {
-                var h = b.Heroes[i];
+                var h = battleData.Heroes[index];
                 if (h == null) continue;
                 try
                 {
                     var owned = h.GetInfo();
                     if (owned != null && (choice.HasSynergy(owned) || owned.HasSynergy(choice)))
-                        w.WriteStringValue(h.Type.ToString());
+                        writer.WriteStringValue(h.Type.ToString());
                 }
                 catch { }
             }
-            w.WriteEndArray();
+            writer.WriteEndArray();
         }
 
         /// <summary>융합 화면: 지금 고를 수 있는 진화와 융합 조합. 게임 자동 선택 AI의 조합 점수도 함께 보낸다.</summary>
-        static void WriteFuser(Utf8JsonWriter w, LevelUpUI ui)
+        static void WriteFuser(Utf8JsonWriter writer, LevelUpUI levelUpUI)
         {
-            w.WriteStartObject("fuser");
-            try { w.WriteBoolean("free_upgrades", ui.HasFreeUpgrades()); } catch { }
-            w.WriteStartArray("options");
-            var opts = ui._fusionChoices;
+            writer.WriteStartObject("fuser");
+            try { writer.WriteBoolean("free_upgrades", levelUpUI.HasFreeUpgrades()); } catch { }
+            writer.WriteStartArray("options");
+            var opts = levelUpUI._fusionChoices;
             if (opts != null)
-                for (int i = 0; i < opts.Count; i++) w.WriteStringValue(((FuserOptionType)opts[i]).ToString());
-            w.WriteEndArray();
+                for (int index = 0; index < opts.Count; index++) writer.WriteStringValue(((FuserOptionType)opts[index]).ToString());
+            writer.WriteEndArray();
 
-            w.WriteStartArray("evos");
-            var merges = ui._availMerges;
+            writer.WriteStartArray("evos");
+            var merges = levelUpUI._availMerges;
             if (merges != null)
             {
-                for (int i = 0; i < merges.Count; i++)
+                for (int loopIndex = 0; loopIndex < merges.Count; loopIndex++)
                 {
-                    var m = merges[i];
-                    w.WriteStartObject();
-                    w.WriteNumber("idx", i);
-                    w.WriteNumber("equip_idx", m.EquipmentIdx);
-                    w.WriteNumber("evo_idx", m.EvoIdx);
-                    WriteInfoType(w, "type", m.Info);
-                    w.WriteEndObject();
+                    var m = merges[loopIndex];
+                    writer.WriteStartObject();
+                    writer.WriteNumber("idx", loopIndex);
+                    writer.WriteNumber("equip_idx", m.EquipmentIdx);
+                    writer.WriteNumber("evo_idx", m.EvoIdx);
+                    WriteInfoType(writer, "type", m.Info);
+                    writer.WriteEndObject();
                 }
             }
-            w.WriteEndArray();
+            writer.WriteEndArray();
 
-            w.WriteStartArray("combos");
-            var combos = ui._availHCombos;
+            writer.WriteStartArray("combos");
+            var combos = levelUpUI._availHCombos;
             var heroes = BattleSaveData.I != null ? BattleSaveData.I.Heroes : null;
             if (combos != null)
             {
-                for (int i = 0; i < combos.Count; i++)
+                for (int loopIndex = 0; loopIndex < combos.Count; loopIndex++)
                 {
-                    var hc = combos[i];
-                    w.WriteStartObject();
-                    w.WriteNumber("idx", i);
-                    w.WriteString("h1", hc.H1.ToString());
-                    w.WriteString("h2", hc.H2.ToString());
-                    w.WriteNumber("idx1", hc.Idx1);
-                    w.WriteNumber("idx2", hc.Idx2);
-                    try { w.WriteNumber("ai_score", ui.GetComboScore(i, hc)); } catch { }
+                    var hc = combos[loopIndex];
+                    writer.WriteStartObject();
+                    writer.WriteNumber("idx", loopIndex);
+                    writer.WriteString("h1", hc.H1.ToString());
+                    writer.WriteString("h2", hc.H2.ToString());
+                    writer.WriteNumber("idx1", hc.Idx1);
+                    writer.WriteNumber("idx2", hc.Idx2);
+                    try { writer.WriteNumber("ai_score", levelUpUI.GetComboScore(loopIndex, hc)); } catch { }
                     try
                     {
                         if (heroes != null && hc.Idx1 >= 0 && hc.Idx2 >= 0 && hc.Idx1 < heroes.Count && hc.Idx2 < heroes.Count)
-                            w.WriteBoolean("bad", heroes[hc.Idx1].IsBadCombo(heroes[hc.Idx2]));
+                            writer.WriteBoolean("bad", heroes[hc.Idx1].IsBadCombo(heroes[hc.Idx2]));
                     }
                     catch { }
-                    w.WriteEndObject();
+                    writer.WriteEndObject();
                 }
             }
-            w.WriteEndArray();
-            w.WriteEndObject();
+            writer.WriteEndArray();
+            writer.WriteEndObject();
         }
 
         /// <summary>게임 번역 표에서 현재 게임 언어 문장을 읽는다 (읽기만 함). 실패하면 빈 문자열.</summary>
@@ -1218,92 +1218,92 @@ namespace BallxPitBridge
             if (string.IsNullOrEmpty(term)) return "";
             try
             {
-                var t = I2.Loc.LocalizationManager.GetTranslation(term, true, 0, true, false, null, null, true);
-                return t ?? "";
+                var typeName = I2.Loc.LocalizationManager.GetTranslation(term, true, 0, true, false, null, null, true);
+                return typeName ?? "";
             }
             catch { return ""; }
         }
 
-        internal static void WriteInfoTypeValue(Utf8JsonWriter w, UpgradeInfo info)
+        internal static void WriteInfoTypeValue(Utf8JsonWriter writer, UpgradeInfo info)
         {
             if (info == null) return;
             var hero = info.TryCast<HeroInfo>();
-            if (hero != null) { w.WriteStringValue(hero.Type.ToString()); return; }
+            if (hero != null) { writer.WriteStringValue(hero.Type.ToString()); return; }
             var passive = info.TryCast<PassiveInfo>();
-            if (passive != null) { w.WriteStringValue(passive.Type.ToString()); return; }
-            w.WriteStringValue(info.Slug);
+            if (passive != null) { writer.WriteStringValue(passive.Type.ToString()); return; }
+            writer.WriteStringValue(info.Slug);
         }
 
-        internal static void WriteInfoType(Utf8JsonWriter w, string name, UpgradeInfo info)
+        internal static void WriteInfoType(Utf8JsonWriter writer, string name, UpgradeInfo info)
         {
-            if (info == null) { w.WriteNull(name); return; }
+            if (info == null) { writer.WriteNull(name); return; }
             var hero = info.TryCast<HeroInfo>();
-            if (hero != null) { w.WriteString(name, hero.Type.ToString()); return; }
+            if (hero != null) { writer.WriteString(name, hero.Type.ToString()); return; }
             var passive = info.TryCast<PassiveInfo>();
-            if (passive != null) { w.WriteString(name, passive.Type.ToString()); return; }
-            w.WriteString(name, info.Slug);
+            if (passive != null) { writer.WriteString(name, passive.Type.ToString()); return; }
+            writer.WriteString(name, info.Slug);
         }
 
         /// <summary>게임 안 레시피 표 (진화 재료). 연결될 때 한 번 보낸다.</summary>
         public static string BuildCatalog()
         {
-            var db = InfoDB.I;
-            if (db == null) return null;
-            using var ms = new MemoryStream();
-            using (var w = new Utf8JsonWriter(ms))
+            var database = InfoDB.I;
+            if (database == null) return null;
+            using var memoryStream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(memoryStream))
             {
-                w.WriteStartObject();
-                w.WriteNumber("v", PipeServer.ProtocolVersion);
-                w.WriteString("plugin", Plugin.Version);
-                w.WriteString("game_version", Application.version);
-                w.WriteStartObject("catalog");
-                try { w.WriteNumber("max_solo_lvl", UpgradeInst<HeroInfo>.kMaxSoloLvl); } catch { }
-                WriteInfos(w, "balls", db.Heroes);
-                WriteInfos(w, "passives", db.Passives);
-                w.WriteStartArray("levels");
+                writer.WriteStartObject();
+                writer.WriteNumber("v", PipeServer.ProtocolVersion);
+                writer.WriteString("plugin", Plugin.Version);
+                writer.WriteString("game_version", Application.version);
+                writer.WriteStartObject("catalog");
+                try { writer.WriteNumber("max_solo_lvl", UpgradeInst<HeroInfo>.kMaxSoloLvl); } catch { }
+                WriteInfos(writer, "balls", database.Heroes);
+                WriteInfos(writer, "passives", database.Passives);
+                writer.WriteStartArray("levels");
                 try
                 {
-                    var lvls = db.Levels;
+                    var lvls = database.Levels;
                     if (lvls != null)
-                        for (int i = 0; i < lvls.Length; i++)
+                        for (int index = 0; index < lvls.Length; index++)
                         {
-                            var li = lvls[i];
+                            var li = lvls[index];
                             if (li == null) continue;
-                            w.WriteStartObject();
-                            w.WriteString("type", li.Type.ToString());
-                            w.WriteStartArray("boss_turns");
-                            if (li.BossTurns != null) for (int k = 0; k < li.BossTurns.Length; k++) w.WriteNumberValue(li.BossTurns[k]);
-                            w.WriteEndArray();
-                            w.WriteStartArray("fuser_turns");
-                            if (li.FuserTurns != null) for (int k = 0; k < li.FuserTurns.Length; k++) w.WriteNumberValue(li.FuserTurns[k]);
-                            w.WriteEndArray();
-                            w.WriteNumber("turn_len", Math.Round(li.DefaultTurnLength, 3));
-                            w.WriteEndObject();
+                            writer.WriteStartObject();
+                            writer.WriteString("type", li.Type.ToString());
+                            writer.WriteStartArray("boss_turns");
+                            if (li.BossTurns != null) for (int componentIndex = 0; componentIndex < li.BossTurns.Length; componentIndex++) writer.WriteNumberValue(li.BossTurns[componentIndex]);
+                            writer.WriteEndArray();
+                            writer.WriteStartArray("fuser_turns");
+                            if (li.FuserTurns != null) for (int partIndex = 0; partIndex < li.FuserTurns.Length; partIndex++) writer.WriteNumberValue(li.FuserTurns[partIndex]);
+                            writer.WriteEndArray();
+                            writer.WriteNumber("turn_len", Math.Round(li.DefaultTurnLength, 3));
+                            writer.WriteEndObject();
                         }
                 }
                 catch { }
-                w.WriteEndArray();
-                w.WriteEndObject();
-                w.WriteEndObject();
+                writer.WriteEndArray();
+                writer.WriteEndObject();
+                writer.WriteEndObject();
             }
-            return Encoding.UTF8.GetString(ms.ToArray());
+            return Encoding.UTF8.GetString(memoryStream.ToArray());
         }
 
-        static void WriteInfos<T>(Utf8JsonWriter w, string name, Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<T> infos)
+        static void WriteInfos<T>(Utf8JsonWriter writer, string name, Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<T> infos)
             where T : UpgradeInfo
         {
-            w.WriteStartArray(name);
+            writer.WriteStartArray(name);
             if (infos != null)
             {
-                for (int i = 0; i < infos.Length; i++)
+                for (int index = 0; index < infos.Length; index++)
                 {
-                    var info = infos[i];
+                    var info = infos[index];
                     if (info == null) continue;
-                    w.WriteStartObject();
-                    WriteInfoType(w, "type", info);
-                    w.WriteBoolean("in_game", info.IsInGame);
-                    WriteLevelProps(w, info);
-                    w.WriteStartArray("recipes");
+                    writer.WriteStartObject();
+                    WriteInfoType(writer, "type", info);
+                    writer.WriteBoolean("in_game", info.IsInGame);
+                    WriteLevelProps(writer, info);
+                    writer.WriteStartArray("recipes");
                     var comps = info.MergeComponents;
                     if (comps != null)
                     {
@@ -1311,43 +1311,43 @@ namespace BallxPitBridge
                         {
                             var recipe = comps[r];
                             if (recipe == null) continue;
-                            w.WriteStartArray();
-                            for (int k = 0; k < recipe.Length; k++)
+                            writer.WriteStartArray();
+                            for (int componentIndex = 0; componentIndex < recipe.Length; componentIndex++)
                             {
-                                var part = recipe[k];
+                                var part = recipe[componentIndex];
                                 if (part == null) continue;
                                 var hero = part.TryCast<HeroInfo>();
                                 var passive = part.TryCast<PassiveInfo>();
-                                w.WriteStringValue(hero != null ? hero.Type.ToString()
+                                writer.WriteStringValue(hero != null ? hero.Type.ToString()
                                     : passive != null ? passive.Type.ToString() : part.Slug);
                             }
-                            w.WriteEndArray();
+                            writer.WriteEndArray();
                         }
                     }
-                    w.WriteEndArray();
-                    w.WriteEndObject();
+                    writer.WriteEndArray();
+                    writer.WriteEndObject();
                 }
             }
-            w.WriteEndArray();
+            writer.WriteEndArray();
         }
 
         /// <summary>레벨별 수치 (피해 최소·최대, 상태 이상 피해 등). 게임 PropertiesByLvl 그대로.</summary>
-        static void WriteLevelProps(Utf8JsonWriter w, UpgradeInfo info)
+        static void WriteLevelProps(Utf8JsonWriter writer, UpgradeInfo info)
         {
             try
             {
                 var byLvl = info.PropertiesByLvl;
                 if (byLvl == null) return;
-                w.WriteStartArray("lvl_props");
+                writer.WriteStartArray("lvl_props");
                 for (int l = 0; l < byLvl.Length; l++)
                 {
-                    w.WriteStartObject();
+                    writer.WriteStartObject();
                     var d = byLvl[l];
                     if (d != null)
-                        foreach (var kv in d) w.WriteNumber(kv.Key.ToString(), kv.Value);
-                    w.WriteEndObject();
+                        foreach (var kv in d) writer.WriteNumber(kv.Key.ToString(), kv.Value);
+                    writer.WriteEndObject();
                 }
-                w.WriteEndArray();
+                writer.WriteEndArray();
             }
             catch { }
         }
@@ -1355,10 +1355,10 @@ namespace BallxPitBridge
         static LevelUpBtn FindButton(Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<LevelUpBtn> btns, int choiceIdx)
         {
             if (btns == null) return null;
-            for (int i = 0; i < btns.Length; i++)
+            for (int index = 0; index < btns.Length; index++)
             {
-                var b = btns[i];
-                if (b != null && b.gameObject.activeInHierarchy && b.ChoiceIdx == choiceIdx) return b;
+                var choiceButton = btns[index];
+                if (choiceButton != null && choiceButton.gameObject.activeInHierarchy && choiceButton.ChoiceIdx == choiceIdx) return choiceButton;
             }
             return null;
         }
@@ -1368,112 +1368,112 @@ namespace BallxPitBridge
 
         /// <summary>UI 요소의 화면 사각형 (게임 클라이언트 영역 픽셀, 왼쪽 위 원점).</summary>
         /// <summary>1.11: 지금 화면에서 도우미 HUD 가 가리면 안 되는 게임 UI 영역 (글자·버튼·목록). 켜져 있는 것만.</summary>
-        static void WriteUiAvoid(Utf8JsonWriter w)
+        static void WriteUiAvoid(Utf8JsonWriter writer)
         {
-            w.WriteStartObject("ui");
+            writer.WriteStartObject("ui");
             try
             {
-                var cs = CharSelectUI.I;
-                if (cs != null && cs.gameObject.activeInHierarchy)
+                var characterSelection = CharSelectUI.I;
+                if (characterSelection != null && characterSelection.gameObject.activeInHierarchy)
                 {
-                    w.WriteString("screen", "char_select");
-                    w.WriteBoolean("fusion", cs.IsSelectingFusion);
-                    w.WriteStartArray("avoid");
-                    RectIfActive(w, cs.CharGrid);           // 캐릭터 목록 (이름표 포함)
-                    RectIfActive(w, cs.WrapperList);
-                    RectIfActive(w, cs.DetailsPanel);       // 선택한 캐릭터 설명
-                    RectIfActive(w, cs.WrapperDetailsBtns);
-                    RectIfActive(w, cs.BtnSelect);
-                    RectIfActive(w, cs.BtnClose);
-                    RectIfActive(w, cs.WrapperLvlItems);
-                    w.WriteEndArray();
+                    writer.WriteString("screen", "char_select");
+                    writer.WriteBoolean("fusion", characterSelection.IsSelectingFusion);
+                    writer.WriteStartArray("avoid");
+                    RectIfActive(writer, characterSelection.CharGrid);           // 캐릭터 목록 (이름표 포함)
+                    RectIfActive(writer, characterSelection.WrapperList);
+                    RectIfActive(writer, characterSelection.DetailsPanel);       // 선택한 캐릭터 설명
+                    RectIfActive(writer, characterSelection.WrapperDetailsBtns);
+                    RectIfActive(writer, characterSelection.BtnSelect);
+                    RectIfActive(writer, characterSelection.BtnClose);
+                    RectIfActive(writer, characterSelection.WrapperLvlItems);
+                    writer.WriteEndArray();
                 }
                 else
                 {
-                    var ui = LevelUpUI.I;
-                    if (ui != null && ui.gameObject.activeInHierarchy && ui.IsActiveOverlay())
+                    var levelUpUI = LevelUpUI.I;
+                    if (levelUpUI != null && levelUpUI.gameObject.activeInHierarchy && levelUpUI.IsActiveOverlay())
                     {
-                        w.WriteString("screen", ui.Type.ToString() == "kFuser" ? "fuser" : "levelup");
-                        w.WriteStartArray("avoid");
-                        RectIfActive(w, ui.PanelSelectionDetails);   // 오른쪽 설명 패널
-                        RectIfActive(w, ui.WrapperCurHeroes);        // 볼 슬롯
-                        RectIfActive(w, ui.WrapperCurPassives);      // 패시브 슬롯
-                        RectIfActive(w, ui.BtnReroll);
-                        RectIfActive(w, ui.BtnBanish);
-                        RectIfActive(w, ui.WrapperFuserOptions);     // 융합 선택지
-                        RectIfActive(w, ui.WrapperSelectEvo);
-                        RectIfActive(w, ui.WrapperSelectCombo);
-                        RectIfActive(w, ui.EvoSelectInfoPanel);
-                        w.WriteEndArray();
+                        writer.WriteString("screen", levelUpUI.Type.ToString() == "kFuser" ? "fuser" : "levelup");
+                        writer.WriteStartArray("avoid");
+                        RectIfActive(writer, levelUpUI.PanelSelectionDetails);   // 오른쪽 설명 패널
+                        RectIfActive(writer, levelUpUI.WrapperCurHeroes);        // 볼 슬롯
+                        RectIfActive(writer, levelUpUI.WrapperCurPassives);      // 패시브 슬롯
+                        RectIfActive(writer, levelUpUI.BtnReroll);
+                        RectIfActive(writer, levelUpUI.BtnBanish);
+                        RectIfActive(writer, levelUpUI.WrapperFuserOptions);     // 융합 선택지
+                        RectIfActive(writer, levelUpUI.WrapperSelectEvo);
+                        RectIfActive(writer, levelUpUI.WrapperSelectCombo);
+                        RectIfActive(writer, levelUpUI.EvoSelectInfoPanel);
+                        writer.WriteEndArray();
                     }
                 }
             }
             catch { }
-            w.WriteEndObject();
+            writer.WriteEndObject();
         }
 
-        static void RectIfActive(Utf8JsonWriter w, GameObject go)
+        static void RectIfActive(Utf8JsonWriter writer, GameObject go)
         {
-            if (go != null) RectIfActive(w, go.transform);
+            if (go != null) RectIfActive(writer, go.transform);
         }
 
-        static void RectIfActive(Utf8JsonWriter w, Component comp)
+        static void RectIfActive(Utf8JsonWriter writer, Component comp)
         {
             if (comp == null || !comp.gameObject.activeInHierarchy) return;
-            var rt = comp.TryCast<RectTransform>() ?? comp.GetComponent<RectTransform>();
-            if (rt == null) return;
-            rt.GetWorldCorners(Corners);
-            var canvas = rt.GetComponentInParent<Canvas>();
-            Camera cam = null;
+            var rectTransform = comp.TryCast<RectTransform>() ?? comp.GetComponent<RectTransform>();
+            if (rectTransform == null) return;
+            rectTransform.GetWorldCorners(Corners);
+            var canvas = rectTransform.GetComponentInParent<Canvas>();
+            Camera camera = null;
             if (canvas != null)
             {
                 canvas = canvas.rootCanvas;
-                if (canvas.renderMode != RenderMode.ScreenSpaceOverlay) cam = canvas.worldCamera;
+                if (canvas.renderMode != RenderMode.ScreenSpaceOverlay) camera = canvas.worldCamera;
             }
             float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
-            for (int i = 0; i < 4; i++)
+            for (int index = 0; index < 4; index++)
             {
-                var p = RectTransformUtility.WorldToScreenPoint(cam, Corners[i]);
-                x0 = Math.Min(x0, p.x); x1 = Math.Max(x1, p.x);
-                y0 = Math.Min(y0, p.y); y1 = Math.Max(y1, p.y);
+                var currentPosition = RectTransformUtility.WorldToScreenPoint(camera, Corners[index]);
+                x0 = Math.Min(x0, currentPosition.x); x1 = Math.Max(x1, currentPosition.x);
+                y0 = Math.Min(y0, currentPosition.y); y1 = Math.Max(y1, currentPosition.y);
             }
             if (x1 - x0 < 2 || y1 - y0 < 2) return;
-            int h = Screen.height;
-            w.WriteStartArray();
-            w.WriteNumberValue((int)Math.Round(x0));
-            w.WriteNumberValue((int)Math.Round(h - y1));
-            w.WriteNumberValue((int)Math.Round(x1 - x0));
-            w.WriteNumberValue((int)Math.Round(y1 - y0));
-            w.WriteEndArray();
+            int currentHeight = Screen.height;
+            writer.WriteStartArray();
+            writer.WriteNumberValue((int)Math.Round(x0));
+            writer.WriteNumberValue((int)Math.Round(currentHeight - y1));
+            writer.WriteNumberValue((int)Math.Round(x1 - x0));
+            writer.WriteNumberValue((int)Math.Round(y1 - y0));
+            writer.WriteEndArray();
         }
 
-        static void WriteRect(Utf8JsonWriter w, string name, Component comp)
+        static void WriteRect(Utf8JsonWriter writer, string name, Component comp)
         {
             if (comp == null) return;
-            var rt = comp.TryCast<RectTransform>() ?? comp.GetComponent<RectTransform>();
-            if (rt == null) return;
-            rt.GetWorldCorners(Corners);
-            var canvas = rt.GetComponentInParent<Canvas>();
-            Camera cam = null;
+            var rectTransform = comp.TryCast<RectTransform>() ?? comp.GetComponent<RectTransform>();
+            if (rectTransform == null) return;
+            rectTransform.GetWorldCorners(Corners);
+            var canvas = rectTransform.GetComponentInParent<Canvas>();
+            Camera camera = null;
             if (canvas != null)
             {
                 canvas = canvas.rootCanvas;
-                if (canvas.renderMode != RenderMode.ScreenSpaceOverlay) cam = canvas.worldCamera;
+                if (canvas.renderMode != RenderMode.ScreenSpaceOverlay) camera = canvas.worldCamera;
             }
             float x0 = float.MaxValue, y0 = float.MaxValue, x1 = float.MinValue, y1 = float.MinValue;
-            for (int i = 0; i < 4; i++)
+            for (int index = 0; index < 4; index++)
             {
-                var p = RectTransformUtility.WorldToScreenPoint(cam, Corners[i]);
-                x0 = Math.Min(x0, p.x); x1 = Math.Max(x1, p.x);
-                y0 = Math.Min(y0, p.y); y1 = Math.Max(y1, p.y);
+                var currentPosition = RectTransformUtility.WorldToScreenPoint(camera, Corners[index]);
+                x0 = Math.Min(x0, currentPosition.x); x1 = Math.Max(x1, currentPosition.x);
+                y0 = Math.Min(y0, currentPosition.y); y1 = Math.Max(y1, currentPosition.y);
             }
-            int h = Screen.height;
-            w.WriteStartArray(name);
-            w.WriteNumberValue((int)Math.Round(x0));
-            w.WriteNumberValue((int)Math.Round(h - y1));
-            w.WriteNumberValue((int)Math.Round(x1 - x0));
-            w.WriteNumberValue((int)Math.Round(y1 - y0));
-            w.WriteEndArray();
+            int currentHeight = Screen.height;
+            writer.WriteStartArray(name);
+            writer.WriteNumberValue((int)Math.Round(x0));
+            writer.WriteNumberValue((int)Math.Round(currentHeight - y1));
+            writer.WriteNumberValue((int)Math.Round(x1 - x0));
+            writer.WriteNumberValue((int)Math.Round(y1 - y0));
+            writer.WriteEndArray();
         }
     }
     /// <summary>기지·누적 기록 (런 밖에서도). 5초마다 읽고 바뀌었을 때만 보낸다.</summary>
@@ -1481,329 +1481,329 @@ namespace BallxPitBridge
     {
         public static string Build()
         {
-            var m = MetaSaveData.I;
-            if (m == null) return null;
-            using var ms = new MemoryStream();
-            using (var w = new Utf8JsonWriter(ms))
+            var saveData = MetaSaveData.I;
+            if (saveData == null) return null;
+            using var memoryStream = new MemoryStream();
+            using (var writer = new Utf8JsonWriter(memoryStream))
             {
-                w.WriteStartObject();
-                w.WriteNumber("v", PipeServer.ProtocolVersion);
-                w.WriteString("plugin", Plugin.Version);
-                w.WriteStartObject("meta");
-                WriteInts(w, "resources", m.NumResources);
-                w.WriteNumber("day", m.CurDay);
-                w.WriteNumber("battles", m.NumBattlesPlayed);
-                w.WriteNumber("boss_waves", m.NumBossWavesCompleted);
-                w.WriteStartObject("lifetime");
-                w.WriteNumber("kills", m.NumKills);
-                w.WriteNumber("play_time", Math.Round(m.PlayTime));
-                w.WriteNumber("harvests", m.NumHarvests);
-                w.WriteNumber("elevator", m.ElevatorLvl);
-                w.WriteNumber("buildings_built", m.NumBuildingsConstructed);
-                w.WriteNumber("boss_blueprints", m.NumBossBlueprintsDropped);
-                w.WriteEndObject();
-                var bm = BuildingMgr.I;
-                if (bm != null)
+                writer.WriteStartObject();
+                writer.WriteNumber("v", PipeServer.ProtocolVersion);
+                writer.WriteString("plugin", Plugin.Version);
+                writer.WriteStartObject("meta");
+                WriteInts(writer, "resources", saveData.NumResources);
+                writer.WriteNumber("day", saveData.CurDay);
+                writer.WriteNumber("battles", saveData.NumBattlesPlayed);
+                writer.WriteNumber("boss_waves", saveData.NumBossWavesCompleted);
+                writer.WriteStartObject("lifetime");
+                writer.WriteNumber("kills", saveData.NumKills);
+                writer.WriteNumber("play_time", Math.Round(saveData.PlayTime));
+                writer.WriteNumber("harvests", saveData.NumHarvests);
+                writer.WriteNumber("elevator", saveData.ElevatorLvl);
+                writer.WriteNumber("buildings_built", saveData.NumBuildingsConstructed);
+                writer.WriteNumber("boss_blueprints", saveData.NumBossBlueprintsDropped);
+                writer.WriteEndObject();
+                var buildingManager = BuildingMgr.I;
+                if (buildingManager != null)
                 {
-                    w.WriteStartObject("bonuses");
-                    w.WriteNumber("banishes", bm.NumBanishes);
-                    w.WriteNumber("free_rerolls", bm.NumFreeRerolls);
-                    w.WriteNumber("revives", bm.NumRevives);
-                    w.WriteNumber("choices", bm.NumLvlUpChoices);
-                    w.WriteNumber("ball_slots", bm.NumBallSlots);
-                    w.WriteNumber("passive_slots", bm.NumPassiveSlots);
-                    w.WriteBoolean("endless", bm.EndlessModeUnlocked);
-                    w.WriteEndObject();
+                    writer.WriteStartObject("bonuses");
+                    writer.WriteNumber("banishes", buildingManager.NumBanishes);
+                    writer.WriteNumber("free_rerolls", buildingManager.NumFreeRerolls);
+                    writer.WriteNumber("revives", buildingManager.NumRevives);
+                    writer.WriteNumber("choices", buildingManager.NumLvlUpChoices);
+                    writer.WriteNumber("ball_slots", buildingManager.NumBallSlots);
+                    writer.WriteNumber("passive_slots", buildingManager.NumPassiveSlots);
+                    writer.WriteBoolean("endless", buildingManager.EndlessModeUnlocked);
+                    writer.WriteEndObject();
                 }
-                WriteBuildings(w, m);
-                WriteHeroStats(w, m);
-                WritePassiveStats(w, m);
-                WriteDiscovery(w, m);
-                if (m.CharWorkerOrder != null)
+                WriteBuildings(writer, saveData);
+                WriteHeroStats(writer, saveData);
+                WritePassiveStats(writer, saveData);
+                WriteDiscovery(writer, saveData);
+                if (saveData.CharWorkerOrder != null)
                 {
-                    w.WriteStartArray("worker_order");
-                    for (int i = 0; i < m.CharWorkerOrder.Count; i++)
-                        w.WriteStringValue(m.CharWorkerOrder[i].ToString());
-                    w.WriteEndArray();
+                    writer.WriteStartArray("worker_order");
+                    for (int index = 0; index < saveData.CharWorkerOrder.Count; index++)
+                        writer.WriteStringValue(saveData.CharWorkerOrder[index].ToString());
+                    writer.WriteEndArray();
                 }
-                w.WriteStartArray("chars");
-                var chars = m.Chars;
+                writer.WriteStartArray("chars");
+                var chars = saveData.Chars;
                 if (chars != null)
-                    for (int i = 0; i < chars.Length; i++)
+                    for (int loopIndex = 0; loopIndex < chars.Length; loopIndex++)
                     {
-                        var c = chars[i];
-                        if (c == null || !c.IsUnlocked) continue;
-                        w.WriteStartObject();
-                        w.WriteString("type", c.Type.ToString());
-                        w.WriteNumber("lvl", c.Lvl);
-                        w.WriteNumber("battles", c.NumBattles);
-                        try { w.WriteString("state", c.CurState.ToString()); } catch { }
-                        try { w.WriteString("work", c.WorkerBuildingType.ToString()); w.WriteNumber("work_id", c.WorkerBuildingId); } catch { }
+                        var character = chars[loopIndex];
+                        if (character == null || !character.IsUnlocked) continue;
+                        writer.WriteStartObject();
+                        writer.WriteString("type", character.Type.ToString());
+                        writer.WriteNumber("lvl", character.Lvl);
+                        writer.WriteNumber("battles", character.NumBattles);
+                        try { writer.WriteString("state", character.CurState.ToString()); } catch { }
+                        try { writer.WriteString("work", character.WorkerBuildingType.ToString()); writer.WriteNumber("work_id", character.WorkerBuildingId); } catch { }
                         try
                         {
-                            var hu = c.HarvestUpgrades;
+                            var hu = character.HarvestUpgrades;
                             if (hu != null && hu.Count > 0)
                             {
-                                w.WriteStartObject("harvest");
-                                for (int k = 0; k < hu.Count; k++) if (hu[k] != null) w.WriteNumber(hu[k].Type.ToString(), hu[k].Lvl);
-                                w.WriteEndObject();
+                                writer.WriteStartObject("harvest");
+                                for (int componentIndex = 0; componentIndex < hu.Count; componentIndex++) if (hu[componentIndex] != null) writer.WriteNumber(hu[componentIndex].Type.ToString(), hu[componentIndex].Lvl);
+                                writer.WriteEndObject();
                             }
                         }
                         catch { }
                         // 강화 레벨과 실제 효과 값을 구분한다. 없는 강화의 기본 반환값도 게임에서 직접 읽는다.
-                        w.WriteStartObject("harvest_bonus");
+                        writer.WriteStartObject("harvest_bonus");
                         foreach (HarvestUpgradeType type in Enum.GetValues(typeof(HarvestUpgradeType)))
                         {
                             if (type.ToString() == "kNum") continue;
-                            try { w.WriteNumber(type.ToString(), c.GetHarvestUpgradeBonusAmt(type)); }
+                            try { writer.WriteNumber(type.ToString(), character.GetHarvestUpgradeBonusAmt(type)); }
                             catch { } // 읽을 수 없는 항목은 0을 만들어 보내지 않는다.
                         }
-                        w.WriteEndObject();
+                        writer.WriteEndObject();
                         try
                         {
-                            if (c.BonusStats != null)
+                            if (character.BonusStats != null)
                             {
-                                w.WriteStartArray("bonus_stats");
-                                for (int k = 0; k < c.BonusStats.Length; k++) w.WriteNumberValue(c.BonusStats[k]);
-                                w.WriteEndArray();
+                                writer.WriteStartArray("bonus_stats");
+                                for (int partIndex = 0; partIndex < character.BonusStats.Length; partIndex++) writer.WriteNumberValue(character.BonusStats[partIndex]);
+                                writer.WriteEndArray();
                             }
                         }
                         catch { }
-                        w.WriteEndObject();
+                        writer.WriteEndObject();
                     }
-                w.WriteEndArray();
-                WriteLevels(w, m);
-                w.WriteEndObject();
-                w.WriteEndObject();
+                writer.WriteEndArray();
+                WriteLevels(writer, saveData);
+                writer.WriteEndObject();
+                writer.WriteEndObject();
             }
-            return Encoding.UTF8.GetString(ms.ToArray());
+            return Encoding.UTF8.GetString(memoryStream.ToArray());
         }
 
         /// <summary>지역별: 해금·완료, 무한의 심연 최고 기록, 이 지역을 깬 캐릭터, 아직 못 얻은 설계도.</summary>
-        static void WriteLevels(Utf8JsonWriter w, MetaSaveData m)
+        static void WriteLevels(Utf8JsonWriter writer, MetaSaveData saveData)
         {
             var have = new HashSet<int>();
-            var bps = m.Blueprints;
+            var bps = saveData.Blueprints;
             if (bps != null)
-                for (int i = 0; i < bps.Length; i++)
-                    if (bps[i] != null && bps[i].HasBlueprint) have.Add((int)bps[i].TgtBuilding);
-            var db = InfoDB.I;
-            w.WriteStartArray("levels");
-            var lv = m.LvlData;
+                for (int index = 0; index < bps.Length; index++)
+                    if (bps[index] != null && bps[index].HasBlueprint) have.Add((int)bps[index].TgtBuilding);
+            var database = InfoDB.I;
+            writer.WriteStartArray("levels");
+            var lv = saveData.LvlData;
             if (lv != null)
-                for (int i = 0; i < lv.Length; i++)
+                for (int loopIndex = 0; loopIndex < lv.Length; loopIndex++)
                 {
-                    var d = lv[i];
+                    var d = lv[loopIndex];
                     if (d == null) continue;
-                    w.WriteStartObject();
-                    w.WriteString("type", d.Type.ToString());
-                    try { w.WriteString("name", d.GetInfo().GetNameTranslation(false)); } catch { }
-                    try { w.WriteBoolean("unlocked", d.IsUnlocked()); } catch { }
-                    w.WriteBoolean("done", d.DidComplete);
-                    w.WriteNumber("attempts", d.NumAttempts);
-                    w.WriteNumber("best_endless", d.BestEndlessDepth);
-                    w.WriteNumber("blueprint_attempts", d.NumBlueprintDropAttempts);
+                    writer.WriteStartObject();
+                    writer.WriteString("type", d.Type.ToString());
+                    try { writer.WriteString("name", d.GetInfo().GetNameTranslation(false)); } catch { }
+                    try { writer.WriteBoolean("unlocked", d.IsUnlocked()); } catch { }
+                    writer.WriteBoolean("done", d.DidComplete);
+                    writer.WriteNumber("attempts", d.NumAttempts);
+                    writer.WriteNumber("best_endless", d.BestEndlessDepth);
+                    writer.WriteNumber("blueprint_attempts", d.NumBlueprintDropAttempts);
                     // 캐릭터별 최고 난이도·시도 횟수 원본 (배열 위치 = CharType). DidCompleteWithChar 는 실제 화면과 달랐다.
                     try
                     {
                         if (d.BestDifficultyByChar != null)
                         {
-                            w.WriteStartArray("best_diff_by_char");
-                            for (int k = 0; k < d.BestDifficultyByChar.Length; k++) w.WriteNumberValue(d.BestDifficultyByChar[k]);
-                            w.WriteEndArray();
+                            writer.WriteStartArray("best_diff_by_char");
+                            for (int componentIndex = 0; componentIndex < d.BestDifficultyByChar.Length; componentIndex++) writer.WriteNumberValue(d.BestDifficultyByChar[componentIndex]);
+                            writer.WriteEndArray();
                         }
                         if (d.NumAttemptsByChar != null)
                         {
-                            w.WriteStartArray("attempts_by_char");
-                            for (int k = 0; k < d.NumAttemptsByChar.Length; k++) w.WriteNumberValue(d.NumAttemptsByChar[k]);
-                            w.WriteEndArray();
+                            writer.WriteStartArray("attempts_by_char");
+                            for (int partIndex = 0; partIndex < d.NumAttemptsByChar.Length; partIndex++) writer.WriteNumberValue(d.NumAttemptsByChar[partIndex]);
+                            writer.WriteEndArray();
                         }
                     }
                     catch { }
-                    w.WriteStartArray("blueprints_left");
+                    writer.WriteStartArray("blueprints_left");
                     try
                     {
-                        var byLvl = db != null ? db.BlueprintsByLevel : null;
+                        var byLvl = database != null ? database.BlueprintsByLevel : null;
                         int li = (int)d.Type;
                         if (byLvl != null && li >= 0 && li < byLvl.Length && byLvl[li] != null)
                             for (int b = 0; b < byLvl[li].Count; b++)
                             {
                                 var info = byLvl[li][b];
-                                if (info != null && !have.Contains((int)info.Type)) w.WriteStringValue(info.Type.ToString());
+                                if (info != null && !have.Contains((int)info.Type)) writer.WriteStringValue(info.Type.ToString());
                             }
                     }
                     catch { }
-                    w.WriteEndArray();
-                    w.WriteEndObject();
+                    writer.WriteEndArray();
+                    writer.WriteEndObject();
                 }
-            w.WriteEndArray();
+            writer.WriteEndArray();
         }
 
-        static void WriteInts(Utf8JsonWriter w, string name, Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<int> a)
+        static void WriteInts(Utf8JsonWriter writer, string name, Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<int> a)
         {
-            w.WriteStartArray(name);
-            if (a != null) for (int i = 0; i < a.Length; i++) w.WriteNumberValue(a[i]);
-            w.WriteEndArray();
+            writer.WriteStartArray(name);
+            if (a != null) for (int index = 0; index < a.Length; index++) writer.WriteNumberValue(a[index]);
+            writer.WriteEndArray();
         }
 
-        static void WriteCost(Utf8JsonWriter w, string name, Cost c)
+        static void WriteCost(Utf8JsonWriter writer, string name, Cost currentCost)
         {
-            if (c == null) return;
-            WriteInts(w, name, c.Num);
+            if (currentCost == null) return;
+            WriteInts(writer, name, currentCost.Num);
         }
 
-        static void WriteBuildings(Utf8JsonWriter w, MetaSaveData m)
+        static void WriteBuildings(Utf8JsonWriter writer, MetaSaveData saveData)
         {
             var built = new HashSet<int>();
-            w.WriteStartArray("buildings");
-            var list = m.Buildings;
+            writer.WriteStartArray("buildings");
+            var list = saveData.Buildings;
             if (list != null)
-                for (int i = 0; i < list.Count; i++)
+                for (int index = 0; index < list.Count; index++)
                 {
-                    var b = list[i];
-                    if (b == null) continue;
-                    built.Add((int)b.Type);
-                    w.WriteStartObject();
-                    w.WriteString("type", b.Type.ToString());
-                    w.WriteNumber("lvl", b.UpgradeLvl);
-                    w.WriteString("state", b.CurState.ToString());
+                    var building = list[index];
+                    if (building == null) continue;
+                    built.Add((int)building.Type);
+                    writer.WriteStartObject();
+                    writer.WriteString("type", building.Type.ToString());
+                    writer.WriteNumber("lvl", building.UpgradeLvl);
+                    writer.WriteString("state", building.CurState.ToString());
                     try
                     {
-                        bool can = b.CanBeUpgraded();
-                        w.WriteBoolean("can_upgrade", can);
-                        if (can) WriteCost(w, "upgrade_cost", b.GetUpgradeCost());
+                        bool can = building.CanBeUpgraded();
+                        writer.WriteBoolean("can_upgrade", can);
+                        if (can) WriteCost(writer, "upgrade_cost", building.GetUpgradeCost());
                     }
                     catch { }
-                    w.WriteEndObject();
+                    writer.WriteEndObject();
                 }
-            w.WriteEndArray();
+            writer.WriteEndArray();
             // 설계도는 있는데 아직 안 지은 건물 + 짓는 비용
             var infos = new Dictionary<int, BuildingInfo>();
-            var db = InfoDB.I;
-            if (db != null && db.Buildings != null)
-                for (int i = 0; i < db.Buildings.Length; i++)
-                    if (db.Buildings[i] != null) infos[(int)db.Buildings[i].Type] = db.Buildings[i];
-            w.WriteStartArray("blueprints");
-            var bps = m.Blueprints;
+            var database = InfoDB.I;
+            if (database != null && database.Buildings != null)
+                for (int loopIndex = 0; loopIndex < database.Buildings.Length; loopIndex++)
+                    if (database.Buildings[loopIndex] != null) infos[(int)database.Buildings[loopIndex].Type] = database.Buildings[loopIndex];
+            writer.WriteStartArray("blueprints");
+            var bps = saveData.Blueprints;
             if (bps != null)
-                for (int i = 0; i < bps.Length; i++)
+                for (int loopIndex = 0; loopIndex < bps.Length; loopIndex++)
                 {
-                    var bp = bps[i];
+                    var bp = bps[loopIndex];
                     if (bp == null || !bp.HasBlueprint || built.Contains((int)bp.TgtBuilding)) continue;
-                    w.WriteStartObject();
-                    w.WriteString("type", bp.TgtBuilding.ToString());
+                    writer.WriteStartObject();
+                    writer.WriteString("type", bp.TgtBuilding.ToString());
                     if (infos.TryGetValue((int)bp.TgtBuilding, out var info))
                     {
-                        w.WriteString("slug", info.Slug);
-                        w.WriteString("cat", info.Cat.ToString());
-                        WriteCost(w, "cost", info.BuildCost);
-                        try { w.WriteNumber("tw", info.TileSize.x); w.WriteNumber("th", info.TileSize.y); } catch { }
-                        try { w.WriteString("col", info.ColType.ToString()); } catch { }
-                        try { w.WriteString("stat", info.GetStatBonus().ToString()); } catch { }
+                        writer.WriteString("slug", info.Slug);
+                        writer.WriteString("cat", info.Cat.ToString());
+                        WriteCost(writer, "cost", info.BuildCost);
+                        try { writer.WriteNumber("tw", info.TileSize.x); writer.WriteNumber("th", info.TileSize.y); } catch { }
+                        try { writer.WriteString("col", info.ColType.ToString()); } catch { }
+                        try { writer.WriteString("stat", info.GetStatBonus().ToString()); } catch { }
                     }
-                    w.WriteEndObject();
+                    writer.WriteEndObject();
                 }
-            w.WriteEndArray();
+            writer.WriteEndArray();
             // 이미 지은 반복 건설형도 포함한다. 원래 blueprints 는 미건설 설계도 목록으로 유지한다.
             // 비용·추가 건설 가능 여부는 게임 getter 결과를 그대로 읽는다.
-            w.WriteStartArray("build_options");
+            writer.WriteStartArray("build_options");
             if (bps != null)
-                for (int i = 0; i < bps.Length; i++)
+                for (int loopIndex = 0; loopIndex < bps.Length; loopIndex++)
                 {
-                    var bp = bps[i];
+                    var bp = bps[loopIndex];
                     if (bp == null || !bp.HasBlueprint || !infos.TryGetValue((int)bp.TgtBuilding, out var info)) continue;
                     bool included, more;
                     Cost cost;
                     try { included = info.IsInGame && info.IncludeInGame(); more = info.CanBuildMore(); cost = info.GetCost(); }
                     catch { continue; }
                     if (!included || !more) continue;
-                    w.WriteStartObject();
-                    w.WriteString("type", info.Type.ToString());
-                    w.WriteString("slug", info.Slug);
-                    w.WriteString("cat", info.Cat.ToString());
-                    w.WriteBoolean("can_build_more", more);
-                    WriteCost(w, "cost", cost);
-                    WriteCost(w, "base_cost", info.BuildCost);
-                    w.WriteNumber("tw", info.TileSize.x);
-                    w.WriteNumber("th", info.TileSize.y);
-                    try { w.WriteNumber("max_instances", info.GetMaxBuildingInst()); } catch { }
-                    PhysicsSnapshot.WriteRange(w, info, info.TileSize, 0);
-                    try { if (cost != null) w.WriteBoolean("affordable", cost.CanAfford()); } catch { }
-                    w.WriteEndObject();
+                    writer.WriteStartObject();
+                    writer.WriteString("type", info.Type.ToString());
+                    writer.WriteString("slug", info.Slug);
+                    writer.WriteString("cat", info.Cat.ToString());
+                    writer.WriteBoolean("can_build_more", more);
+                    WriteCost(writer, "cost", cost);
+                    WriteCost(writer, "base_cost", info.BuildCost);
+                    writer.WriteNumber("tw", info.TileSize.x);
+                    writer.WriteNumber("th", info.TileSize.y);
+                    try { writer.WriteNumber("max_instances", info.GetMaxBuildingInst()); } catch { }
+                    PhysicsSnapshot.WriteRange(writer, info, info.TileSize, 0);
+                    try { if (cost != null) writer.WriteBoolean("affordable", cost.CanAfford()); } catch { }
+                    writer.WriteEndObject();
                 }
-            w.WriteEndArray();
+            writer.WriteEndArray();
         }
 
-        static void WriteHeroStats(Utf8JsonWriter w, MetaSaveData m)
+        static void WriteHeroStats(Utf8JsonWriter writer, MetaSaveData saveData)
         {
-            w.WriteStartObject("ball_stats");
-            var a = m.HeroStats;
+            writer.WriteStartObject("ball_stats");
+            var a = saveData.HeroStats;
             if (a != null)
-                for (int i = 0; i < a.Length; i++)
+                for (int index = 0; index < a.Length; index++)
                 {
-                    var s = a[i];
+                    var s = a[index];
                     if (s == null || (s.NumObtained == 0 && s.NumNewRejected == 0)) continue;
-                    w.WriteStartObject(((HeroType)i).ToString());
-                    w.WriteNumber("obtained", s.NumObtained);
-                    w.WriteNumber("upgraded", s.NumUpgraded);
-                    w.WriteNumber("rejected", s.NumNewRejected);
-                    w.WriteNumber("completed", s.NumCompletedRuns);
-                    w.WriteNumber("damage", s.TotalDamage);
-                    w.WriteNumber("launches", s.TotalLaunches);
-                    w.WriteEndObject();
+                    writer.WriteStartObject(((HeroType)index).ToString());
+                    writer.WriteNumber("obtained", s.NumObtained);
+                    writer.WriteNumber("upgraded", s.NumUpgraded);
+                    writer.WriteNumber("rejected", s.NumNewRejected);
+                    writer.WriteNumber("completed", s.NumCompletedRuns);
+                    writer.WriteNumber("damage", s.TotalDamage);
+                    writer.WriteNumber("launches", s.TotalLaunches);
+                    writer.WriteEndObject();
                 }
-            w.WriteEndObject();
+            writer.WriteEndObject();
         }
 
         /// <summary>등장 가능 여부와 백과사전 발견 여부를 별도로 읽는다. 0회도 명시해 미확인과 구분한다.</summary>
-        static void WriteDiscovery(Utf8JsonWriter w, MetaSaveData m)
+        static void WriteDiscovery(Utf8JsonWriter writer, MetaSaveData saveData)
         {
             var heroes = InfoDB.I?.Heroes;
-            var stats = m.HeroStats;
+            var stats = saveData.HeroStats;
             if (heroes == null || stats == null) return;
-            w.WriteStartObject("discovery");
-            for (int i = 0; i < heroes.Length; i++)
+            writer.WriteStartObject("discovery");
+            for (int index = 0; index < heroes.Length; index++)
             {
-                var info = heroes[i];
+                var info = heroes[index];
                 if (info == null) continue;
-                int idx = (int)info.Type;
-                if (idx < 0 || idx >= stats.Length || stats[idx] == null) continue;
-                var stat = stats[idx];
-                w.WriteStartObject(info.Type.ToString());
-                w.WriteNumber("obtained", stat.NumObtained);
-                w.WriteBoolean("in_game", info.IncludeInGame());
-                w.WriteBoolean("available", info.IsUnlocked());
-                w.WriteBoolean("merged", info.IsMerged());
+                int indexIdx = (int)info.Type;
+                if (indexIdx < 0 || indexIdx >= stats.Length || stats[indexIdx] == null) continue;
+                var stat = stats[indexIdx];
+                writer.WriteStartObject(info.Type.ToString());
+                writer.WriteNumber("obtained", stat.NumObtained);
+                writer.WriteBoolean("in_game", info.IncludeInGame());
+                writer.WriteBoolean("available", info.IsUnlocked());
+                writer.WriteBoolean("merged", info.IsMerged());
                 var combos = stat.NumCombos;
                 if (combos != null)
                 {
-                    w.WriteStartObject("combos");
-                    for (int j = 0; j < combos.Length; j++)
-                        if (combos[j] > 0) w.WriteNumber(((HeroType)j).ToString(), combos[j]);
-                    w.WriteEndObject();
+                    writer.WriteStartObject("combos");
+                    for (int otherIndex = 0; otherIndex < combos.Length; otherIndex++)
+                        if (combos[otherIndex] > 0) writer.WriteNumber(((HeroType)otherIndex).ToString(), combos[otherIndex]);
+                    writer.WriteEndObject();
                 }
-                w.WriteEndObject();
+                writer.WriteEndObject();
             }
-            w.WriteEndObject();
+            writer.WriteEndObject();
         }
 
-        static void WritePassiveStats(Utf8JsonWriter w, MetaSaveData m)
+        static void WritePassiveStats(Utf8JsonWriter writer, MetaSaveData saveData)
         {
-            w.WriteStartObject("passive_stats");
-            var a = m.PassiveStats;
+            writer.WriteStartObject("passive_stats");
+            var a = saveData.PassiveStats;
             if (a != null)
-                for (int i = 0; i < a.Length; i++)
+                for (int index = 0; index < a.Length; index++)
                 {
-                    var s = a[i];
+                    var s = a[index];
                     if (s == null || (s.NumObtained == 0 && s.NumNewRejected == 0)) continue;
-                    w.WriteStartObject(((PassiveType)i).ToString());
-                    w.WriteNumber("obtained", s.NumObtained);
-                    w.WriteNumber("upgraded", s.NumUpgraded);
-                    w.WriteNumber("rejected", s.NumNewRejected);
-                    w.WriteNumber("completed", s.NumCompletedRuns);
-                    w.WriteEndObject();
+                    writer.WriteStartObject(((PassiveType)index).ToString());
+                    writer.WriteNumber("obtained", s.NumObtained);
+                    writer.WriteNumber("upgraded", s.NumUpgraded);
+                    writer.WriteNumber("rejected", s.NumNewRejected);
+                    writer.WriteNumber("completed", s.NumCompletedRuns);
+                    writer.WriteEndObject();
                 }
-            w.WriteEndObject();
+            writer.WriteEndObject();
         }
     }
 }

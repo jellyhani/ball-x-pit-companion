@@ -4,6 +4,7 @@
 전투 시간이 없으면(옛 플러그인) 스냅샷의 실시간 시각으로 대신한다.
 진화·융합으로 볼 종류가 바뀌면 새 볼은 처음 본 시점부터 센다.
 """
+
 from __future__ import annotations
 
 from collections import deque
@@ -15,7 +16,7 @@ from typing import Deque, Dict, List, Optional, Tuple
 class DpsRow:
     item_id: str
     dps: float
-    share: float          # 이번 창 전체 피해 중 비율
+    share: float  # 이번 창 전체 피해 중 비율
 
 
 class DpsTracker:
@@ -28,7 +29,7 @@ class DpsTracker:
 
     def add(self, t: float, damage: Dict[str, int]):
         if self._samples and t < self._samples[-1][0]:
-            self.reset()            # 시간이 되돌아감 = 새 런
+            self.reset()  # 시간이 되돌아감 = 새 런
         if self._samples and t == self._samples[-1][0]:
             self._samples[-1] = (t, dict(damage))
         else:
@@ -43,7 +44,7 @@ class DpsTracker:
             return [], 0.0
         t1, now = self._samples[-1]
         rates: Dict[str, float] = {}
-        for item, v in now.items():
+        for item, value in now.items():
             if not item.startswith(kind_prefix):
                 continue
             # 이 항목이 처음 나타난 표본(창 안)부터 잰다
@@ -57,8 +58,8 @@ class DpsTracker:
             dt = t1 - first[0]
             if dt <= 0.5:
                 continue
-            rates[item] = max(0.0, (v - first[1]) / dt)
+            rates[item] = max(0.0, (value - first[1]) / dt)
         total = sum(rates.values())
-        rows = [DpsRow(i, r, r / total if total else 0.0) for i, r in rates.items()]
+        rows = [DpsRow(index, r, r / total if total else 0.0) for index, r in rates.items()]
         rows.sort(key=lambda r: -r.dps)
         return rows, total

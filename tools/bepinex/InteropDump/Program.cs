@@ -5,74 +5,74 @@ using System.Collections.Immutable;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 
-var path = args[0];
-var patterns = args.Skip(1).Select(p => p.ToLowerInvariant()).ToArray();
-using var fs = File.OpenRead(path);
-using var pe = new PEReader(fs);
-var md = pe.GetMetadataReader();
-var prov = new NameProvider(md);
-foreach (var th in md.TypeDefinitions)
+var assemblyPath = args[0];
+var patterns = args.Skip(1).Select(pattern => pattern.ToLowerInvariant()).ToArray();
+using var assemblyStream = File.OpenRead(assemblyPath);
+using var assemblyReader = new PEReader(assemblyStream);
+var metadataReader = assemblyReader.GetMetadataReader();
+var typeNameProvider = new NameProvider(metadataReader);
+foreach (var typeHandle in metadataReader.TypeDefinitions)
 {
-    var t = md.GetTypeDefinition(th);
-    var name = md.GetString(t.Name);
-    var ns = md.GetString(t.Namespace);
-    var full = string.IsNullOrEmpty(ns) ? name : ns + "." + name;
-    if (patterns.Length > 0 && !patterns.Any(p => full.ToLowerInvariant().Contains(p))) continue;
+    var typeDefinition = metadataReader.GetTypeDefinition(typeHandle);
+    var typeName = metadataReader.GetString(typeDefinition.Name);
+    var namespaceName = metadataReader.GetString(typeDefinition.Namespace);
+    var fullName = string.IsNullOrEmpty(namespaceName) ? typeName : namespaceName + "." + typeName;
+    if (patterns.Length > 0 && !patterns.Any(pattern => fullName.ToLowerInvariant().Contains(pattern))) continue;
     string baseName = "";
-    if (!t.BaseType.IsNil && t.BaseType.Kind == HandleKind.TypeReference)
-        baseName = md.GetString(md.GetTypeReference((TypeReferenceHandle)t.BaseType).Name);
-    else if (!t.BaseType.IsNil && t.BaseType.Kind == HandleKind.TypeDefinition)
-        baseName = md.GetString(md.GetTypeDefinition((TypeDefinitionHandle)t.BaseType).Name);
-    Console.WriteLine($"TYPE {full} : {baseName}");
-    foreach (var fh in t.GetFields())
+    if (!typeDefinition.BaseType.IsNil && typeDefinition.BaseType.Kind == HandleKind.TypeReference)
+        baseName = metadataReader.GetString(metadataReader.GetTypeReference((TypeReferenceHandle)typeDefinition.BaseType).Name);
+    else if (!typeDefinition.BaseType.IsNil && typeDefinition.BaseType.Kind == HandleKind.TypeDefinition)
+        baseName = metadataReader.GetString(metadataReader.GetTypeDefinition((TypeDefinitionHandle)typeDefinition.BaseType).Name);
+    Console.WriteLine($"TYPE {fullName} : {baseName}");
+    foreach (var fieldHandle in typeDefinition.GetFields())
     {
-        var f = md.GetFieldDefinition(fh);
-        var fn = md.GetString(f.Name);
-        if (fn == "value__" || fn.StartsWith("NativeFieldInfoPtr") || fn.StartsWith("NativeMethodInfoPtr")) continue;
-        if (baseName == "Enum") { Console.WriteLine($"  enum {fn}"); continue; }
-        string ft;
-        try { ft = f.DecodeSignature(prov, null); } catch { ft = "?"; }
-        Console.WriteLine($"  field {ft} {fn}");
+        var field = metadataReader.GetFieldDefinition(fieldHandle);
+        var fieldName = metadataReader.GetString(field.Name);
+        if (fieldName == "value__" || fieldName.StartsWith("NativeFieldInfoPtr") || fieldName.StartsWith("NativeMethodInfoPtr")) continue;
+        if (baseName == "Enum") { Console.WriteLine($"  enum {fieldName}"); continue; }
+        string fieldType;
+        try { fieldType = field.DecodeSignature(typeNameProvider, null); } catch { fieldType = "?"; }
+        Console.WriteLine($"  field {fieldType} {fieldName}");
     }
-    foreach (var ph in t.GetProperties())
+    foreach (var propertyHandle in typeDefinition.GetProperties())
     {
-        var p = md.GetPropertyDefinition(ph);
-        string pt;
-        try { pt = p.DecodeSignature(prov, null).ReturnType; } catch { pt = "?"; }
-        Console.WriteLine($"  prop {pt} {md.GetString(p.Name)}");
+        var property = metadataReader.GetPropertyDefinition(propertyHandle);
+        string propertyType;
+        try { propertyType = property.DecodeSignature(typeNameProvider, null).ReturnType; } catch { propertyType = "?"; }
+        Console.WriteLine($"  prop {propertyType} {metadataReader.GetString(property.Name)}");
     }
-    foreach (var mh in t.GetMethods())
+    foreach (var methodHandle in typeDefinition.GetMethods())
     {
-        var m = md.GetMethodDefinition(mh);
-        var mn = md.GetString(m.Name);
-        if (mn.StartsWith("get_") || mn.StartsWith("set_") || mn == ".ctor" || mn == ".cctor") continue;
-        string sig;
+        var method = metadataReader.GetMethodDefinition(methodHandle);
+        var methodName = metadataReader.GetString(method.Name);
+        if (methodName.StartsWith("get_") || methodName.StartsWith("set_") || methodName == ".ctor" || methodName == ".cctor") continue;
+        string signatureText;
         try
         {
-            var s = m.DecodeSignature(prov, null);
-            sig = $"{s.ReturnType} {mn}({string.Join(", ", s.ParameterTypes)})";
+            var signature = method.DecodeSignature(typeNameProvider, null);
+            signatureText = $"{signature.ReturnType} {methodName}({string.Join(", ", signature.ParameterTypes)})";
         }
-        catch { sig = mn; }
-        Console.WriteLine($"  meth {sig}");
+        catch { signatureText = methodName; }
+        Console.WriteLine($"  meth {signatureText}");
     }
 }
 
 sealed class NameProvider : ISignatureTypeProvider<string, object>
 {
-    readonly MetadataReader _md;
-    public NameProvider(MetadataReader md) { _md = md; }
-    public string GetPrimitiveType(PrimitiveTypeCode c) => c.ToString().ToLowerInvariant();
-    public string GetTypeFromDefinition(MetadataReader r, TypeDefinitionHandle h, byte k) => r.GetString(r.GetTypeDefinition(h).Name);
-    public string GetTypeFromReference(MetadataReader r, TypeReferenceHandle h, byte k) => r.GetString(r.GetTypeReference(h).Name);
-    public string GetTypeFromSpecification(MetadataReader r, object ctx, TypeSpecificationHandle h, byte k) => "spec";
-    public string GetSZArrayType(string e) => e + "[]";
-    public string GetArrayType(string e, ArrayShape s) => e + "[,]";
-    public string GetByReferenceType(string e) => "ref " + e;
-    public string GetPointerType(string e) => e + "*";
-    public string GetGenericInstantiation(string g, ImmutableArray<string> a) => g.Split('`')[0] + "<" + string.Join(",", a) + ">";
-    public string GetGenericTypeParameter(object ctx, int i) => "T" + i;
-    public string GetGenericMethodParameter(object ctx, int i) => "M" + i;
-    public string GetFunctionPointerType(MethodSignature<string> s) => "fnptr";
-    public string GetModifiedType(string m, string u, bool req) => u;
-    public string GetPinnedType(string e) => e;
+    readonly MetadataReader _metadataReader;
+    public NameProvider(MetadataReader metadataReader) { _metadataReader = metadataReader; }
+    public string GetPrimitiveType(PrimitiveTypeCode typeCode) => typeCode.ToString().ToLowerInvariant();
+    public string GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind) => reader.GetString(reader.GetTypeDefinition(handle).Name);
+    public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind) => reader.GetString(reader.GetTypeReference(handle).Name);
+    public string GetTypeFromSpecification(MetadataReader reader, object genericContext, TypeSpecificationHandle handle, byte rawTypeKind) => "spec";
+    public string GetSZArrayType(string elementType) => elementType + "[]";
+    public string GetArrayType(string elementType, ArrayShape shape) => elementType + "[,]";
+    public string GetByReferenceType(string elementType) => "ref " + elementType;
+    public string GetPointerType(string elementType) => elementType + "*";
+    public string GetGenericInstantiation(string genericType, ImmutableArray<string> typeArguments) => genericType.Split('`')[0] + "<" + string.Join(",", typeArguments) + ">";
+    public string GetGenericTypeParameter(object genericContext, int index) => "T" + index;
+    public string GetGenericMethodParameter(object genericContext, int index) => "M" + index;
+    public string GetFunctionPointerType(MethodSignature<string> signature) => "fnptr";
+    public string GetModifiedType(string modifierType, string unmodifiedType, bool isRequired) => unmodifiedType;
+    public string GetPinnedType(string elementType) => elementType;
 }

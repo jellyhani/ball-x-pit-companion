@@ -10,6 +10,7 @@
 옮기기: 크기·방향이 같은 두 건물 자리 바꾸기, 또는 빈 자리로 옮기기(기지 타일 격자 기준, 실제 건물 58개가
 격자에 정확히 맞는 것 확인). 새 건물: 지을 수 있는 설계도 중 범위 효과 건물은 효과가 가장 큰 빈 자리를 권한다.
 """
+
 from __future__ import annotations
 
 import math
@@ -32,8 +33,14 @@ EFFECTS: Dict[str, Tuple[int, float, str]] = {
     "kCozyHome": (WOOD, 0.6, tr("근처 숲에서 주기적으로 채집")),
     "kHovel": (STONE, 0.6, tr("근처 바위에서 주기적으로 채집")),
 }
-TILE_TYPES = {"kWheatField": WHEAT, "kDenseWheat": WHEAT, "kForest": WOOD, "kGrandTree": WOOD,
-              "kBoulder": STONE, "kGraniteSlab": STONE}
+TILE_TYPES = {
+    "kWheatField": WHEAT,
+    "kDenseWheat": WHEAT,
+    "kForest": WOOD,
+    "kGrandTree": WOOD,
+    "kBoulder": STONE,
+    "kGraniteSlab": STONE,
+}
 
 
 @dataclass
@@ -63,13 +70,14 @@ class Swap:
 @dataclass
 class Move:
     """빈 자리로 옮기기. to = 옮긴 뒤 중심 (월드 좌표)."""
+
     a: int
     to: Tuple[float, float]
     gain: float
     reason: str
-    b: int = -1              # 자리 바꾸기와 같은 모양으로 다루기 위한 자리 (-1 = 빈 자리)
-    target: int = -1         # 길 열기: 이 옮기기로 작업자가 닿게 되는 미완성 건물 id (gain = 예상 타격 수)
-    rot: int = -1            # 옮기면서 회전할 때 목표 회전 값 (게임 rot, +1 = 시계 방향 90°). -1 = 회전 없음
+    b: int = -1  # 자리 바꾸기와 같은 모양으로 다루기 위한 자리 (-1 = 빈 자리)
+    target: int = -1  # 길 열기: 이 옮기기로 작업자가 닿게 되는 미완성 건물 id (gain = 예상 타격 수)
+    rot: int = -1  # 옮기면서 회전할 때 목표 회전 값 (게임 rot, +1 = 시계 방향 90°). -1 = 회전 없음
 
 
 class MoveSequence(list):
@@ -86,7 +94,7 @@ class NewSpot:
     type: str
     center: Tuple[float, float]
     size: Tuple[int, int]
-    covered: int             # 범위 안의 맞는 자원 타일 수
+    covered: int  # 범위 안의 맞는 자원 타일 수
     reason: str
 
 
@@ -100,22 +108,28 @@ class LayoutPlan:
     harvest_before: Optional[List[int]] = None
     harvest_after: Optional[List[int]] = None
     new_spots: List[NewSpot] = field(default_factory=list)
-    final: Dict[int, Tuple[float, float]] = field(default_factory=dict)   # 전체 재배치: 건물별 목표 중심
-    final_rot: Dict[int, int] = field(default_factory=dict)               # 건물별 목표 회전 (게임 rot 값)
+    final: Dict[int, Tuple[float, float]] = field(default_factory=dict)  # 전체 재배치: 건물별 목표 중심
+    final_rot: Dict[int, int] = field(default_factory=dict)  # 건물별 목표 회전 (게임 rot 값)
     notes: List[str] = field(default_factory=list)
-    reach_after: Dict[int, int] = field(default_factory=dict)   # 최적 배치 뒤 미완성 건물별 최대 타격 수 (0 = 여전히 안 닿음)
-    builds: List[tuple] = field(default_factory=list)            # 새로 지을 건물 추천 (종류, 중심, 크기, 늘어나는 점수, 대상 수)
+    reach_after: Dict[int, int] = field(
+        default_factory=dict
+    )  # 최적 배치 뒤 미완성 건물별 최대 타격 수 (0 = 여전히 안 닿음)
+    builds: List[tuple] = field(
+        default_factory=list
+    )  # 새로 지을 건물 추천 (종류, 중심, 크기, 늘어나는 점수, 대상 수)
     build_costs: Dict[str, Tuple[int, ...]] = field(default_factory=dict)  # 게임이 보낸 다음 1개 건설 비용
     construction_pending: bool = False  # 아직 적용하지 않은 배치의 계수를 실제 건설 근거로 쓰지 않음
-    activations: List[tuple] = field(default_factory=list)       # 강화·일꾼 배정으로 켜지는 효과 (id, 종류, 할 일, 점수)
-    demolish: List[tuple] = field(default_factory=list)           # 철거 후보 (id, 종류, 지금 기여 점수) — 점수 낮은 순
-    calibration: Tuple[float, int, int] = (0.0, 0, 0)            # 범위 판정 게임 값 비교 (여유, 맞음, 비교 수)
-    preset: str = "effect"                                       # effect(효과 최대) | gold_u(금광 U자) | plan(계획도시)
-    preset_spots: List[Tuple[float, float]] = field(default_factory=list) # 프리셋 자리 중심 (금광 U자)
-    movement_complete: bool = True                            # 끝까지 옮길 수 있는 순서를 확인했는지
-    unresolved_moves: Tuple[int, ...] = ()                    # 목표를 보류한 건물 id
-    evaluated_base: dict = field(default_factory=dict)        # 이동·길 열기를 모두 반영한 단일 계산 기준
-    model_limitations: List[str] = field(default_factory=list) # 물리 계산이 아직 재현하지 못하는 게임 효과
+    activations: List[tuple] = field(
+        default_factory=list
+    )  # 강화·일꾼 배정으로 켜지는 효과 (id, 종류, 할 일, 점수)
+    demolish: List[tuple] = field(default_factory=list)  # 철거 후보 (id, 종류, 지금 기여 점수) — 점수 낮은 순
+    calibration: Tuple[float, int, int] = (0.0, 0, 0)  # 범위 판정 게임 값 비교 (여유, 맞음, 비교 수)
+    preset: str = "effect"  # effect(효과 최대) | gold_u(금광 U자) | plan(계획도시)
+    preset_spots: List[Tuple[float, float]] = field(default_factory=list)  # 프리셋 자리 중심 (금광 U자)
+    movement_complete: bool = True  # 끝까지 옮길 수 있는 순서를 확인했는지
+    unresolved_moves: Tuple[int, ...] = ()  # 목표를 보류한 건물 id
+    evaluated_base: dict = field(default_factory=dict)  # 이동·길 열기를 모두 반영한 단일 계산 기준
+    model_limitations: List[str] = field(default_factory=list)  # 물리 계산이 아직 재현하지 못하는 게임 효과
     calculation_deferred: bool = False
     resource_access_checked: bool = False
     resource_unreachable_before: Tuple[int, ...] = ()
@@ -127,13 +141,16 @@ def build_purchase_cost(row: tuple, costs: Dict[str, Tuple[int, ...]]) -> Option
     if len(row) < 5:
         return None
     cost = costs.get(row[0])
-    if (not isinstance(cost, (tuple, list)) or len(cost) != 4
-            or not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in cost)):
+    if (
+        not isinstance(cost, (tuple, list))
+        or len(cost) != 4
+        or not all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in cost)
+    ):
         return None
     count = row[4] if row[0] in TILE_TYPES else 1
     if not isinstance(count, int) or isinstance(count, bool) or count < 1:
         return None
-    return tuple(v * count for v in cost)
+    return tuple(value * count for value in cost)
 
 
 # ---- 기지 타일 격자 ----
@@ -142,12 +159,12 @@ class Grid:
     ox: float
     oy: float
     size: float
-    tiles: set               # 산 청크의 모든 타일 (col, row)
+    tiles: set  # 산 청크의 모든 타일 (col, row)
 
-    def cells(self, cx: float, cy: float, w: int, h: int) -> set:
-        c0 = round((cx - w * self.size / 2 - self.ox) / self.size)
-        r0 = round((cy - h * self.size / 2 - self.oy) / self.size)
-        return {(c0 + i, r0 + j) for i in range(w) for j in range(h)}
+    def cells(self, center_x: float, center_y: float, w: int, h: int) -> set:
+        c0 = round((center_x - w * self.size / 2 - self.ox) / self.size)
+        r0 = round((center_y - h * self.size / 2 - self.oy) / self.size)
+        return {(c0 + index, r0 + other_index) for index in range(w) for other_index in range(h)}
 
     def center(self, c0: int, r0: int, w: int, h: int) -> Tuple[float, float]:
         return (self.ox + (c0 + w / 2) * self.size, self.oy + (r0 + h / 2) * self.size)
@@ -158,55 +175,60 @@ def grid_from_geo(geo: dict) -> Optional[Grid]:
         size = float(geo["space_w"])
         cw, ch = int(geo["chunk_w"]), int(geo["chunk_h"])
         chunks = [tuple(c) for c in geo["chunks"]]
-        ox = float(geo["left"]) - min(c[0] for c in chunks) * cw * size
-        oy = float(geo["bottom"]) - min(c[1] for c in chunks) * ch * size
-        tiles = {(cx * cw + i, cy * ch + j) for cx, cy in chunks for i in range(cw) for j in range(ch)}
-        return Grid(ox, oy, size, tiles)
+        origin_x = float(geo["left"]) - min(c[0] for c in chunks) * cw * size
+        origin_y = float(geo["bottom"]) - min(c[1] for c in chunks) * ch * size
+        tiles = {
+            (center_x * cw + index, center_y * ch + other_index)
+            for center_x, center_y in chunks
+            for index in range(cw)
+            for other_index in range(ch)
+        }
+        return Grid(origin_x, origin_y, size, tiles)
     except (KeyError, TypeError, ValueError):
         return None
 
 
 def _inside(shape: dict, x: float, y: float) -> bool:
     if shape.get("shape") == "circle":
-        cx, cy = shape["c"]
-        return math.hypot(x - cx, y - cy) <= float(shape["r"]) + 1e-6
-    pts = shape.get("pts") or []
+        center_x, center_y = shape["c"]
+        return math.hypot(x - center_x, y - center_y) <= float(shape["r"]) + 1e-6
+    points = shape.get("pts") or []
     inside = False
-    n = len(pts)
-    for i in range(n):
-        x1, y1 = pts[i]
-        x2, y2 = pts[(i + 1) % n]
-        if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
+    item_count = len(points)
+    for index in range(item_count):
+        right_x, top_y = points[index]
+        x2, y2 = points[(index + 1) % item_count]
+        if (top_y > y) != (y2 > y) and x < (x2 - right_x) * (y - top_y) / (y2 - top_y) + right_x:
             inside = not inside
     return inside
 
 
-def shape_masks(geo: dict, blds: Dict[int, "Bld"], grid: Grid) -> Dict[int, set]:
+def shape_masks(geo: dict, buildings: Dict[int, "Bld"], grid: Grid) -> Dict[int, set]:
     """건물마다 실제 충돌 모양이 덮는 타일 (건물 사각형 왼쪽 아래 기준 상대 좌표).
 
     실제 게임 확인: ㄱ자 건물(별장·아늑한 집 등)의 빈 모서리 타일을 옆 건물이 쓴다 → 사각형으로 보면 10칸이 겹친다.
     원형(바위)은 중심 타일만 차지한다.
     """
-    cols: Dict[int, List[dict]] = {}
+    columns: Dict[int, List[dict]] = {}
     for c in geo.get("colliders") or []:
-        cols.setdefault(int(c.get("id", -1)), []).append(c)
-    out: Dict[int, set] = {}
-    for i, b in blds.items():
-        shapes = cols.get(i)
+        columns.setdefault(int(c.get("id", -1)), []).append(c)
+    result: Dict[int, set] = {}
+    for index, building in buildings.items():
+        shapes = columns.get(index)
         if not shapes:
             continue
-        w, h = b.footprint
-        c0 = round((b.x - w * grid.size / 2 - grid.ox) / grid.size)
-        r0 = round((b.y - h * grid.size / 2 - grid.oy) / grid.size)
+        width, height = building.footprint
+        c0 = round((building.x - width * grid.size / 2 - grid.ox) / grid.size)
+        r0 = round((building.y - height * grid.size / 2 - grid.oy) / grid.size)
         mask = set()
-        for dx in range(w):
-            for dy in range(h):
-                cx, cy = grid.center(c0 + dx, r0 + dy, 1, 1)
-                if any(_inside(sh, cx, cy) for sh in shapes):
-                    mask.add((dx, dy))
+        for delta_x in range(width):
+            for delta_y in range(height):
+                center_x, center_y = grid.center(c0 + delta_x, r0 + delta_y, 1, 1)
+                if any(_inside(sh, center_x, center_y) for sh in shapes):
+                    mask.add((delta_x, delta_y))
         if mask:
-            out[i] = mask
-    return out
+            result[index] = mask
+    return result
 
 
 def turn_mask(mask: set, w: int, h: int, k: int) -> Tuple[set, int, int]:
@@ -222,227 +244,274 @@ def mask_outline(mask: set) -> List[Tuple[int, int]]:
     이어진 모양 하나만 (건물은 모두 이어져 있다). 곧은 변 가운데 점은 뺀다."""
     edges = {}
     for x, y in mask:
-        for a, b in (((x, y), (x + 1, y)), ((x + 1, y), (x + 1, y + 1)),
-                     ((x + 1, y + 1), (x, y + 1)), ((x, y + 1), (x, y))):
-            if (b, a) in edges:
-                del edges[(b, a)]                 # 두 칸이 맞붙은 변은 안쪽
+        for edge_start, edge_end in (
+            ((x, y), (x + 1, y)),
+            ((x + 1, y), (x + 1, y + 1)),
+            ((x + 1, y + 1), (x, y + 1)),
+            ((x, y + 1), (x, y)),
+        ):
+            if (edge_end, edge_start) in edges:
+                del edges[(edge_end, edge_start)]  # 두 칸이 맞붙은 변은 안쪽
             else:
-                edges[(a, b)] = True
-    nxt = {a: b for a, b in edges}
-    if not nxt:
+                edges[(edge_start, edge_end)] = True
+    next_value = {edge_start: edge_end for edge_start, edge_end in edges}
+    if not next_value:
         return []
-    start = min(nxt)
-    pts, cur = [start], nxt[start]
-    while cur != start and len(pts) <= len(nxt):
-        pts.append(cur)
-        cur = nxt.get(cur, start)
-    out = []
-    for i, p in enumerate(pts):
-        a, b = pts[i - 1], pts[(i + 1) % len(pts)]
-        if (p[0] - a[0]) * (b[1] - p[1]) != (p[1] - a[1]) * (b[0] - p[0]):
-            out.append(p)                         # 꺾이는 점만
-    return out
+    start = min(next_value)
+    points, current = [start], next_value[start]
+    while current != start and len(points) <= len(next_value):
+        points.append(current)
+        current = next_value.get(current, start)
+    result = []
+    for index, position in enumerate(points):
+        edge_start, edge_end = points[index - 1], points[(index + 1) % len(points)]
+        if (position[0] - edge_start[0]) * (edge_end[1] - position[1]) != (position[1] - edge_start[1]) * (
+            edge_end[0] - position[0]
+        ):
+            result.append(position)  # 꺾이는 점만
+    return result
 
 
-def shape_outline_world(b: "Bld", mask: Optional[set], size: float, to: Optional[Tuple[float, float]] = None,
-                        rot: int = -1) -> List[Tuple[float, float]]:
+def shape_outline_world(
+    building: "Bld", mask: Optional[set], size: float, to: Optional[Tuple[float, float]] = None, rot: int = -1
+) -> List[Tuple[float, float]]:
     """건물 모양 윤곽 (월드 좌표). to·rot 를 주면 그 자리·회전으로 옮긴 모양. mask 없으면 사각형."""
-    w, h = b.footprint
-    mask = set(mask) if mask else {(i, j) for i in range(w) for j in range(h)}
+    width, height = building.footprint
+    mask = (
+        set(mask)
+        if mask
+        else {(index, other_index) for index in range(width) for other_index in range(height)}
+    )
     if rot >= 0:
-        mask, w, h = turn_mask(mask, w, h, rot - b.rot)
-    cx, cy = to if to is not None else (b.x, b.y)
-    x0, y0 = cx - w * size / 2, cy - h * size / 2
-    return [(x0 + vx * size, y0 + vy * size) for vx, vy in mask_outline(mask)]
+        mask, width, height = turn_mask(mask, width, height, rot - building.rot)
+    center_x, center_y = to if to is not None else (building.x, building.y)
+    left_x, bottom_y = center_x - width * size / 2, center_y - height * size / 2
+    return [(left_x + vx * size, bottom_y + vy * size) for vx, vy in mask_outline(mask)]
 
 
-def building_cells(b: "Bld", grid: Grid, mask: Optional[set] = None) -> set:
-    w, h = b.footprint
-    c0 = round((b.x - w * grid.size / 2 - grid.ox) / grid.size)
-    r0 = round((b.y - h * grid.size / 2 - grid.oy) / grid.size)
+def building_cells(building: "Bld", grid: Grid, mask: Optional[set] = None) -> set:
+    width, height = building.footprint
+    c0 = round((building.x - width * grid.size / 2 - grid.ox) / grid.size)
+    r0 = round((building.y - height * grid.size / 2 - grid.oy) / grid.size)
     if mask is None:
-        return {(c0 + i, r0 + j) for i in range(w) for j in range(h)}
-    return {(c0 + i, r0 + j) for i, j in mask}
+        return {(c0 + index, r0 + other_index) for index in range(width) for other_index in range(height)}
+    return {(c0 + index, r0 + other_index) for index, other_index in mask}
 
 
-def occupied(blds: Dict[int, "Bld"], grid: Grid, skip: Sequence[int] = (),
-             masks: Optional[Dict[int, set]] = None) -> set:
-    out = set()
-    for i, b in blds.items():
-        if i in skip:
+def occupied(
+    buildings: Dict[int, "Bld"], grid: Grid, skip: Sequence[int] = (), masks: Optional[Dict[int, set]] = None
+) -> set:
+    result = set()
+    for index, building in buildings.items():
+        if index in skip:
             continue
-        out |= building_cells(b, grid, (masks or {}).get(i))
-    return out
+        result |= building_cells(building, grid, (masks or {}).get(index))
+    return result
 
 
-def free_spots(grid: Grid, occ: set, w: int, h: int) -> List[Tuple[float, float]]:
-    out = []
-    for (c, r) in grid.tiles:
-        cells = {(c + i, r + j) for i in range(w) for j in range(h)}
-        if cells <= grid.tiles and not (cells & occ):
-            out.append(grid.center(c, r, w, h))
-    return out
+def free_spots(grid: Grid, occupied_cells: set, w: int, h: int) -> List[Tuple[float, float]]:
+    result = []
+    for c, row in grid.tiles:
+        cells = {(c + index, row + other_index) for index in range(w) for other_index in range(h)}
+        if cells <= grid.tiles and not (cells & occupied_cells):
+            result.append(grid.center(c, row, w, h))
+    return result
 
 
 def buildings_from_base(base: dict) -> Dict[int, Bld]:
-    out = {}
-    for b in base.get("buildings") or []:
+    result = {}
+    for building in base.get("buildings") or []:
         try:
-            out[int(b["id"])] = Bld(int(b["id"]), b.get("type", ""), float(b["x"]), float(b["y"]),
-                                    int(b.get("tw") or 1), int(b.get("th") or 1), int(b.get("rot") or 0),
-                                    float(b.get("range") or 0))
+            result[int(building["id"])] = Bld(
+                int(building["id"]),
+                building.get("type", ""),
+                float(building["x"]),
+                float(building["y"]),
+                int(building.get("tw") or 1),
+                int(building.get("th") or 1),
+                int(building.get("rot") or 0),
+                float(building.get("range") or 0),
+            )
         except (KeyError, TypeError, ValueError):
             continue
-    return out
+    return result
 
 
-def effect_score(blds: Dict[int, Bld]) -> Tuple[float, Dict[str, float]]:
+def effect_score(buildings: Dict[int, Bld]) -> Tuple[float, Dict[str, float]]:
     """범위 효과 점수: 효과 건물마다 범위 안의 맞는 자원 타일 수 × 가중치."""
-    tiles = [(b.x, b.y, TILE_TYPES[b.type]) for b in blds.values() if b.type in TILE_TYPES]
+    tiles = [
+        (building.x, building.y, TILE_TYPES[building.type])
+        for building in buildings.values()
+        if building.type in TILE_TYPES
+    ]
     detail: Dict[str, float] = {}
     total = 0.0
-    for b in blds.values():
-        eff = EFFECTS.get(b.type)
-        if not eff or b.range <= 0:
+    for building in buildings.values():
+        eff = EFFECTS.get(building.type)
+        if not eff or building.range <= 0:
             continue
-        kind, w, _ = eff
-        n = sum(1 for x, y, k in tiles if k == kind and abs(x - b.x) <= b.range + 1e-6 and abs(y - b.y) <= b.range + 1e-6)
-        total += w * n
-        detail[b.type] = detail.get(b.type, 0) + n
+        kind, effect_weight, _ = eff
+        n = sum(
+            1
+            for x, y, k in tiles
+            if k == kind
+            and abs(x - building.x) <= building.range + 1e-6
+            and abs(y - building.y) <= building.range + 1e-6
+        )
+        total += effect_weight * n
+        detail[building.type] = detail.get(building.type, 0) + n
     return total, detail
 
 
-def swap_positions(blds: Dict[int, Bld], a: int, b: int) -> Dict[int, Bld]:
-    out = dict(blds)
-    A, B = blds[a], blds[b]
-    out[a] = Bld(A.id, A.type, B.x, B.y, A.tw, A.th, A.rot, A.range)
-    out[b] = Bld(B.id, B.type, A.x, A.y, B.tw, B.th, B.rot, B.range)
-    return out
+def swap_positions(buildings: Dict[int, Bld], a: int, b: int) -> Dict[int, Bld]:
+    result = dict(buildings)
+    A, B = buildings[a], buildings[b]
+    result[a] = Bld(A.id, A.type, B.x, B.y, A.tw, A.th, A.rot, A.range)
+    result[b] = Bld(B.id, B.type, A.x, A.y, B.tw, B.th, B.rot, B.range)
+    return result
 
 
-def move_geo(geo: dict, blds: Dict[int, "Bld"], a: int, to: Tuple[float, float]) -> dict:
+def move_geo(geo: dict, buildings: Dict[int, "Bld"], a: int, to: Tuple[float, float]) -> dict:
     """한 건물의 충돌 모양을 새 중심으로 평행 이동."""
-    A = blds[a]
+    A = buildings[a]
     d = (to[0] - A.x, to[1] - A.y)
-    cols = []
+    colliders = []
     for c in geo.get("colliders") or []:
         if int(c.get("id", -1)) != a:
-            cols.append(c)
+            colliders.append(c)
             continue
         c2 = dict(c)
         if "pts" in c:
             c2["pts"] = [[x + d[0], y + d[1]] for x, y in c["pts"]]
         if "c" in c:
             c2["c"] = [c["c"][0] + d[0], c["c"][1] + d[1]]
-        cols.append(c2)
-    g = dict(geo)
-    g["colliders"] = cols
-    return g
+        colliders.append(c2)
+    grid = dict(geo)
+    grid["colliders"] = colliders
+    return grid
 
 
 def turn_geo(geo: dict, a: int, frm: Tuple[float, float], to: Tuple[float, float], k: int) -> dict:
     """한 건물의 충돌 모양을 중심 frm 기준 시계 방향 90° × k 돌리고 새 중심 to 로 옮긴다
     (게임 rot +1 = 시계 방향 90° — layout_opt.rotated 와 같은 규칙)."""
+
     def turn(x: float, y: float) -> List[float]:
-        dx, dy = x - frm[0], y - frm[1]
+        delta_x, delta_y = x - frm[0], y - frm[1]
         for _ in range(k % 4):
-            dx, dy = dy, -dx
-        return [to[0] + dx, to[1] + dy]
-    cols = []
+            delta_x, delta_y = delta_y, -delta_x
+        return [to[0] + delta_x, to[1] + delta_y]
+
+    colliders = []
     for c in geo.get("colliders") or []:
         if int(c.get("id", -1)) != a:
-            cols.append(c)
+            colliders.append(c)
             continue
         c2 = dict(c)
         if "pts" in c:
             c2["pts"] = [turn(x, y) for x, y in c["pts"]]
         if "c" in c:
             c2["c"] = turn(*c["c"])
-        cols.append(c2)
-    g = dict(geo)
-    g["colliders"] = cols
-    return g
+        colliders.append(c2)
+    grid = dict(geo)
+    grid["colliders"] = colliders
+    return grid
 
 
 def fill_missing_colliders(base: dict, cache: dict) -> dict:
     """재배치 모드에서 집어 든 건물은 게임이 충돌 모양을 빼고 보낸다 (실제 기록 2026-09-26: 옮기는 연금술 공방만 없음)
     → ㄱ·ㅏ 자 건물이 사각형으로 보였다. 마지막으로 본 모양을 지금 회전·자리로 돌려 채운다.
     cache: 건물 id → (종류, rot, 중심, 충돌 모양 목록) — 부르는 쪽이 들고 있다가 계속 넘긴다."""
-    geo = base.get("geo") or {}
-    cols = geo.get("colliders")
-    if not cols:
+    geometry = base.get("geo") or {}
+    colliders = geometry.get("colliders")
+    if not colliders:
         return base
     by_id: Dict[int, list] = {}
-    for c in cols:
+    for c in colliders:
         by_id.setdefault(int(c.get("id", -1)), []).append(c)
     extra = []
-    for b in base.get("buildings") or []:
-        i, t, rot = int(b.get("id", -1)), b.get("type"), int(b.get("rot") or 0)
-        xy = (float(b.get("x") or 0.0), float(b.get("y") or 0.0))
-        if i in by_id:
-            cache[i] = (t, rot, xy, by_id[i])
-        elif i in cache and cache[i][0] == t:
-            _t, rot0, xy0, old = cache[i]
-            extra += turn_geo({"colliders": old}, i, xy0, xy, rot - rot0)["colliders"]
+    for building in base.get("buildings") or []:
+        index, building_type, rot = (
+            int(building.get("id", -1)),
+            building.get("type"),
+            int(building.get("rot") or 0),
+        )
+        xy = (float(building.get("x") or 0.0), float(building.get("y") or 0.0))
+        if index in by_id:
+            cache[index] = (building_type, rot, xy, by_id[index])
+        elif index in cache and cache[index][0] == building_type:
+            _t, rot0, xy0, old = cache[index]
+            extra += turn_geo({"colliders": old}, index, xy0, xy, rot - rot0)["colliders"]
     if not extra:
         return base
-    return dict(base, geo=dict(geo, colliders=list(cols) + extra))
+    return dict(base, geo=dict(geometry, colliders=list(colliders) + extra))
 
 
-def swap_geo(geo: dict, blds: Dict[int, Bld], a: int, b: int) -> dict:
+def swap_geo(geo: dict, buildings: Dict[int, Bld], a: int, b: int) -> dict:
     """채집 궤적 계산용: 두 건물의 충돌 모양을 서로의 자리로 평행 이동한다."""
-    A, B = blds[a], blds[b]
+    A, B = buildings[a], buildings[b]
     shift = {a: (B.x - A.x, B.y - A.y), b: (A.x - B.x, A.y - B.y)}
-    cols = []
+    colliders = []
     for c in geo.get("colliders") or []:
         d = shift.get(int(c.get("id", -1)))
         if d is None:
-            cols.append(c)
+            colliders.append(c)
             continue
         c2 = dict(c)
         if "pts" in c:
             c2["pts"] = [[x + d[0], y + d[1]] for x, y in c["pts"]]
         if "c" in c:
             c2["c"] = [c["c"][0] + d[0], c["c"][1] + d[1]]
-        cols.append(c2)
-    g = dict(geo)
-    g["colliders"] = cols
-    return g
+        colliders.append(c2)
+    grid = dict(geo)
+    grid["colliders"] = colliders
+    return grid
 
 
-def _movable(b: Bld) -> bool:
+def _movable(building: Bld) -> bool:
     # 엘리베이터·기지 핵심 건물은 옮기지 않는다고 본다 (확인 필요: 게임이 막는 건물)
-    return b.type not in ("kHome",) and b.tw > 0
+    return building.type not in ("kHome",) and building.tw > 0
 
 
 def _col_boxes(geo: dict) -> Dict[int, Tuple[float, float, float, float]]:
     """건물 id → 충돌 모양 경계 상자 (월드 좌표)."""
-    out: Dict[int, Tuple[float, float, float, float]] = {}
+    result: Dict[int, Tuple[float, float, float, float]] = {}
     for c in geo.get("colliders") or []:
         if "pts" in c and c["pts"]:
             xs, ys = [q[0] for q in c["pts"]], [q[1] for q in c["pts"]]
             box = (min(xs), min(ys), max(xs), max(ys))
         elif "c" in c:
-            r = float(c.get("r") or 0)
-            box = (c["c"][0] - r, c["c"][1] - r, c["c"][0] + r, c["c"][1] + r)
+            radius = float(c.get("r") or 0)
+            box = (c["c"][0] - radius, c["c"][1] - radius, c["c"][0] + radius, c["c"][1] + radius)
         else:
             continue
-        i = int(c.get("id", -1))
-        o = out.get(i)
-        out[i] = box if o is None else (min(o[0], box[0]), min(o[1], box[1]), max(o[2], box[2]), max(o[3], box[3]))
-    return out
+        index = int(c.get("id", -1))
+        o = result.get(index)
+        result[index] = (
+            box if o is None else (min(o[0], box[0]), min(o[1], box[1]), max(o[2], box[2]), max(o[3], box[3]))
+        )
+    return result
 
 
-def moved_base(base: dict, blds: Dict[int, Bld], a: int, to: Tuple[float, float]) -> dict:
+def moved_base(base: dict, buildings: Dict[int, Bld], a: int, to: Tuple[float, float]) -> dict:
     """한 건물을 옮긴 뒤의 기지 (건물 위치 + 충돌 모양)."""
-    out = dict(base)
-    out["geo"] = move_geo(base.get("geo") or {}, blds, a, to)
-    out["buildings"] = [dict(b, x=to[0], y=to[1]) if b.get("id") == a else b for b in base.get("buildings") or []]
-    return out
+    result = dict(base)
+    result["geo"] = move_geo(base.get("geo") or {}, buildings, a, to)
+    result["buildings"] = [
+        dict(building, x=to[0], y=to[1]) if building.get("id") == a else building
+        for building in base.get("buildings") or []
+    ]
+    return result
 
 
-def plan_access(base: dict, targets: Sequence[int], reach_fn, max_moves: int = 2,
-                max_tries: int = 8, avoid: set = frozenset(), accept_fn=None) -> Tuple[List[Move], dict, set]:
+def plan_access(
+    base: dict,
+    targets: Sequence[int],
+    reach_fn,
+    max_moves: int = 2,
+    max_tries: int = 8,
+    avoid: set = frozenset(),
+    accept_fn=None,
+) -> Tuple[List[Move], dict, set]:
     """어떤 발사 각도로도 작업자가 닿지 않는 미완성 건물: 옆 건물 하나를 빈 자리로 옮겨 길을 여는 방법을 찾는다.
 
     실제 기지 확인: 강화 공사 중인 학교·영사관이 건물에 사방이 막혀 0%에서 멈춰 있었다.
@@ -450,53 +519,81 @@ def plan_access(base: dict, targets: Sequence[int], reach_fn, max_moves: int = 2
     발사대 쪽(아래)·작은 것부터, 빈 자리는 범위 효과 점수가 가장 덜 줄어드는 곳.
     돌려주는 값: (옮기기 목록, 옮긴 뒤 기지, 비워 둬야 할 타일 — 뒤의 옮기기가 길을 다시 막지 않게).
     """
-    blds = buildings_from_base(base)
-    geo = base.get("geo") or {}
-    grid = grid_from_geo(geo)
-    if not blds or grid is None or not targets:
+    buildings = buildings_from_base(base)
+    geometry = base.get("geo") or {}
+    grid = grid_from_geo(geometry)
+    if not buildings or grid is None or not targets:
         return [], base, set()
-    reach = reach_fn(geo)
-    initially_reachable = {t for t in targets if reach.get(t, 0) > 0}
+    reach = reach_fn(geometry)
+    initially_reachable = {target_id for target_id in targets if reach.get(target_id, 0) > 0}
     moves: List[Move] = []
     reserved: set = set()
     cur_base = base
-    for t in targets:
-        if len(moves) >= max_moves or reach.get(t) or t not in blds:
+    for target_id in targets:
+        if len(moves) >= max_moves or reach.get(target_id) or target_id not in buildings:
             continue
-        cur = buildings_from_base(cur_base)
+        current = buildings_from_base(cur_base)
         boxes = _col_boxes(cur_base.get("geo") or {})
-        tb = boxes.get(t)
+        tb = boxes.get(target_id)
         if tb is None:
             continue
         m = 0.3
-        near = [i for i, bb in boxes.items() if i != t and i in cur and _movable(cur[i]) and i not in targets
-                and not (bb[2] + m < tb[0] or tb[2] + m < bb[0] or bb[3] + m < tb[1] or tb[3] + m < bb[1])]
-        near.sort(key=lambda i: (boxes[i][1], cur[i].tw * cur[i].th))
-        masks = shape_masks(cur_base.get("geo") or {}, cur, grid)
+        near = [
+            index
+            for index, bb in boxes.items()
+            if index != target_id
+            and index in current
+            and _movable(current[index])
+            and index not in targets
+            and not (bb[2] + m < tb[0] or tb[2] + m < bb[0] or bb[3] + m < tb[1] or tb[3] + m < bb[1])
+        ]
+        near.sort(key=lambda i: (boxes[i][1], current[i].tw * current[i].th))
+        masks = shape_masks(cur_base.get("geo") or {}, current, grid)
         found = None
-        for i in near[:max_tries]:
-            w, h = cur[i].footprint
-            here = building_cells(cur[i], grid, masks.get(i))
-            occ = occupied(cur, grid, skip=[i], masks=masks)
-            spots = free_spots(grid, occ | here | reserved | avoid, w, h)
+        for index in near[:max_tries]:
+            width, height = current[index].footprint
+            here = building_cells(current[index], grid, masks.get(index))
+            occupied_cells = occupied(current, grid, skip=[index], masks=masks)
+            spots = free_spots(grid, occupied_cells | here | reserved | avoid, width, height)
             if not spots:
                 continue
-            b = cur[i]
+            building = current[index]
 
             def score(sp):
-                moved = dict(cur)
-                moved[i] = Bld(b.id, b.type, sp[0], sp[1], b.tw, b.th, b.rot, b.range)
+                moved = dict(current)
+                moved[index] = Bld(
+                    building.id,
+                    building.type,
+                    sp[0],
+                    sp[1],
+                    building.tw,
+                    building.th,
+                    building.rot,
+                    building.range,
+                )
                 return effect_score(moved)[0]
+
             reachable_before = {other for other in targets if reach.get(other, 0) > 0}
             checked = 0
             for to in sorted(spots, key=score, reverse=True):
-                nb = moved_base(cur_base, cur, i, to)
+                nb = moved_base(cur_base, current, index, to)
                 if accept_fn is not None and not accept_fn(nb):
                     continue
                 checked += 1
                 r2 = reach_fn(nb["geo"])
-                if r2.get(t, 0) > 0 and all(r2.get(other, 0) > 0 for other in reachable_before):
-                    found = (Move(i, to, float(r2[t]), tr("미완성 건물로 가는 길 열기"), target=t), nb, r2, here)
+                if r2.get(target_id, 0) > 0 and all(r2.get(other, 0) > 0 for other in reachable_before):
+                    found = (
+                        Move(
+                            index,
+                            to,
+                            float(r2[target_id]),
+                            tr("미완성 건물로 가는 길 열기"),
+                            target=target_id,
+                        ),
+                        nb,
+                        r2,
+                        here,
+                    )
                     break
                 if checked >= max_tries:
                     break
@@ -509,113 +606,160 @@ def plan_access(base: dict, targets: Sequence[int], reach_fn, max_moves: int = 2
     if moves:
         final_reach = reach_fn(cur_base.get("geo") or {})
         required = initially_reachable | {m.target for m in moves}
-        if (not all(final_reach.get(t, 0) > 0 for t in required)
-                or (accept_fn is not None and not accept_fn(cur_base))):
+        if not all(final_reach.get(target_id, 0) > 0 for target_id in required) or (
+            accept_fn is not None and not accept_fn(cur_base)
+        ):
             return [], base, set()
     return moves, cur_base, reserved
 
 
-def plan_swaps(base: dict, max_swaps: int = 6, harvest_eval=None,
-               blueprints: Sequence[dict] = (), reserved: set = frozenset()) -> Optional[LayoutPlan]:
+def plan_swaps(
+    base: dict,
+    max_swaps: int = 6,
+    harvest_eval=None,
+    blueprints: Sequence[dict] = (),
+    reserved: set = frozenset(),
+) -> Optional[LayoutPlan]:
     """범위 효과 점수를 올리는 옮기기 순서 (욕심쟁이 탐색): 같은 크기 건물 맞바꾸기 + 빈 자리로 옮기기.
 
     harvest_eval(geo) -> [골드, 밀, 나무, 돌] 를 주면 옮긴 뒤 채집 발사 예상량도 비교하고,
     채집량을 10% 넘게 줄이는 옮기기는 뺀다. blueprints: [{type, tw, th}] 새로 지을 수 있는 건물.
     """
-    blds = buildings_from_base(base)
-    if not blds:
+    buildings = buildings_from_base(base)
+    if not buildings:
         return None
-    geo = dict(base.get("geo") or {})
-    grid = grid_from_geo(geo)
-    masks = shape_masks(geo, blds, grid) if grid else {}
-    before, detail_b = effect_score(blds)
-    hv_before = harvest_eval(geo) if harvest_eval else None
-    cur, cur_geo, cur_score = blds, geo, before
+    geometry = dict(base.get("geo") or {})
+    grid = grid_from_geo(geometry)
+    masks = shape_masks(geometry, buildings, grid) if grid else {}
+    before, detail_b = effect_score(buildings)
+    hv_before = harvest_eval(geometry) if harvest_eval else None
+    current, cur_geo, cur_score = buildings, geometry, before
     steps: List = []
     used = set()
     for _ in range(max_swaps):
         cands = []
-        ids = [i for i, b in cur.items() if _movable(b)]
-        relevant = [i for i in ids if cur[i].type in EFFECTS or cur[i].type in TILE_TYPES]
-        for i in relevant:
-            for j in ids:
-                if i == j or cur[i].footprint != cur[j].footprint or cur[i].type == cur[j].type:
+        ids = [index for index, building in current.items() if _movable(building)]
+        relevant = [
+            index for index in ids if current[index].type in EFFECTS or current[index].type in TILE_TYPES
+        ]
+        for index in relevant:
+            for other_index in ids:
+                if (
+                    index == other_index
+                    or current[index].footprint != current[other_index].footprint
+                    or current[index].type == current[other_index].type
+                ):
                     continue
-                if ("s", min(i, j), max(i, j)) in used:
+                if ("s", min(index, other_index), max(index, other_index)) in used:
                     continue
-                cand = swap_positions(cur, i, j)
+                cand = swap_positions(current, index, other_index)
                 sc, _ = effect_score(cand)
                 if sc > cur_score + 0.5:
-                    cands.append((sc, ("s", i, j), cand))
+                    cands.append((sc, ("s", index, other_index), cand))
             if grid is not None:
-                w, h = cur[i].footprint
-                occ = occupied(cur, grid, skip=[i], masks=masks)
-                for to in free_spots(grid, occ | reserved, w, h):
-                    if ("m", i, to) in used:
+                width, height = current[index].footprint
+                occupied_cells = occupied(current, grid, skip=[index], masks=masks)
+                for to in free_spots(grid, occupied_cells | reserved, width, height):
+                    if ("m", index, to) in used:
                         continue
-                    moved = dict(cur)
-                    b = cur[i]
-                    moved[i] = Bld(b.id, b.type, to[0], to[1], b.tw, b.th, b.rot, b.range)
+                    moved = dict(current)
+                    building = current[index]
+                    moved[index] = Bld(
+                        building.id,
+                        building.type,
+                        to[0],
+                        to[1],
+                        building.tw,
+                        building.th,
+                        building.rot,
+                        building.range,
+                    )
                     sc, _ = effect_score(moved)
                     if sc > cur_score + 0.5:
-                        cands.append((sc, ("m", i, to), moved))
+                        cands.append((sc, ("m", index, to), moved))
         if not cands:
             break
         cands.sort(key=lambda t: -t[0])
         accepted = False
-        for sc, key, cand in cands[:12]:           # 채집량 조건에 걸리면 다음 후보
+        for sc, key, cand in cands[:12]:  # 채집량 조건에 걸리면 다음 후보
             if key[0] == "s":
-                new_geo = swap_geo(cur_geo, cur, key[1], key[2])
+                new_geo = swap_geo(cur_geo, current, key[1], key[2])
             else:
-                new_geo = move_geo(cur_geo, cur, key[1], key[2])
+                new_geo = move_geo(cur_geo, current, key[1], key[2])
             if harvest_eval and hv_before is not None:
                 hv = harvest_eval(new_geo)
                 if sum(hv) < 0.9 * sum(hv_before):
                     used.add(key if key[0] == "m" else ("s", min(key[1], key[2]), max(key[1], key[2])))
                     continue
-            a = cur[key[1]]
+            first_building = current[key[1]]
             if key[0] == "s":
-                b = cur[key[2]]
-                eff = EFFECTS.get(a.type) or EFFECTS.get(b.type)
-                steps.append(Swap(key[1], key[2], sc - cur_score, eff[2] if eff else tr("자원 타일을 효과 건물 범위 안으로")))
+                building = current[key[2]]
+                eff = EFFECTS.get(first_building.type) or EFFECTS.get(building.type)
+                steps.append(
+                    Swap(
+                        key[1],
+                        key[2],
+                        sc - cur_score,
+                        eff[2] if eff else tr("자원 타일을 효과 건물 범위 안으로"),
+                    )
+                )
                 used.add(("s", min(key[1], key[2]), max(key[1], key[2])))
             else:
-                eff = EFFECTS.get(a.type)
-                steps.append(Move(key[1], key[2], sc - cur_score,
-                                  eff[2] + tr(" — 빈 자리로") if eff else tr("자원 타일을 효과 건물 범위 안 빈 자리로")))
+                eff = EFFECTS.get(first_building.type)
+                steps.append(
+                    Move(
+                        key[1],
+                        key[2],
+                        sc - cur_score,
+                        eff[2] + tr(" — 빈 자리로") if eff else tr("자원 타일을 효과 건물 범위 안 빈 자리로"),
+                    )
+                )
                 used.add(key)
-            cur, cur_geo, cur_score = cand, new_geo, sc
+            current, cur_geo, cur_score = cand, new_geo, sc
             accepted = True
             break
         if not accepted:
             break
-    after, detail_a = effect_score(cur)
+    after, detail_a = effect_score(current)
     hv_after = harvest_eval(cur_geo) if harvest_eval and steps else hv_before
     plan = LayoutPlan(before, after, steps, detail_b, detail_a, hv_before, hv_after)
     if grid is not None:
-        plan.new_spots = suggest_new(cur, grid, blueprints, masks, reserved)
+        plan.new_spots = suggest_new(current, grid, blueprints, masks, reserved)
     return plan
 
 
-def suggest_new(blds: Dict[int, "Bld"], grid: Grid, blueprints: Sequence[dict],
-                masks: Optional[Dict[int, set]] = None, reserved: set = frozenset()) -> List[NewSpot]:
+def suggest_new(
+    buildings: Dict[int, "Bld"],
+    grid: Grid,
+    blueprints: Sequence[dict],
+    masks: Optional[Dict[int, set]] = None,
+    reserved: set = frozenset(),
+) -> List[NewSpot]:
     """지을 수 있는 범위 효과 건물의 최적 빈 자리 (옮기기를 반영한 배치 기준)."""
-    out = []
-    tiles = [(b.x, b.y, TILE_TYPES[b.type]) for b in blds.values() if b.type in TILE_TYPES]
-    occ = occupied(blds, grid, masks=masks) | set(reserved)
-    for bp in blueprints:
-        t = bp.get("type", "")
-        eff = EFFECTS.get(t)
+    result = []
+    tiles = [
+        (building.x, building.y, TILE_TYPES[building.type])
+        for building in buildings.values()
+        if building.type in TILE_TYPES
+    ]
+    occupied_cells = occupied(buildings, grid, masks=masks) | set(reserved)
+    for blueprint in blueprints:
+        building_type = blueprint.get("type", "")
+        eff = EFFECTS.get(building_type)
         if not eff:
             continue
-        w, h = int(bp.get("tw") or 2), int(bp.get("th") or 2)
-        rng = float(bp.get("range") or 3.38)
+        width, height = int(blueprint.get("tw") or 2), int(blueprint.get("th") or 2)
+        rng = float(blueprint.get("range") or 3.38)
         best = None
-        for c in free_spots(grid, occ, w, h):
-            n = sum(1 for x, y, k in tiles if k == eff[0] and abs(x - c[0]) <= rng + 1e-6 and abs(y - c[1]) <= rng + 1e-6)
+        for c in free_spots(grid, occupied_cells, width, height):
+            n = sum(
+                1
+                for x, y, k in tiles
+                if k == eff[0] and abs(x - c[0]) <= rng + 1e-6 and abs(y - c[1]) <= rng + 1e-6
+            )
             if best is None or n > best[1]:
                 best = (c, n)
         if best and best[1] > 0:
-            size_note = "" if bp.get("tw") else tr(" (크기 2×2 가정)")
-            out.append(NewSpot(t, best[0], (w, h), best[1], eff[2] + size_note))
-    return out
+            size_note = "" if blueprint.get("tw") else tr(" (크기 2×2 가정)")
+            result.append(NewSpot(building_type, best[0], (width, height), best[1], eff[2] + size_note))
+    return result

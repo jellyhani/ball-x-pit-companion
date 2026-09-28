@@ -5,6 +5,7 @@
 실제 확인(2026-09-26): 기본 볼 20개 중 19개가 나오고, 주취자를 해금하지 않은 사용자에게는 그 기본 볼(매혹)만 없었다.
 해금은 되돌아가지 않으므로 누적해서 저장한다 — 잠긴 재료가 든 진화를 추천에서 빼는 데 쓴다 (GameData.available).
 """
+
 from __future__ import annotations
 
 import json
@@ -27,8 +28,8 @@ def load(path: str) -> Optional[Set[str]]:
     if path == "-":
         return None
     try:
-        with open(path, encoding="utf-8") as f:
-            items = json.load(f).get("items")
+        with open(path, encoding="utf-8") as file_handle:
+            items = json.load(file_handle).get("items")
         return set(items) if isinstance(items, list) and items else None
     except (OSError, ValueError, AttributeError):
         return None
@@ -39,7 +40,7 @@ def save(path: str, items: Iterable[str]):
         return
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump({"items": sorted(items)}, f, ensure_ascii=False, indent=0)
+        with open(path, "w", encoding="utf-8") as file_handle:
+            json.dump({"items": sorted(items)}, file_handle, ensure_ascii=False, indent=0)
     except OSError:
         log.exception("해금 목록 저장 실패")

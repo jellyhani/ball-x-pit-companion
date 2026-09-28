@@ -3,6 +3,7 @@
 화면 내용은 저장하지 않는다. HUD가 있을 때와 없을 때 같은 영역의 픽셀 차이만 계산한다.
     .venv\\Scripts\\python.exe tools\\verify_windows_behavior.py
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -72,9 +73,9 @@ def main() -> int:
     gw.exclude_from_capture(hwnd)
 
     # 2) 클릭 통과: HUD 가운데 좌표의 최상위 창이 HUD 인지
-    cx = rect[0] + rect[2] // 2
-    cy = rect[1] + rect[3] // 2
-    point = ctypes.c_longlong((cy << 32) | (cx & 0xFFFFFFFF))
+    center_x = rect[0] + rect[2] // 2
+    center_y = rect[1] + rect[3] // 2
+    point = ctypes.c_longlong((center_y << 32) | (center_x & 0xFFFFFFFF))
     top = user32.WindowFromPoint(point)
     top_root = user32.GetAncestor(top, 2) if top else None
     click_through = top_root != hwnd
@@ -92,8 +93,14 @@ def main() -> int:
     print(f"클릭 통과: {click_through} (HUD 확장 스타일 투명 {hud.click_through})")
     print(f"위치 조정 모드에서 클릭 받음: {edit_receives}")
     print(f"포커스 유지: {fg_before == fg_after} (전 {fg_before}, 후 {fg_after})")
-    ok = hud.capture_excluded and capture_diff < 1.0 and visible_diff > 5 and click_through and edit_receives \
+    ok = (
+        hud.capture_excluded
+        and capture_diff < 1.0
+        and visible_diff > 5
+        and click_through
+        and edit_receives
         and fg_before == fg_after
+    )
     hud.close()
     print("결과:", "통과" if ok else "확인 필요")
     return 0 if ok else 1

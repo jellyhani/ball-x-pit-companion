@@ -10,6 +10,7 @@
 
 같은 틀(HudView)로 강화 선택창 추천과 융합 화면 추천을 모두 그린다.
 """
+
 from __future__ import annotations
 
 import logging
@@ -32,16 +33,21 @@ from . import tokens as tk
 log = logging.getLogger(__name__)
 
 W = QFont.Weight
-SHADOW = 14          # 그림자 여백 (px, 배율 1 기준)
+SHADOW = 14  # 그림자 여백 (px, 배율 1 기준)
 
-STATUS_TEXT = {"recommend": tr("추천"), "close": tr("차이 작음"), "hold": tr("판단 보류"), "auto": tr("자동 선택"),
-              "none": tr("미확인")}
+STATUS_TEXT = {
+    "recommend": tr("추천"),
+    "close": tr("차이 작음"),
+    "hold": tr("판단 보류"),
+    "auto": tr("자동 선택"),
+    "none": tr("미확인"),
+}
 
 
 @lru_cache(maxsize=256)
 def _sprite(item_id: str) -> Optional[QPixmap]:
     if item_id.startswith("baby:"):
-        item_id = "passive:babyrattle"     # 베이비볼은 아이콘이 없어 베이비 딸랑이 아이콘을 빌린다
+        item_id = "passive:babyrattle"  # 베이비볼은 아이콘이 없어 베이비 딸랑이 아이콘을 빌린다
     pm = QPixmap(os.path.join(DATA_DIR, "icons", item_id.replace(":", "_") + ".png"))
     return None if pm.isNull() else pm
 
@@ -49,44 +55,50 @@ def _sprite(item_id: str) -> Optional[QPixmap]:
 def icon_tile(item_ids: Sequence[Optional[str]], size: int, radius_ratio: float = 0.24) -> QPixmap:
     """한두 아이콘은 기존 배치, 세 개 이상은 네 칸에 표시한다. 넘치는 효과 수는 마지막 칸에 쓴다."""
     dpr = 2.0
-    out = QPixmap(int(size * dpr), int(size * dpr))
-    out.setDevicePixelRatio(dpr)
-    out.fill(Qt.GlobalColor.transparent)
-    p = QPainter(out)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    result = QPixmap(int(size * dpr), int(size * dpr))
+    result.setDevicePixelRatio(dpr)
+    result.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(result)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     tile = QPainterPath()
     tile.addRoundedRect(QRectF(0.5, 0.5, size - 1, size - 1), size * radius_ratio, size * radius_ratio)
-    p.fillPath(tile, QColor(255, 255, 255, 16))
-    p.setPen(QPen(QColor(255, 255, 255, 22), 1))
-    p.drawPath(tile)
-    ids = [i for i in item_ids if i] or [None]
-    n = len(ids)
-    inner = size * (0.78 if n == 1 else 0.52 if n == 2 else 0.40)
-    for k, iid in enumerate(ids[:4] if n <= 4 else ids[:3]):
-        src = _sprite(iid) if iid else None
-        if src is None:
+    painter.fillPath(tile, QColor(255, 255, 255, 16))
+    painter.setPen(QPen(QColor(255, 255, 255, 22), 1))
+    painter.drawPath(tile)
+    ids = [index for index in item_ids if index] or [None]
+    item_count = len(ids)
+    inner = size * (0.78 if item_count == 1 else 0.52 if item_count == 2 else 0.40)
+    for step_index, item_id in enumerate(ids[:4] if item_count <= 4 else ids[:3]):
+        source = _sprite(item_id) if item_id else None
+        if source is None:
             continue
-        scaled = src.scaled(int(inner * dpr), int(inner * dpr), Qt.AspectRatioMode.KeepAspectRatio,
-                            Qt.TransformationMode.FastTransformation)
+        scaled = source.scaled(
+            int(inner * dpr),
+            int(inner * dpr),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.FastTransformation,
+        )
         scaled.setDevicePixelRatio(dpr)
         w, h = scaled.width() / dpr, scaled.height() / dpr
-        if n == 1:
+        if item_count == 1:
             x, y = (size - w) / 2, (size - h) / 2
-        elif n == 2:   # 두 개: 왼쪽 위 / 오른쪽 아래로 겹쳐 배치
-            x = size * 0.08 if k == 0 else size - w - size * 0.08
-            y = size * 0.08 if k == 0 else size - h - size * 0.08
+        elif item_count == 2:  # 두 개: 왼쪽 위 / 오른쪽 아래로 겹쳐 배치
+            x = size * 0.08 if step_index == 0 else size - w - size * 0.08
+            y = size * 0.08 if step_index == 0 else size - h - size * 0.08
         else:
-            x = size * (.25 + .5 * (k % 2)) - w / 2
-            y = size * (.25 + .5 * (k // 2)) - h / 2
-        p.drawPixmap(QRectF(x, y, w, h), scaled, QRectF(0, 0, scaled.width(), scaled.height()))
-    if n > 4:
+            x = size * (0.25 + 0.5 * (step_index % 2)) - w / 2
+            y = size * (0.25 + 0.5 * (step_index // 2)) - h / 2
+        painter.drawPixmap(QRectF(x, y, w, h), scaled, QRectF(0, 0, scaled.width(), scaled.height()))
+    if item_count > 4:
         font = tk.base_font()
-        font.setPixelSize(max(8, round(size * .23)))
-        p.setFont(font)
-        p.setPen(tk.qcolor(tk.TEXT))
-        p.drawText(QRectF(size / 2, size / 2, size / 2, size / 2), Qt.AlignmentFlag.AlignCenter, f"+{n - 3}")
-    p.end()
-    return out
+        font.setPixelSize(max(8, round(size * 0.23)))
+        painter.setFont(font)
+        painter.setPen(tk.qcolor(tk.TEXT))
+        painter.drawText(
+            QRectF(size / 2, size / 2, size / 2, size / 2), Qt.AlignmentFlag.AlignCenter, f"+{item_count - 3}"
+        )
+    painter.end()
+    return result
 
 
 @dataclass
@@ -94,9 +106,9 @@ class HudRow:
     icons: Tuple[Optional[str], ...]
     text: str
     note: str = ""
-    note_tone: str = "tertiary"          # tertiary | secondary | warn
-    verdict: str = ""                    # 강화 선택지: best | alt | banish | skip | neutral | unknown
-    badge: str = ""                      # 판정 알약 글자 (없으면 판정 이름). 예: '2위 비슷함' '3위'
+    note_tone: str = "tertiary"  # tertiary | secondary | warn
+    verdict: str = ""  # 강화 선택지: best | alt | banish | skip | neutral | unknown
+    badge: str = ""  # 판정 알약 글자 (없으면 판정 이름). 예: '2위 비슷함' '3위'
 
 
 @dataclass
@@ -104,22 +116,35 @@ class HudView:
     title: str
     subtitle: str = ""
     status: str = ""
-    status_tone: str = "accent"          # accent | neutral | warn | ok
+    status_tone: str = "accent"  # accent | neutral | warn | ok
     icons: Tuple[Optional[str], ...] = ()
-    lines: List[Tuple[str, str]] = field(default_factory=list)   # (문장, tone)
+    lines: List[Tuple[str, str]] = field(default_factory=list)  # (문장, tone)
     section: str = ""
     rows: List[HudRow] = field(default_factory=list)
     footer: List[Tuple[str, str]] = field(default_factory=list)
 
 
 TONE = {
-    "primary": (245, 245, 247, 255), "secondary": (235, 235, 245, 153), "tertiary": (235, 235, 245, 92),
-    "accent": (64, 156, 255, 255), "warn": (255, 159, 10, 255), "ok": (48, 209, 88, 255), "neutral": (235, 235, 245, 153),
-    "danger": tk.DANGER, "dim": (235, 235, 245, 120),
+    "primary": (245, 245, 247, 255),
+    "secondary": (235, 235, 245, 153),
+    "tertiary": (235, 235, 245, 92),
+    "accent": (64, 156, 255, 255),
+    "warn": (255, 159, 10, 255),
+    "ok": (48, 209, 88, 255),
+    "neutral": (235, 235, 245, 153),
+    "danger": tk.DANGER,
+    "dim": (235, 235, 245, 120),
 }
 # 카드 판정 → 색 이름 (tokens.VERDICT 와 같은 색)
-VERDICT_TONE = {"best": "accent", "alt": "ok", "banish": "warn", "skip": "danger", "neutral": "neutral", "pick": "accent",
-                "unknown": "tertiary"}
+VERDICT_TONE = {
+    "best": "accent",
+    "alt": "ok",
+    "banish": "warn",
+    "skip": "danger",
+    "neutral": "neutral",
+    "pick": "accent",
+    "unknown": "tertiary",
+}
 
 
 class _Label(QLabel):
@@ -141,8 +166,10 @@ class _Pill(_Label):
         r, g, b, _ = TONE[tone]
         self.setFont(font)
         self.setText(text)
-        self.setStyleSheet(f"color: rgba({r},{g},{b},255); background: rgba({r},{g},{b},40);"
-                           f"border-radius: {pad_v + font.pixelSize() // 2 + 1}px; padding: {pad_v}px {pad_h}px;")
+        self.setStyleSheet(
+            f"color: rgba({r},{g},{b},255); background: rgba({r},{g},{b},40);"
+            f"border-radius: {pad_v + font.pixelSize() // 2 + 1}px; padding: {pad_v}px {pad_h}px;"
+        )
         self.setVisible(bool(text))
 
 
@@ -156,12 +183,16 @@ class RecommendationHud(QWidget):
         self.data = data
         self.type = tk.Type(scale)
         self.edit_mode = False
-        self.compact = False            # F7: 추천·이유 한 줄·삭제만
+        self.compact = False  # F7: 추천·이유 한 줄·삭제만
         self.capture_excluded: Optional[bool] = None
         self.click_through: Optional[bool] = None
         self._drag_from: Optional[QPoint] = None
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
-                            | Qt.WindowType.Tool | Qt.WindowType.WindowDoesNotAcceptFocus)
+        self.setWindowFlags(
+            Qt.WindowType.FramelessWindowHint
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.Tool
+            | Qt.WindowType.WindowDoesNotAcceptFocus
+        )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
@@ -175,54 +206,56 @@ class RecommendationHud(QWidget):
 
     # ---- 구성 ----
     def _build(self):
-        root = QVBoxLayout(self)
-        self._root = root
+        vertical_layout = QVBoxLayout(self)
+        self._root = vertical_layout
         top = QHBoxLayout()
         self.icon = _Label(self)
         top.addWidget(self.icon, alignment=Qt.AlignmentFlag.AlignTop)
-        col = QVBoxLayout()
-        col.setSpacing(2)
-        title_row = QHBoxLayout()
-        title_row.setSpacing(8)
+        current_vertical_layout = QVBoxLayout()
+        current_vertical_layout.setSpacing(2)
+        horizontal_layout = QHBoxLayout()
+        horizontal_layout.setSpacing(8)
         self.headline = _Label(self, wrap=True)
         self.status = _Pill(self)
-        title_row.addWidget(self.headline, 1)
-        title_row.addWidget(self.status, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight)
-        col.addLayout(title_row)
+        horizontal_layout.addWidget(self.headline, 1)
+        horizontal_layout.addWidget(
+            self.status, alignment=Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignRight
+        )
+        current_vertical_layout.addLayout(horizontal_layout)
         self.sub = _Label(self, wrap=True)
-        col.addWidget(self.sub)
-        top.addLayout(col, 1)
+        current_vertical_layout.addWidget(self.sub)
+        top.addLayout(current_vertical_layout, 1)
         self._top = top
-        root.addLayout(top)
+        vertical_layout.addLayout(top)
 
         # 이유 줄끼리는 붙이고(한 덩어리), 덩어리 사이만 띄운다
         self._lines_box = QVBoxLayout()
         self.lines = [_Label(self, wrap=True) for _ in range(3)]
         for r in self.lines:
             self._lines_box.addWidget(r)
-        root.addLayout(self._lines_box)
+        vertical_layout.addLayout(self._lines_box)
         self.sep1 = self._hairline()
-        root.addWidget(self.sep1)
-        self._rows_box = QVBoxLayout()                 # '다른 선택지' 제목 + 목록 한 덩어리
+        vertical_layout.addWidget(self.sep1)
+        self._rows_box = QVBoxLayout()  # '다른 선택지' 제목 + 목록 한 덩어리
         self.section = _Label(self)
         self._rows_box.addWidget(self.section)
         self.rows = QGridLayout()
         self._rows_box.addLayout(self.rows)
-        root.addLayout(self._rows_box)
+        vertical_layout.addLayout(self._rows_box)
         self.sep2 = self._hairline()
-        root.addWidget(self.sep2)
+        vertical_layout.addWidget(self.sep2)
         self._footer_box = QVBoxLayout()
         self.footer = [_Label(self, wrap=True) for _ in range(4)]
         for f in self.footer:
             self._footer_box.addWidget(f)
-        root.addLayout(self._footer_box)
+        vertical_layout.addLayout(self._footer_box)
         self._row_widgets: List[QLabel] = []
 
     def _hairline(self) -> QFrame:
-        f = QFrame(self)
-        f.setFixedHeight(1)
-        f.setStyleSheet("background: rgba(255,255,255,20);")
-        return f
+        frame = QFrame(self)
+        frame.setFixedHeight(1)
+        frame.setStyleSheet("background: rgba(255,255,255,20);")
+        return frame
 
     def apply_scale(self, scale: float):
         self.type = tk.Type(scale)
@@ -253,9 +286,9 @@ class RecommendationHud(QWidget):
         if self.isVisible():
             self.capture_excluded = gw.set_capture_exclusion(int(self.winId()), on)
 
-    def showEvent(self, e):
-        super().showEvent(e)
-        self.fit_height()                              # 숨겨져 있을 때 그린 내용도 보일 때 높이를 다시 맞춘다
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.fit_height()  # 숨겨져 있을 때 그린 내용도 보일 때 높이를 다시 맞춘다
         hwnd = int(self.winId())
         try:
             self.capture_excluded = gw.set_capture_exclusion(hwnd, getattr(self, "_want_excluded", True))
@@ -275,38 +308,45 @@ class RecommendationHud(QWidget):
         t = self.type
         m = t.px(SHADOW)
         radius = t.px(16)
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        card = QRectF(self.rect()).adjusted(m, m, -m, -m)
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rectangle = QRectF(self.rect()).adjusted(m, m, -m, -m)
         # 부드러운 그림자: 바깥으로 갈수록 옅어지는 둥근 사각형 여러 겹
-        for i in range(m, 0, -2):
-            a = int(34 * (1 - i / m) ** 2)
+        for index in range(m, 0, -2):
+            a = int(34 * (1 - index / m) ** 2)
             sp = QPainterPath()
-            sp.addRoundedRect(card.adjusted(-i, -i + t.px(4), i, i + t.px(4)), radius + i, radius + i)
-            p.fillPath(sp, QColor(0, 0, 0, a))
+            sp.addRoundedRect(
+                rectangle.adjusted(-index, -index + t.px(4), index, index + t.px(4)),
+                radius + index,
+                radius + index,
+            )
+            painter.fillPath(sp, QColor(0, 0, 0, a))
         path = QPainterPath()
-        path.addRoundedRect(card, radius, radius)
-        p.fillPath(path, QColor(30, 30, 32, 236))
+        path.addRoundedRect(rectangle, radius, radius)
+        painter.fillPath(path, QColor(30, 30, 32, 236))
         # 위쪽이 아주 조금 밝은 재질감
-        p.save()
-        p.setClipPath(path)
-        p.fillRect(QRectF(card.left(), card.top(), card.width(), card.height() * 0.5), QColor(255, 255, 255, 6))
-        p.restore()
+        painter.save()
+        painter.setClipPath(path)
+        painter.fillRect(
+            QRectF(rectangle.left(), rectangle.top(), rectangle.width(), rectangle.height() * 0.5),
+            QColor(255, 255, 255, 6),
+        )
+        painter.restore()
         pen = QPen(QColor(10, 132, 255, 200) if self.edit_mode else QColor(255, 255, 255, 26))
         pen.setWidthF(1.5 if self.edit_mode else 1.0)
         if self.edit_mode:
             pen.setStyle(Qt.PenStyle.DashLine)
-        p.setPen(pen)
-        p.drawPath(path)
+        painter.setPen(pen)
+        painter.drawPath(path)
 
     # 위치 조정 모드에서만 끌기
-    def mousePressEvent(self, e):
-        if self.edit_mode and e.button() == Qt.MouseButton.LeftButton:
-            self._drag_from = e.globalPosition().toPoint() - self.pos()
+    def mousePressEvent(self, event):
+        if self.edit_mode and event.button() == Qt.MouseButton.LeftButton:
+            self._drag_from = event.globalPosition().toPoint() - self.pos()
 
-    def mouseMoveEvent(self, e):
+    def mouseMoveEvent(self, event):
         if self.edit_mode and self._drag_from is not None:
-            self.move(e.globalPosition().toPoint() - self._drag_from)
+            self.move(event.globalPosition().toPoint() - self._drag_from)
 
     def mouseReleaseEvent(self, e):
         if self._drag_from is not None:
@@ -327,13 +367,13 @@ class RecommendationHud(QWidget):
         self.sub.setVisible(bool(v.subtitle))
         self.status.set(v.status, v.status_tone, t.font(t.px(12), W.DemiBold), t.px(9), t.px(3))
 
-        for lbl, item in zip(self.lines, v.lines[:3] + [None] * (3 - len(v.lines[:3]))):
+        for label, item in zip(self.lines, v.lines[:3] + [None] * (3 - len(v.lines[:3]))):
             if item is None:
-                lbl.hide()
+                label.hide()
                 continue
-            lbl.style(t.font(t.px(13)), item[1])
-            lbl.setText(item[0])
-            lbl.show()
+            label.style(t.font(t.px(13)), item[1])
+            label.setText(item[0])
+            label.show()
 
         for w in self._row_widgets:
             self.rows.removeWidget(w)
@@ -364,22 +404,24 @@ class RecommendationHud(QWidget):
         self.section.setText(v.section)
         self.section.setVisible(has_rows and bool(v.section))
 
-        for lbl, item in zip(self.footer, v.footer[:4] + [None] * (4 - len(v.footer[:4]))):
+        for label, item in zip(self.footer, v.footer[:4] + [None] * (4 - len(v.footer[:4]))):
             if item is None:
-                lbl.hide()
+                label.hide()
                 continue
-            lbl.style(t.font(t.px(12)), item[1])
-            lbl.setText(item[0])
-            lbl.show()
+            label.style(t.font(t.px(12)), item[1])
+            label.setText(item[0])
+            label.show()
         self.sep2.setVisible(bool(v.footer))
         self.fit_height()
-        QTimer.singleShot(0, self.fit_height)          # 늦게 보이는 자식·글꼴 적용 뒤에 한 번 더 (높이가 모자라면 줄이 눌림)
+        QTimer.singleShot(
+            0, self.fit_height
+        )  # 늦게 보이는 자식·글꼴 적용 뒤에 한 번 더 (높이가 모자라면 줄이 눌림)
         self.update()
 
     def fit_height(self):
         """내용에 맞는 높이로 고정. 줄바꿈 글자가 있으면 adjustSize 가 높이를 넉넉히 잡아 남는 공간이 줄 사이로
         퍼지므로 폭에 맞는 높이(heightForWidth)로 — 고정해 두면 뒤에 부르는 adjustSize 가 되돌리지 않는다."""
-        self.setMinimumHeight(0)                       # 지난번 고정 높이 풀기
+        self.setMinimumHeight(0)  # 지난번 고정 높이 풀기
         self.setMaximumHeight(16777215)
         self.adjustSize()
         self._root.activate()
@@ -391,187 +433,266 @@ class RecommendationHud(QWidget):
         t = self.type
         tone = VERDICT_TONE.get(row.verdict, "tertiary")
         cr, cg, cb, _ = TONE[tone]
-        bar = QFrame(self)
-        bar.setFixedWidth(max(3, t.px(3)))
-        bar.setStyleSheet(f"background: rgba({cr},{cg},{cb},230); border-radius: {max(1, t.px(1))}px;")
+        frame = QFrame(self)
+        frame.setFixedWidth(max(3, t.px(3)))
+        frame.setStyleSheet(f"background: rgba({cr},{cg},{cb},230); border-radius: {max(1, t.px(1))}px;")
         ic = _Label(self)
         ic.setPixmap(icon_tile(row.icons, t.px(28)))
         ic.setFixedSize(t.px(28), t.px(28))
-        box = QWidget(self)
-        box.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        box.setStyleSheet("background: transparent;")
-        vb = QVBoxLayout(box)
-        vb.setContentsMargins(0, 0, 0, 0)
-        vb.setSpacing(0)
-        name = _Label(box)
+        widget = QWidget(self)
+        widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        widget.setStyleSheet("background: transparent;")
+        vertical_layout = QVBoxLayout(widget)
+        vertical_layout.setContentsMargins(0, 0, 0, 0)
+        vertical_layout.setSpacing(0)
+        name = _Label(widget)
         dim = row.verdict in ("skip", "neutral", "unknown")
         name.style(t.font(t.px(13), W.Normal if dim else W.DemiBold), "dim" if dim else "primary")
         name.setText(row.text)
-        vb.addWidget(name)
+        vertical_layout.addWidget(name)
         if row.note:
-            why = _Label(box, wrap=True)
+            why = _Label(widget, wrap=True)
             why.style(t.font(t.px(12)), "neutral" if row.verdict in ("best", "alt") else "tertiary")
             why.setText(row.note)
-            vb.addWidget(why)
+            vertical_layout.addWidget(why)
         pill = _Pill(self)
         label = tk.VERDICT.get(row.verdict, (None, ""))[1]
         if row.badge and row.verdict in ("neutral", "skip", "alt", "pick"):
-            label = row.badge                            # 순위 + 판정 (예: '2위 비슷함', '3위 비추천', 보류면 '2위')
+            label = row.badge  # 순위 + 판정 (예: '2위 비슷함', '3위 비추천', 보류면 '2위')
         pill.set(label, tone, t.font(t.px(12), W.DemiBold), t.px(8), t.px(3))
-        self.rows.addWidget(bar, r, 0)
+        self.rows.addWidget(frame, r, 0)
         self.rows.addWidget(ic, r, 1)
-        self.rows.addWidget(box, r, 2)
+        self.rows.addWidget(widget, r, 2)
         self.rows.addWidget(pill, r, 3, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
-        self._row_widgets += [bar, ic, box, pill]
+        self._row_widgets += [frame, ic, widget, pill]
 
     # ---- 강화 선택창 ----
-    def show_recommendation(self, rec: Recommendation, points_left: Optional[int] = None):
+    def show_recommendation(self, record: Recommendation, points_left: Optional[int] = None):
         self._hide_timer.stop()
-        d = self.data
-        best = rec.best
-        tone = {"recommend": "accent", "close": "accent", "none": "warn"}.get(rec.status, "neutral")
+        game_data = self.data
+        best = record.best
+        tone = {"recommend": "accent", "close": "accent", "none": "warn"}.get(record.status, "neutral")
         # 확신도: 1위와 2위의 차이·근거 (확실 / 추천 / 근소 / 근거 약함)
-        status = rec.confidence or STATUS_TEXT.get(rec.status, "")
+        status = record.confidence or STATUS_TEXT.get(record.status, "")
         if best is not None:
-            v = HudView(title=tr("1위 {v0}", v0=d.name(best.card.item_id)),
-                        subtitle=tr("{action_text} · {position} 카드", action_text=best.action_text, position=tr(best.card.position)),
-                        status=status, status_tone="ok" if rec.confidence == tr("확실") else tone, icons=(best.card.item_id,))
-            v.lines = [(best.effect, "primary")] if best.effect else []
-            v.lines += [(r.text, "secondary") for r in best.top_reasons(1 if best.effect else 2,
-                         include_growth=rec.growth_plan is not None)]   # 결론 + 이유 한두 줄
+            value = HudView(
+                title=tr("1위 {v0}", v0=game_data.name(best.card.item_id)),
+                subtitle=tr(
+                    "{action_text} · {position} 카드",
+                    action_text=best.action_text,
+                    position=tr(best.card.position),
+                ),
+                status=status,
+                status_tone="ok" if record.confidence == tr("확실") else tone,
+                icons=(best.card.item_id,),
+            )
+            value.lines = [(best.effect, "primary")] if best.effect else []
+            value.lines += [
+                (r.text, "secondary")
+                for r in best.top_reasons(
+                    1 if best.effect else 2, include_growth=record.growth_plan is not None
+                )
+            ]  # 결론 + 이유 한두 줄
             if best.warnings:
-                v.lines.append((best.warnings[0].text, "warn"))
-        elif rec.ranked:
+                value.lines.append((best.warnings[0].text, "warn"))
+        elif record.ranked:
             # 판단 보류여도 순서는 보여 준다 (근거가 약하다는 것을 함께)
-            fb = rec.fallback or rec.ranked[0]
-            v = HudView(title=tr("1위 {v0} (무난한 선택)", v0=d.name(fb.card.item_id)),
-                        subtitle=tr("{action_text} · {position} 카드", action_text=fb.action_text, position=tr(fb.card.position)),
-                        status=status, status_tone=tone, icons=(fb.card.item_id,))
-            v.lines = [(fb.effect, "primary")] if fb.effect else []
+            fb = record.fallback or record.ranked[0]
+            value = HudView(
+                title=tr("1위 {v0} (무난한 선택)", v0=game_data.name(fb.card.item_id)),
+                subtitle=tr(
+                    "{action_text} · {position} 카드",
+                    action_text=fb.action_text,
+                    position=tr(fb.card.position),
+                ),
+                status=status,
+                status_tone=tone,
+                icons=(fb.card.item_id,),
+            )
+            value.lines = [(fb.effect, "primary")] if fb.effect else []
             # 왜 그나마 1위인지 (덱 계열·캐릭터 궁합·평가·내 기록 중 가장 큰 근거)와 걸리는 점
-            v.lines += [(r.text, "secondary") for r in fb.top_reasons(1, include_growth=rec.growth_plan is not None)]
+            value.lines += [
+                (r.text, "secondary")
+                for r in fb.top_reasons(1, include_growth=record.growth_plan is not None)
+            ]
             if fb.warnings:
-                v.lines.append((fb.warnings[0].text, "warn"))
-            v.lines.append((tr("어느 카드도 현재 덱과 뚜렷하게 이어지지 않음 — 새로고침도 고려"), "tertiary"))
+                value.lines.append((fb.warnings[0].text, "warn"))
+            value.lines.append(
+                (tr("어느 카드도 현재 덱과 뚜렷하게 이어지지 않음 — 새로고침도 고려"), "tertiary")
+            )
         else:
-            v = HudView(title=rec.headline, subtitle=rec.limitations[0] if rec.limitations else "",
-                        status=STATUS_TEXT.get(rec.status, ""), status_tone=tone)
-        top = best if best is not None else (rec.fallback or (rec.ranked[0] if rec.ranked else None))
-        if rec.growth_plan is not None:
-            gp = rec.growth_plan
-            v.lines = [(gp.summary, "primary")]
+            value = HudView(
+                title=record.headline,
+                subtitle=record.limitations[0] if record.limitations else "",
+                status=STATUS_TEXT.get(record.status, ""),
+                status_tone=tone,
+            )
+        top = best if best is not None else (record.fallback or (record.ranked[0] if record.ranked else None))
+        if record.growth_plan is not None:
+            gp = record.growth_plan
+            value.lines = [(gp.summary, "primary")]
             if gp.benefit:
-                v.lines.append((gp.benefit, "secondary"))
+                value.lines.append((gp.benefit, "secondary"))
             if best and best.warnings:
-                v.lines.append((best.warnings[0].text, "warn"))
+                value.lines.append((best.warnings[0].text, "warn"))
             elif gp.effect:
-                v.lines.append((gp.effect, "secondary"))
-        if rec.discovery_text:
-            v.lines.insert(0, (rec.discovery_text, "primary"))
-            if len(v.lines) > 3:
-                warnings = [line for line in v.lines[1:] if line[1] == "warn"][:1]
-                details = [line for line in v.lines[1:] if line[1] != "warn"]
-                v.lines = v.lines[:1] + details[:2 - len(warnings)] + warnings
+                value.lines.append((gp.effect, "secondary"))
+        if record.discovery_text:
+            value.lines.insert(0, (record.discovery_text, "primary"))
+            if len(value.lines) > 3:
+                warnings = [line for line in value.lines[1:] if line[1] == "warn"][:1]
+                details = [line for line in value.lines[1:] if line[1] != "warn"]
+                value.lines = value.lines[:1] + details[: 2 - len(warnings)] + warnings
         # 나머지는 순위 순서로 (게임 화면 위치는 각 줄에 적혀 있다)
-        others = sorted((e for e in rec.evals if e is not top),
-                        key=lambda e: card_rank(rec, e) or 99)
+        others = sorted(
+            (evaluation for evaluation in record.evals if evaluation is not top),
+            key=lambda e: card_rank(record, e) or 99,
+        )
         if self.compact:
-            v.lines = v.lines[:1]
-            if rec.banish_text:
-                v.footer.append((rec.banish_text, "warn"))
-            if rec.reroll_status == "consider":
-                v.footer.append((rec.reroll_text, "warn"))
-            self.render_view(v)
+            value.lines = value.lines[:1]
+            if record.banish_text:
+                value.footer.append((record.banish_text, "warn"))
+            if record.reroll_status == "consider":
+                value.footer.append((record.reroll_text, "warn"))
+            self.render_view(value)
             return
-        v.section = tr("다른 선택지")
-        v.rows = [self._row(e, rec) for e in others]
+        value.section = tr("다른 선택지")
+        value.rows = [self._row(e, record) for e in others]
         # 아래 줄은 행동이 필요한 것만, 최대 2줄 (체력·다음 보스 같은 상황 요약은 설정 창에 있다)
-        if rec.banish_text:
-            v.footer.append((rec.banish_text, "warn"))
-        if rec.reroll_status == "consider" and rec.reroll_text:
-            v.footer.append((rec.reroll_text, "warn"))
-        if rec.plan_text:
-            v.footer.append((rec.plan_text, "secondary"))
+        if record.banish_text:
+            value.footer.append((record.banish_text, "warn"))
+        if record.reroll_status == "consider" and record.reroll_text:
+            value.footer.append((record.reroll_text, "warn"))
+        if record.plan_text:
+            value.footer.append((record.plan_text, "secondary"))
         if points_left and points_left > 1:
-            v.footer.append((tr("강화 포인트 {points_left}개 남음", points_left=points_left), "tertiary"))
-        if best is None and rec.limitations:
-            v.footer.append((rec.limitations[0], "tertiary"))
-        v.footer = v.footer[:2]
+            value.footer.append((tr("강화 포인트 {points_left}개 남음", points_left=points_left), "tertiary"))
+        if best is None and record.limitations:
+            value.footer.append((record.limitations[0], "tertiary"))
+        value.footer = value.footer[:2]
         # 고정한 덱 목표는 경고 두 줄에 밀려 안 보이면 안 된다 — 경고 하나를 양보한다
-        if rec.plan_text and rec.plan_locked and (rec.plan_text, "secondary") not in v.footer:
-            v.footer = v.footer[:1] + [(rec.plan_text, "secondary")]
-        self.render_view(v)
+        if record.plan_text and record.plan_locked and (record.plan_text, "secondary") not in value.footer:
+            value.footer = value.footer[:1] + [(record.plan_text, "secondary")]
+        self.render_view(value)
 
-    def _row(self, e: ActionEval, rec: Recommendation) -> HudRow:
-        verdict = card_verdict(rec, e)
-        if not e.evaluated:
-            return HudRow((None,), tr("{position} 카드", position=tr(e.card.position)), "", verdict=verdict)
-        n = card_rank(rec, e)
-        act = tr("레벨 {level_after}", level_after=e.level_after) if e.action.startswith("upgrade") and e.level_after else e.action_text
+    def _row(self, evaluation: ActionEval, record: Recommendation) -> HudRow:
+        verdict = card_verdict(record, evaluation)
+        if not evaluation.evaluated:
+            return HudRow(
+                (None,), tr("{position} 카드", position=tr(evaluation.card.position)), "", verdict=verdict
+            )
+        n = card_rank(record, evaluation)
+        act = (
+            tr("레벨 {level_after}", level_after=evaluation.level_after)
+            if evaluation.action.startswith("upgrade") and evaluation.level_after
+            else evaluation.action_text
+        )
         # 게임 카드에 이미 순위 배지가 있으니 이름을 앞에, 행동·이유는 아랫줄 한마디로
-        text = tr("{n}위  {v0}", n=n, v0=self.data.name(e.card.item_id)) if n else self.data.name(e.card.item_id)
-        top = e.top_reasons(1, include_growth=rec.growth_plan is not None)
+        text = (
+            tr("{n}위  {v0}", n=n, v0=self.data.name(evaluation.card.item_id))
+            if n
+            else self.data.name(evaluation.card.item_id)
+        )
+        top = evaluation.top_reasons(1, include_growth=record.growth_plan is not None)
         good = (top[0].short or top[0].text) if top else ""
-        bad = e.warnings[0].text if e.warnings else ""
+        bad = evaluation.warnings[0].text if evaluation.warnings else ""
         if verdict in ("banish", "skip"):
             why = bad or (tr("{good}, 1위보다 약함", good=good) if good else tr("현재 덱과 연결 없음"))
         else:
             why = " · ".join(x for x in (good, bad) if x)
-        if e.effect:
-            why = f"{e.effect} · {why}" if why else e.effect
-        if e.growth_plan is not None and rec.growth_plan is not None:
-            why = e.growth_plan.summary
+        if evaluation.effect:
+            why = f"{evaluation.effect} · {why}" if why else evaluation.effect
+        if evaluation.growth_plan is not None and record.growth_plan is not None:
+            why = evaluation.growth_plan.summary
         why = f"{act} · {why}" if why else act
-        return HudRow((e.card.item_id,), text, why, verdict=verdict, badge=card_badge(rec, e))
+        return HudRow(
+            (evaluation.card.item_id,), text, why, verdict=verdict, badge=card_badge(record, evaluation)
+        )
 
     # ---- 보스 격퇴 후: 원정 계속 / 복귀 ----
     def show_expedition(self, adv):
         self._hide_timer.stop()
         tone = {"continue": "ok", "return": "warn"}.get(adv.verdict, "neutral")
         status = {"continue": tr("계속"), "return": tr("복귀")}.get(adv.verdict, tr("선택"))
-        v = HudView(title=adv.headline, subtitle=tr("보스 격퇴 · 원정 계속 또는 복귀"), status=status, status_tone=tone)
-        v.lines = [(r, "secondary") for r in adv.reasons[:3]]
+        value = HudView(
+            title=adv.headline,
+            subtitle=tr("보스 격퇴 · 원정 계속 또는 복귀"),
+            status=status,
+            status_tone=tone,
+        )
+        value.lines = [(reason, "secondary") for reason in adv.reasons[:3]]
         if adv.best_depth:
-            v.footer.append((tr("이 지역 무한의 심연 최고 기록 {best_depth}m", best_depth=adv.best_depth), "tertiary"))
-        v.footer += [(c, "tertiary") for c in adv.cautions[:2]]
-        self.render_view(v)
+            value.footer.append(
+                (tr("이 지역 무한의 심연 최고 기록 {best_depth}m", best_depth=adv.best_depth), "tertiary")
+            )
+        value.footer += [(c, "tertiary") for c in adv.cautions[:2]]
+        self.render_view(value)
 
     # ---- 융합 화면 ----
-    def show_fusion(self, rec: FusionRecommendation):
+    def show_fusion(self, record: FusionRecommendation):
         self._hide_timer.stop()
-        best = rec.best
-        tone = {"recommend": "accent", "close": "accent", "none": "warn"}.get(rec.status, "neutral")
+        best = record.best
+        tone = {"recommend": "accent", "close": "accent", "none": "warn"}.get(record.status, "neutral")
         if best is not None:
             icons = (best.result_id,) if best.kind == "evo" else (best.display_parts or tuple(best.parts))
-            v = HudView(title=rec.headline, subtitle=best.detail, status=STATUS_TEXT.get(rec.status, ""),
-                        status_tone=tone, icons=icons)
-            v.lines = [(r.text, "secondary") for r in sorted(best.reasons, key=lambda r: -r.weight)[:2]]
+            value = HudView(
+                title=record.headline,
+                subtitle=best.detail,
+                status=STATUS_TEXT.get(record.status, ""),
+                status_tone=tone,
+                icons=icons,
+            )
+            value.lines = [
+                (reason.text, "secondary") for reason in sorted(best.reasons, key=lambda r: -r.weight)[:2]
+            ]
             if best.warnings:
-                v.lines.append((best.warnings[0].text, "warn"))
+                value.lines.append((best.warnings[0].text, "warn"))
         else:
-            v = HudView(title=rec.headline, status=STATUS_TEXT.get(rec.status, ""), status_tone=tone)
+            value = HudView(
+                title=record.headline, status=STATUS_TEXT.get(record.status, ""), status_tone=tone
+            )
         rows = []
-        for p in rec.evos + rec.combos + ([rec.free] if rec.free else []):
+        for p in record.evos + record.combos + ([record.free] if record.free else []):
             if p is best:
                 continue
             icons = (p.result_id,) if p.kind == "evo" else (p.display_parts or tuple(p.parts))
             verb = {"evo": tr("진화"), "combo": tr("융합"), "free": tr("강화")}[p.kind]
-            note, tone2 = ((p.warnings[0].short, "warn") if p.warnings else
-                           (next((r.short for r in p.reasons if r.rule_id in ("combo_ai", "evo_chain")), ""), "tertiary"))
+            note, tone2 = (
+                (p.warnings[0].short, "warn")
+                if p.warnings
+                else (
+                    next(
+                        (reason.short for reason in p.reasons if reason.rule_id in ("combo_ai", "evo_chain")),
+                        "",
+                    ),
+                    "tertiary",
+                )
+            )
             rows.append(HudRow(icons, f"{p.title}  {verb}", note, tone2))
-        v.section = tr("다른 후보")
-        v.rows = rows[:4]
-        if rec.notes:
-            v.footer = [(" · ".join(rec.notes[:2]), "tertiary")]
-        self.render_view(v)
+        value.section = tr("다른 후보")
+        value.rows = rows[:4]
+        if record.notes:
+            value.footer = [(" · ".join(record.notes[:2]), "tertiary")]
+        self.render_view(value)
 
     # ---- 짧은 알림 ----
-    def show_message(self, headline: str, body: str = "", tone: tk.RGBA = tk.TEXT_3, hide_after_ms: int = 0,
-                     item_id: Optional[str] = None):
+    def show_message(
+        self,
+        headline: str,
+        body: str = "",
+        tone: tk.RGBA = tk.TEXT_3,
+        hide_after_ms: int = 0,
+        item_id: Optional[str] = None,
+    ):
         tone_name = "ok" if tone == tk.OK else "warn" if tone == tk.WARN else "neutral"
-        v = HudView(title=headline, subtitle=body, icons=(item_id,) if item_id else (),
-                    status={"ok": tr("반영됨"), "warn": tr("확인 필요")}.get(tone_name, ""), status_tone=tone_name)
-        self.render_view(v)
+        value = HudView(
+            title=headline,
+            subtitle=body,
+            icons=(item_id,) if item_id else (),
+            status={"ok": tr("반영됨"), "warn": tr("확인 필요")}.get(tone_name, ""),
+            status_tone=tone_name,
+        )
+        self.render_view(value)
         if hide_after_ms:
             self._hide_timer.start(hide_after_ms)
         else:

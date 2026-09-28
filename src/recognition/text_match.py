@@ -6,6 +6,7 @@
 - 유사 비교는 호출하는 쪽이 제목 자리라고 판단한 줄에만 쓰고, 세 글자 이상·편집 거리 1·유일한 후보일 때만 받아들인다.
 - 두 항목의 이름이 같아 구분할 수 없으면 미확인으로 돌려준다.
 """
+
 from __future__ import annotations
 
 import re
@@ -28,18 +29,22 @@ def strip_level_suffix(text: str) -> str:
 def edit_distance(a: str, b: str, limit: int = 2) -> int:
     if abs(len(a) - len(b)) > limit:
         return limit + 1
-    prev = list(range(len(b) + 1))
-    for i, ca in enumerate(a, 1):
-        cur = [i]
-        best = i
-        for j, cb in enumerate(b, 1):
-            v = min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb))
-            cur.append(v)
-            best = min(best, v)
+    previous = list(range(len(b) + 1))
+    for index, ca in enumerate(a, 1):
+        current = [index]
+        best = index
+        for other_index, cb in enumerate(b, 1):
+            value = min(
+                previous[other_index] + 1,
+                current[other_index - 1] + 1,
+                previous[other_index - 1] + (ca != cb),
+            )
+            current.append(value)
+            best = min(best, value)
         if best > limit:
             return limit + 1
-        prev = cur
-    return prev[-1]
+        previous = current
+    return previous[-1]
 
 
 class NameIndex:
@@ -69,8 +74,9 @@ class NameIndex:
             return None
         if key in self._map:
             return self._map[key]
-        hits = [ident for name, ident in self._map.items()
-                if len(name) >= 3 and edit_distance(key, name, 1) <= 1]
+        hits = [
+            ident for name, ident in self._map.items() if len(name) >= 3 and edit_distance(key, name, 1) <= 1
+        ]
         return hits[0] if len(hits) == 1 else None
 
     def __len__(self) -> int:

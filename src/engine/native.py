@@ -31,56 +31,56 @@ def lib():
     if os.environ.get("BXP_NO_NATIVE") or os.name != "nt" or not os.path.exists(_DLL):
         return None
     try:
-        dll = ctypes.CDLL(_DLL)
-        if dll.bxp_version() != 9:
+        native_library = ctypes.CDLL(_DLL)
+        if native_library.bxp_version() != 9:
             return None
-        P = ctypes.POINTER
-        d, i = ctypes.c_double, ctypes.c_int
-        dll.bxp_simulate_team.restype = i
-        dll.bxp_simulate_team.argtypes = [
-            P(d),
-            i,
-            P(i),
-            P(i),
-            P(i),
-            P(i),
-            P(i),
-            P(d),
-            P(d),
-            P(d),
-            P(i),
-            P(i),
-            P(i),
-            i,
-            P(d),
-            P(i),
-            d,
-            i,
-            P(i),
-            P(i),
-            P(i),
-            P(d),
-            i,
-            P(d),
-            P(i),
-            P(i),
-            P(i),
-            P(i),
-            P(i),
-            P(d),
-            P(i),
-            P(i),
-            i,
-            P(d),
-            d,
-            i,
-            P(i),
-            P(i),
+        pointer_type = ctypes.POINTER
+        double_type, integer_type = ctypes.c_double, ctypes.c_int
+        native_library.bxp_simulate_team.restype = integer_type
+        native_library.bxp_simulate_team.argtypes = [
+            pointer_type(double_type),
+            integer_type,
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            pointer_type(double_type),
+            pointer_type(double_type),
+            pointer_type(double_type),
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            integer_type,
+            pointer_type(double_type),
+            pointer_type(integer_type),
+            double_type,
+            integer_type,
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            pointer_type(double_type),
+            integer_type,
+            pointer_type(double_type),
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            pointer_type(double_type),
+            pointer_type(integer_type),
+            pointer_type(integer_type),
+            integer_type,
+            pointer_type(double_type),
+            double_type,
+            integer_type,
+            pointer_type(integer_type),
+            pointer_type(integer_type),
         ]
-        _lib = dll
+        _lib = native_library
         log.info("네이티브 계산 모듈 사용 (%s)", _DLL)
-    except (OSError, AttributeError) as e:
-        log.warning("네이티브 계산 모듈을 불러오지 못해 파이썬으로 계산합니다: %s", e)
+    except (OSError, AttributeError) as error:
+        log.warning("네이티브 계산 모듈을 불러오지 못해 파이썬으로 계산합니다: %s", error)
         return None
     return _lib
 
@@ -93,38 +93,43 @@ class PackedWorld:
     """기지 모양을 DLL 에 넘길 배열로 (World 마다 한 번)."""
 
     def __init__(self, world):
-        self.world = _arr(
+        self.world_bounds = _arr(
             ctypes.c_double,
             [world.left, world.right, world.bottom, world.top, world.radius, float(world.use_bounds)],
         )
-        self.roads = _arr(ctypes.c_double, [v for box in world.roads for v in box])
+        self.roads = _arr(ctypes.c_double, [value for box in world.roads for value in box])
         shapes = world.shapes
-        self.n = len(shapes)
-        self.bids = [s.bid for s in shapes]
-        self.kind = _arr(ctypes.c_int, [KIND[s.kind] | (8 if s.environment else 0) for s in shapes])
-        self.bid = _arr(ctypes.c_int, self.bids)
-        off, cnt, pts, circ, bb = [], [], [], [], []
-        for s in shapes:
-            off.append(len(pts) // 2)
-            cnt.append(len(s.pts))
-            for x, y in s.pts:
-                pts += [x, y]
-            circ += [s.c[0], s.c[1], s.r]
-            bb += list(s.bb)
-        self.pt_off, self.pt_cnt = _arr(ctypes.c_int, off), _arr(ctypes.c_int, cnt)
-        self.pts, self.circ, self.bb = (
-            _arr(ctypes.c_double, pts),
-            _arr(ctypes.c_double, circ),
-            _arr(ctypes.c_double, bb),
+        self.shape_count = len(shapes)
+        self.building_ids = [shape.bid for shape in shapes]
+        self.shape_types = _arr(
+            ctypes.c_int, [KIND[shape.kind] | (8 if shape.environment else 0) for shape in shapes]
+        )
+        self.shape_building_ids = _arr(ctypes.c_int, self.building_ids)
+        point_offsets, point_counts, points, circles, bounds = [], [], [], [], []
+        for shape in shapes:
+            point_offsets.append(len(points) // 2)
+            point_counts.append(len(shape.pts))
+            for x, y in shape.pts:
+                points += [x, y]
+            circles += [shape.c[0], shape.c[1], shape.r]
+            bounds += list(shape.bb)
+        self.point_offsets, self.point_counts = (
+            _arr(ctypes.c_int, point_offsets),
+            _arr(ctypes.c_int, point_counts),
+        )
+        self.vertices, self.circles, self.bounds = (
+            _arr(ctypes.c_double, points),
+            _arr(ctypes.c_double, circles),
+            _arr(ctypes.c_double, bounds),
         )
         # 건물 슬롯: 모양의 건물 id 마다 하나 (id 가 같은 모양은 같은 슬롯 — 자원·횟수가 건물 단위)
         self.slot_ids: List[int] = []
-        idx: Dict[int, int] = {}
-        for b in self.bids:
-            if b not in idx:
-                idx[b] = len(self.slot_ids)
-                self.slot_ids.append(b)
-        self.slot = _arr(ctypes.c_int, [idx[b] for b in self.bids])
+        index: Dict[int, int] = {}
+        for building_id in self.building_ids:
+            if building_id not in index:
+                index[building_id] = len(self.slot_ids)
+                self.slot_ids.append(building_id)
+        self.shape_slots = _arr(ctypes.c_int, [index[building_id] for building_id in self.building_ids])
 
 
 def simulate_team(
@@ -140,77 +145,93 @@ def simulate_team(
 ) -> Optional[List[int]]:
     """harvest_sim.simulate_team 과 같은 계산. 작업자(Worker)의 위치·경로·획득을 채우고 합계를 돌려준다.
     flags_of(bid) → (flags, rtype, res). 쓸 수 없으면 None (파이썬으로 계산)."""
-    dll = lib()
-    if dll is None:
+    native_library = lib()
+    if native_library is None:
         return None
-    pw = getattr(world, "_packed", None)
-    if pw is None:
-        pw = world._packed = PackedWorld(world)
-    fl, rt, rs = [], [], []
-    for b in pw.slot_ids:
-        f, r, n = flags_of(b)
-        fl.append(f)
-        rt.append(r)
-        rs.append(n)
-    ns = len(pw.slot_ids)
-    flags, rtype, res = _arr(ctypes.c_int, fl), _arr(ctypes.c_int, rt), _arr(ctypes.c_int, rs)
-    nw = len(workers)
-    wk = _arr(ctypes.c_double, [v for w in workers for v in (w.x, w.y, w.dx, w.dy, w.speed, w.t)])
-    ups = _arr(
+    packed_world = getattr(world, "_packed", None)
+    if packed_world is None:
+        packed_world = world._packed = PackedWorld(world)
+    building_flags, resource_types, resource_stocks = [], [], []
+    for building_id in packed_world.slot_ids:
+        building_flag, resource_type, remaining_stock = flags_of(building_id)
+        building_flags.append(building_flag)
+        resource_types.append(resource_type)
+        resource_stocks.append(remaining_stock)
+    slot_count = len(packed_world.slot_ids)
+    flags_buffer, resource_type_buffer, resource_buffer = (
+        _arr(ctypes.c_int, building_flags),
+        _arr(ctypes.c_int, resource_types),
+        _arr(ctypes.c_int, resource_stocks),
+    )
+    worker_count = len(workers)
+    worker_buffer = _arr(
+        ctypes.c_double,
+        [
+            value
+            for worker in workers
+            for value in (worker.x, worker.y, worker.dx, worker.dy, worker.speed, worker.t)
+        ],
+    )
+    upgrade_flags = _arr(
         ctypes.c_int,
         [
-            (U_PIERCE_BUILDINGS if w.upgrades.get("kPierceBuildings") else 0)
-            | (U_PIERCE_STONE if w.upgrades.get("kPierceStone") else 0)
-            | (U_PIERCE_WOOD if w.upgrades.get("kPierceWood") else 0)
-            for w in workers
+            (U_PIERCE_BUILDINGS if worker.upgrades.get("kPierceBuildings") else 0)
+            | (U_PIERCE_STONE if worker.upgrades.get("kPierceStone") else 0)
+            | (U_PIERCE_WOOD if worker.upgrades.get("kPierceWood") else 0)
+            for worker in workers
         ],
     )
     total = (ctypes.c_int * 4)()
-    gain = (ctypes.c_int * max(1, 4 * nw))()
-    cnt = (ctypes.c_int * max(1, ns))()
-    points = (ctypes.c_int * max(1, ns))()
-    harvested = (ctypes.c_int * max(1, ns))()
+    gain = (ctypes.c_int * max(1, 4 * worker_count))()
+    hit_counts = (ctypes.c_int * max(1, slot_count))()
+    points = (ctypes.c_int * max(1, slot_count))()
+    harvested = (ctypes.c_int * max(1, slot_count))()
     from .harvest_sim import _game_bonus
 
-    build_bonus = _arr(ctypes.c_int, [(_game_bonus(w.harvest_bonus, "kMoreBuildPts") or 0) for w in workers])
+    build_bonus = _arr(
+        ctypes.c_int, [(_game_bonus(worker.harvest_bonus, "kMoreBuildPts") or 0) for worker in workers]
+    )
     from .harvest_sim import harvest_effects
 
-    effects = [harvest_effects(w.upgrades, w.harvest_bonus) for w in workers]
-    amounts = _arr(ctypes.c_int, [v for amount, _, _ in effects for v in amount])
-    clocks = _arr(ctypes.c_int, [v for _, clock, _ in effects for v in clock])
+    effects = [harvest_effects(worker.upgrades, worker.harvest_bonus) for worker in workers]
+    amounts = _arr(ctypes.c_int, [value for amount, _, _ in effects for value in amount])
+    clocks = _arr(ctypes.c_int, [value for _, clock, _ in effects for value in clock])
     radii = _arr(ctypes.c_double, [radius for _, _, radius in effects])
-    clock_counts = (ctypes.c_int * max(1, 4 * nw))()
-    touching = _arr(ctypes.c_int, [int(bid in w.touching) for w in workers for bid in pw.slot_ids])
-    bounced = _arr(ctypes.c_int, [int(w.just_bounced) for w in workers])
-    cap = max_events + nw + 8
-    path = (ctypes.c_double * (4 * cap))()
+    clock_counts = (ctypes.c_int * max(1, 4 * worker_count))()
+    touching = _arr(
+        ctypes.c_int,
+        [int(building_id in worker.touching) for worker in workers for building_id in packed_world.slot_ids],
+    )
+    bounced = _arr(ctypes.c_int, [int(worker.just_bounced) for worker in workers])
+    path_capacity = max_events + worker_count + 8
+    path = (ctypes.c_double * (4 * path_capacity))()
     # 다음 사건의 시각·거리·법선과 충돌 대상을 작업자별로 저장한다.
-    event_values = (ctypes.c_double * max(1, 4 * nw))()
-    event_kinds = (ctypes.c_int * max(1, 2 * nw))()
-    n = dll.bxp_simulate_team(
-        pw.world,
-        pw.n,
-        pw.kind,
-        pw.slot,
-        pw.bid,
-        pw.pt_off,
-        pw.pt_cnt,
-        pw.pts,
-        pw.circ,
-        pw.bb,
-        flags,
-        rtype,
-        res,
-        nw,
-        wk,
-        ups,
+    event_values = (ctypes.c_double * max(1, 4 * worker_count))()
+    event_kinds = (ctypes.c_int * max(1, 2 * worker_count))()
+    path_point_count = native_library.bxp_simulate_team(
+        packed_world.world_bounds,
+        packed_world.shape_count,
+        packed_world.shape_types,
+        packed_world.shape_slots,
+        packed_world.shape_building_ids,
+        packed_world.point_offsets,
+        packed_world.point_counts,
+        packed_world.vertices,
+        packed_world.circles,
+        packed_world.bounds,
+        flags_buffer,
+        resource_type_buffer,
+        resource_buffer,
+        worker_count,
+        worker_buffer,
+        upgrade_flags,
         float(duration),
         int(max_events),
         total,
         gain,
-        cnt,
+        hit_counts,
         path,
-        cap,
+        path_capacity,
         event_values,
         event_kinds,
         build_bonus,
@@ -221,33 +242,41 @@ def simulate_team(
         clock_counts,
         harvested,
         len(world.roads),
-        pw.roads,
+        packed_world.roads,
         world.road_speed_mult,
-        ns,
+        slot_count,
         touching,
         bounced,
     )
-    if n < 0:
+    if path_point_count < 0:
         return None
-    for i, w in enumerate(workers):
-        w.x, w.y, w.dx, w.dy, w.speed, w.t = wk[6 * i : 6 * i + 6]
-        w.gain = list(gain[4 * i : 4 * i + 4])
-        w.path = []
-        w.touching = {bid for j, bid in enumerate(pw.slot_ids) if touching[i * ns + j]}
-        w.just_bounced = bool(bounced[i])
-    for k in range(n):
-        wi = int(path[4 * k])
-        workers[wi].path.append((path[4 * k + 1], path[4 * k + 2], path[4 * k + 3]))
+    for index, worker in enumerate(workers):
+        worker.x, worker.y, worker.dx, worker.dy, worker.speed, worker.t = worker_buffer[
+            6 * index : 6 * index + 6
+        ]
+        worker.gain = list(gain[4 * index : 4 * index + 4])
+        worker.path = []
+        worker.touching = {
+            building_id
+            for other_index, building_id in enumerate(packed_world.slot_ids)
+            if touching[index * slot_count + other_index]
+        }
+        worker.just_bounced = bool(bounced[index])
+    for step_index in range(path_point_count):
+        worker_index = int(path[4 * step_index])
+        workers[worker_index].path.append(
+            (path[4 * step_index + 1], path[4 * step_index + 2], path[4 * step_index + 3])
+        )
     if counts is not None:
-        for s, b in enumerate(pw.slot_ids):
-            if cnt[s]:
-                counts[b] = counts.get(b, 0) + cnt[s]
+        for slot_index, building_id in enumerate(packed_world.slot_ids):
+            if hit_counts[slot_index]:
+                counts[building_id] = counts.get(building_id, 0) + hit_counts[slot_index]
     if build_points is not None:
-        for s, b in enumerate(pw.slot_ids):
-            if points[s]:
-                build_points[b] = build_points.get(b, 0) + points[s]
+        for slot_index, building_id in enumerate(packed_world.slot_ids):
+            if points[slot_index]:
+                build_points[building_id] = build_points.get(building_id, 0) + points[slot_index]
     if collected is not None:
-        for s, b in enumerate(pw.slot_ids):
-            if harvested[s]:
-                collected[b] = collected.get(b, 0) + harvested[s]
+        for slot_index, building_id in enumerate(packed_world.slot_ids):
+            if harvested[slot_index]:
+                collected[building_id] = collected.get(building_id, 0) + harvested[slot_index]
     return list(total)

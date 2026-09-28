@@ -4,6 +4,7 @@
 선택 결과의 근거는 (1) 선택창이 닫히기 직전의 마우스 클릭이 어느 카드·버튼 위였는지,
 (2) 게임 로그의 새로고침 기록, (3) 새로고침 남은 횟수 변화다. 근거가 없으면 '확인 못 함'으로 남긴다.
 """
+
 from __future__ import annotations
 
 from collections import deque
@@ -16,7 +17,7 @@ from ..i18n import tr
 
 @dataclass
 class TrackerEvent:
-    kind: str                          # opened | updated | closed
+    kind: str  # opened | updated | closed
     session: ChoiceSession
     outcome: Optional[PickOutcome] = None
 
@@ -43,22 +44,38 @@ def _compatible(a: Tuple[Card, ...], b: Tuple[Card, ...]) -> bool:
 
 
 def _merge(old: Tuple[Card, ...], new: Tuple[Card, ...]) -> Tuple[Card, ...]:
-    out = []
+    result = []
     for co, cn in zip(old, new):
         keep_icon = cn.item_id is None and co.item_id is not None
-        out.append(replace(
-            cn,
-            item_id=cn.item_id or co.item_id,
-            icon_error=co.icon_error if keep_icon else cn.icon_error,
-            icon_margin=co.icon_margin if keep_icon else cn.icon_margin,
-            label=cn.label or co.label,
-            shown_level=cn.shown_level or co.shown_level,
-        ))
-    return tuple(out)
+        result.append(
+            replace(
+                cn,
+                item_id=cn.item_id or co.item_id,
+                icon_error=co.icon_error if keep_icon else cn.icon_error,
+                icon_margin=co.icon_margin if keep_icon else cn.icon_margin,
+                label=cn.label or co.label,
+                shown_level=cn.shown_level or co.shown_level,
+            )
+        )
+    return tuple(result)
 
 
-SESSION_FIELDS = ("inventory", "character_id", "gold", "reroll_cost", "free_rerolls", "banish_left", "points_left",
-                  "reroll_rect", "banish_rect", "skip_rect", "panel_rect", "progress", "pool", "extra_characters")
+SESSION_FIELDS = (
+    "inventory",
+    "character_id",
+    "gold",
+    "reroll_cost",
+    "free_rerolls",
+    "banish_left",
+    "points_left",
+    "reroll_rect",
+    "banish_rect",
+    "skip_rect",
+    "panel_rect",
+    "progress",
+    "pool",
+    "extra_characters",
+)
 # 열린 뒤 갱신하는 필드. 보유 목록은 선택창이 열릴 때 값으로 고정한다 — 게임은 선택을 반영한 뒤에
 # 창을 닫으므로, 갱신하면 선택 전후 비교(무엇을 골랐는지)가 불가능해진다.
 UPDATE_FIELDS = tuple(f for f in SESSION_FIELDS if f != "inventory")
@@ -107,13 +124,14 @@ class ChoiceTracker:
         self.generation += 1
         return [self._close(at, force_kind="rerolled", evidence=tr("게임 로그의 새로고침 기록"))]
 
-    def observe(self, obs: ScreenObservation, now: float, forced: bool = False,
-                immediate: bool = False) -> List[TrackerEvent]:
+    def observe(
+        self, observation: ScreenObservation, now: float, forced: bool = False, immediate: bool = False
+    ) -> List[TrackerEvent]:
         """immediate: 게임 연동처럼 확실한 입력. 두 번 확인하지 않고 바로 열고 닫는다."""
-        if obs.kind == ScreenKind.CAPTURE_FAILED:
-            return []   # 일시적인 캡처 실패는 선택창 종료로 보지 않는다
-        if obs.kind == ScreenKind.LEVEL_UP and obs.cards:
-            return self._observe_choice(obs, now, forced or immediate, immediate)
+        if observation.kind == ScreenKind.CAPTURE_FAILED:
+            return []  # 일시적인 캡처 실패는 선택창 종료로 보지 않는다
+        if observation.kind == ScreenKind.LEVEL_UP and observation.cards:
+            return self._observe_choice(observation, now, forced or immediate, immediate)
         self._candidate = None
         self._candidate_count = 0
         if self.session is None:
@@ -124,37 +142,42 @@ class ChoiceTracker:
         return []
 
     # ---- 내부 ----
-    def _observe_choice(self, obs: ScreenObservation, now: float, forced: bool,
-                        immediate: bool = False) -> List[TrackerEvent]:
-        sig = obs.card_signature()
+    def _observe_choice(
+        self, observation: ScreenObservation, now: float, forced: bool, immediate: bool = False
+    ) -> List[TrackerEvent]:
+        sig = observation.card_signature()
         s = self.session
         self._miss = 0
         if s is not None:
-            if sig == s.signature or _compatible(s.cards, obs.cards):
-                merged = _merge(s.cards, obs.cards)
+            if sig == s.signature or _compatible(s.cards, observation.cards):
+                merged = _merge(s.cards, observation.cards)
                 changed = merged != s.cards
                 s.cards = merged
-                s.frame = obs.frame
+                s.frame = observation.frame
                 s.last_seen_at = now
                 for f in UPDATE_FIELDS:
-                    v = getattr(obs, f)
-                    if v is not None and v != getattr(s, f):
-                        setattr(s, f, v)
+                    value = getattr(observation, f)
+                    if value is not None and value != getattr(s, f):
+                        setattr(s, f, value)
                         changed = True
                 return [TrackerEvent("updated", s)] if changed else []
             # 카드가 바뀜: 두 번 연속 같은 내용일 때만 전환한다(애니메이션 중간 프레임 방지)
             if not self._stable(sig, forced):
                 return []
-            events = [self._close(now, next_obs=obs)]
-            events.append(self._open(obs, now))
+            events = [self._close(now, next_obs=observation)]
+            events.append(self._open(observation, now))
             return events
 
-        if (not immediate and self._recent_closed and self._recent_closed[0] == sig
-                and now - self._recent_closed[1] < self.reopen_guard_s):
-            return []   # 닫힌 직후 화면이 사라지는 중인 프레임
+        if (
+            not immediate
+            and self._recent_closed
+            and self._recent_closed[0] == sig
+            and now - self._recent_closed[1] < self.reopen_guard_s
+        ):
+            return []  # 닫힌 직후 화면이 사라지는 중인 프레임
         if not self._stable(sig, forced):
             return []
-        return [self._open(obs, now)]
+        return [self._open(observation, now)]
 
     def _stable(self, sig: tuple, forced: bool) -> bool:
         if self._candidate == sig:
@@ -164,17 +187,28 @@ class ChoiceTracker:
             self._candidate_count = 1
         return forced or self._candidate_count >= self.stable_frames
 
-    def _open(self, obs: ScreenObservation, now: float) -> TrackerEvent:
-        s = ChoiceSession(session_id=self._next_id, opened_at=now, cards=obs.cards, frame=obs.frame, last_seen_at=now,
-                          **{f: getattr(obs, f) for f in SESSION_FIELDS})
+    def _open(self, observation: ScreenObservation, now: float) -> TrackerEvent:
+        s = ChoiceSession(
+            session_id=self._next_id,
+            opened_at=now,
+            cards=observation.cards,
+            frame=observation.frame,
+            last_seen_at=now,
+            **{f: getattr(observation, f) for f in SESSION_FIELDS},
+        )
         self._next_id += 1
         self.session = s
         self._candidate = None
         self._candidate_count = 0
         return TrackerEvent("opened", s)
 
-    def _close(self, now: float, force_kind: str = "", evidence: str = "",
-               next_obs: Optional[ScreenObservation] = None) -> TrackerEvent:
+    def _close(
+        self,
+        now: float,
+        force_kind: str = "",
+        evidence: str = "",
+        next_obs: Optional[ScreenObservation] = None,
+    ) -> TrackerEvent:
         s = self.session
         assert s is not None
         s.closed = True
@@ -188,31 +222,80 @@ class ChoiceTracker:
             outcome = self._judge(s, next_obs)
         return TrackerEvent("closed", s, outcome)
 
-    def _judge(self, s: ChoiceSession, next_obs: Optional[ScreenObservation]) -> PickOutcome:
+    def _judge(self, choice_session: ChoiceSession, next_obs: Optional[ScreenObservation]) -> PickOutcome:
         if next_obs is not None:
-            if (s.free_rerolls is not None and next_obs.free_rerolls is not None
-                    and next_obs.free_rerolls < s.free_rerolls):
-                return PickOutcome(s.session_id, "rerolled", evidence=tr("무료 새로고침 횟수 감소"), options=s.cards)
-            if (s.gold is not None and next_obs.gold is not None and s.reroll_cost
-                    and s.gold - next_obs.gold == s.reroll_cost):
-                return PickOutcome(s.session_id, "rerolled", evidence=tr("새로고침 비용만큼 골드 감소"), options=s.cards)
-            if (s.banish_left is not None and next_obs.banish_left is not None
-                    and next_obs.banish_left < s.banish_left):
-                return PickOutcome(s.session_id, "banished", evidence=tr("삭제 남은 횟수 감소"), options=s.cards)
-        ox, oy = s.frame.origin
+            if (
+                choice_session.free_rerolls is not None
+                and next_obs.free_rerolls is not None
+                and next_obs.free_rerolls < choice_session.free_rerolls
+            ):
+                return PickOutcome(
+                    choice_session.session_id,
+                    "rerolled",
+                    evidence=tr("무료 새로고침 횟수 감소"),
+                    options=choice_session.cards,
+                )
+            if (
+                choice_session.gold is not None
+                and next_obs.gold is not None
+                and choice_session.reroll_cost
+                and choice_session.gold - next_obs.gold == choice_session.reroll_cost
+            ):
+                return PickOutcome(
+                    choice_session.session_id,
+                    "rerolled",
+                    evidence=tr("새로고침 비용만큼 골드 감소"),
+                    options=choice_session.cards,
+                )
+            if (
+                choice_session.banish_left is not None
+                and next_obs.banish_left is not None
+                and next_obs.banish_left < choice_session.banish_left
+            ):
+                return PickOutcome(
+                    choice_session.session_id,
+                    "banished",
+                    evidence=tr("삭제 남은 횟수 감소"),
+                    options=choice_session.cards,
+                )
+        origin_x, origin_y = choice_session.frame.origin
         for c in reversed(self._clicks):
-            if c.at < s.opened_at - 0.2 or c.at > s.last_seen_at + 1.5:
+            if c.at < choice_session.opened_at - 0.2 or c.at > choice_session.last_seen_at + 1.5:
                 continue
-            fx, fy = c.x - ox, c.y - oy
-            if _inside(fx, fy, s.skip_rect):
-                return PickOutcome(s.session_id, "skipped", evidence=tr("넘기기 버튼 클릭"), options=s.cards)
-            if _inside(fx, fy, s.reroll_rect):
-                return PickOutcome(s.session_id, "rerolled", evidence=tr("새로고침 버튼 클릭"), options=s.cards)
-            if _inside(fx, fy, s.banish_rect):
-                return PickOutcome(s.session_id, "banished", evidence=tr("삭제 버튼 클릭"), options=s.cards)
-            for card in s.cards:
+            fx, fy = c.x - origin_x, c.y - origin_y
+            if _inside(fx, fy, choice_session.skip_rect):
+                return PickOutcome(
+                    choice_session.session_id,
+                    "skipped",
+                    evidence=tr("넘기기 버튼 클릭"),
+                    options=choice_session.cards,
+                )
+            if _inside(fx, fy, choice_session.reroll_rect):
+                return PickOutcome(
+                    choice_session.session_id,
+                    "rerolled",
+                    evidence=tr("새로고침 버튼 클릭"),
+                    options=choice_session.cards,
+                )
+            if _inside(fx, fy, choice_session.banish_rect):
+                return PickOutcome(
+                    choice_session.session_id,
+                    "banished",
+                    evidence=tr("삭제 버튼 클릭"),
+                    options=choice_session.cards,
+                )
+            for card in choice_session.cards:
                 if _inside(fx, fy, card.rect):
-                    return PickOutcome(s.session_id, "picked", card=card,
-                                       evidence=tr("{position} 카드 클릭", position=tr(card.position)), options=s.cards)
-        return PickOutcome(s.session_id, "unknown", evidence=tr("선택 근거 없음 (키보드·패드 선택이거나 클릭 위치 불명)"),
-                           options=s.cards)
+                    return PickOutcome(
+                        choice_session.session_id,
+                        "picked",
+                        card=card,
+                        evidence=tr("{position} 카드 클릭", position=tr(card.position)),
+                        options=choice_session.cards,
+                    )
+        return PickOutcome(
+            choice_session.session_id,
+            "unknown",
+            evidence=tr("선택 근거 없음 (키보드·패드 선택이거나 클릭 위치 불명)"),
+            options=choice_session.cards,
+        )

@@ -23,10 +23,14 @@ class TaskClock:
         self.is_resource = resource_tile
         self.notes = notes
         self.gain = [0, 0, 0, 0]
-        self.elapsed = {bid: b.get("task_seconds", 0) for bid, b in buildings.items()}
+        self.elapsed = {
+            building_id: building.get("task_seconds", 0) for building_id, building in buildings.items()
+        }
         self.rate = 1.0
         self.next = math.inf
-        if not any(self.is_resource(b) or b.get("is_idle_harvester") for b in buildings.values()):
+        if not any(
+            self.is_resource(building) or building.get("is_idle_harvester") for building in buildings.values()
+        ):
             return
         if not clock:
             notes.add("missing_world_task_clock")
@@ -44,56 +48,59 @@ class TaskClock:
     def tick(self):
         """보관 목록의 순서대로 처리한다. 가득 찬 자원의 작업 시계는 멈춘다."""
         changed = False
-        for bid, b in self.buildings.items():
-            if b.get("state") == "kScaffold":
+        for building_id, building in self.buildings.items():
+            if building.get("state") == "kScaffold":
                 continue
-            resource = self.is_resource(b)
-            idle = b.get("is_idle_harvester") is True
+            resource = self.is_resource(building)
+            idle = building.get("is_idle_harvester") is True
             if not resource and not idle:
-                if b.get("task_active"):
-                    self.notes.add("unsupported_world_task:" + str(b.get("type", "")))
+                if building.get("task_active"):
+                    self.notes.add("unsupported_world_task:" + str(building.get("type", "")))
                 continue
-            period = b.get("task_target_seconds")
+            period = building.get("task_target_seconds")
             if type(period) not in (int, float) or not math.isfinite(period) or period <= 0:
                 self.notes.add("missing_world_task_period")
                 continue
             if resource:
-                if self.stocks.get(bid, 0) >= b.get("cap", 0):
+                if self.stocks.get(building_id, 0) >= building.get("cap", 0):
                     continue
-            elif b.get("task_active") is not True:
+            elif building.get("task_active") is not True:
                 continue
-            self.elapsed[bid] += 1
-            if self.elapsed[bid] < period:
+            self.elapsed[building_id] += 1
+            if self.elapsed[building_id] < period:
                 continue
-            self.elapsed[bid] = 0
+            self.elapsed[building_id] = 0
             if resource:
-                self.stocks[bid] = self.stocks.get(bid, 0) + 1
-                self.sync(bid)
+                self.stocks[building_id] = self.stocks.get(building_id, 0) + 1
+                self.sync(building_id)
                 changed = True
             else:
-                kind = b.get("production_resource")
+                kind = building.get("production_resource")
                 if type(kind) is not int or kind not in (1, 2, 3):
                     self.notes.add("missing_production_resource")
                     continue
-                for tid, target in self.buildings.items():
-                    if tid == bid or not self.is_resource(target) or self.kind(target) != kind:
+                for target_id, target in self.buildings.items():
+                    if target_id == building_id or not self.is_resource(target) or self.kind(target) != kind:
                         continue
-                    stock = self.stocks.get(tid, 0)
-                    if stock <= 0 or not row_in_range(b, target):
+                    stock = self.stocks.get(target_id, 0)
+                    if stock <= 0 or not row_in_range(building, target):
                         continue
-                    amount = min(stock, max(0, int(b.get("lvl", 0))) + 1)
-                    self.stocks[tid] -= amount
+                    amount = min(stock, max(0, int(building.get("lvl", 0))) + 1)
+                    self.stocks[target_id] -= amount
                     self.gain[kind] += amount
-                    self.sync(tid)
+                    self.sync(target_id)
                     changed = True
         self.next += 1.0 / self.rate
         return changed
 
-    def sync(self, bid):
+    def sync(self, building_id):
         """재고가 비거나 다시 생긴 뒤의 충돌 계층을 같은 사본에 반영한다."""
-        b = self.buildings[bid]
-        n = self.stocks[bid]
-        kind = self.kind(b)
-        b.update(
-            res=n, can_harvest=n > 0, raycast_enabled=n > 0 and kind != 1, pickup_enabled=n > 0 and kind == 1
+        building = self.buildings[building_id]
+        stock_count = self.stocks[building_id]
+        kind = self.kind(building)
+        building.update(
+            res=stock_count,
+            can_harvest=stock_count > 0,
+            raycast_enabled=stock_count > 0 and kind != 1,
+            pickup_enabled=stock_count > 0 and kind == 1,
         )

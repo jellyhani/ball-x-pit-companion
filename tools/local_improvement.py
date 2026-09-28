@@ -3,6 +3,7 @@ r"""로컬 감시 → codex queue → 회차 완료 확인. 중복 요청을 쌓
 start --thread UUID / status / stop / ack REQUEST_ID --outcome continue|wait|stop
 감시만 로컬에서 실행한다. 실제 AI 검토에는 Codex 연결과 사용량이 필요하다.
 """
+
 from __future__ import annotations
 import argparse
 from contextlib import contextmanager
@@ -26,17 +27,17 @@ FOLDER = ROOT / "build/improvement/local"
 @contextmanager
 def locked(path):
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+b") as f:
-        if f.tell() == 0:
-            f.write(b"0")
-            f.flush()
-        f.seek(0)
-        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+    with path.open("a+b") as file_handle:
+        if file_handle.tell() == 0:
+            file_handle.write(b"0")
+            file_handle.flush()
+        file_handle.seek(0)
+        msvcrt.locking(file_handle.fileno(), msvcrt.LK_NBLCK, 1)
         try:
             yield
         finally:
-            f.seek(0)
-            msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+            file_handle.seek(0)
+            msvcrt.locking(file_handle.fileno(), msvcrt.LK_UNLCK, 1)
 
 
 def read_state(folder=FOLDER):
@@ -52,16 +53,18 @@ def save_state(state, folder=FOLDER):
 
 
 def due(state, evidence, now):
-    return (state.get("enabled", False) and not state.get("pending")
-            and now >= state.get("next_at", 0)
-            and (state.get("mode") == "continue" or evidence != state.get("baseline")))
+    return (
+        state.get("enabled", False)
+        and not state.get("pending")
+        and now >= state.get("next_at", 0)
+        and (state.get("mode") == "continue" or evidence != state.get("baseline"))
+    )
 
 
 def acknowledge(state, request, outcome, now):
     if (state.get("pending") or {}).get("id") != request:
         raise ValueError("현재 대기 요청과 완료 번호가 다릅니다.")
-    state.update(pending=None, mode=outcome, last_ack=now,
-                 next_at=now + state["interval"])
+    state.update(pending=None, mode=outcome, last_ack=now, next_at=now + state["interval"])
     if outcome == "stop":
         state["enabled"] = False
 
@@ -85,16 +88,23 @@ def deliver(state, evidence, sender, now):
     state.update(pending={"id": request, "at": now, "status": "sending"}, baseline=evidence)
     save_state(state)
     try:
-        result = sender([state["codex"], "queue", "--thread", state["thread"], "--message", prompt(request)],
-                        cwd=ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
-                        creationflags=subprocess.CREATE_NO_WINDOW)
+        result = sender(
+            [state["codex"], "queue", "--thread", state["thread"], "--message", prompt(request)],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            creationflags=subprocess.CREATE_NO_WINDOW,
+        )
         if result.returncode:
             raise RuntimeError((result.stderr or result.stdout)[-1500:])
         state["pending"]["status"] = "queued"
         state["error"] = None
-    except (OSError, subprocess.TimeoutExpired, RuntimeError) as exc:
+    except (OSError, subprocess.TimeoutExpired, RuntimeError) as error:
         state["pending"]["status"] = "unconfirmed"
-        state.update(enabled=False, error=str(exc))
+        state.update(enabled=False, error=str(error))
     save_state(state)
 
 
@@ -110,14 +120,26 @@ def run():
                     if not state.get("pending") and time.time() >= state.get("next_at", 0):
                         profile = Path(os.environ["LOCALAPPDATA"]) / "BallxPitCompanion"
                         report = inspect(profile)
-                        revision = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True,
-                                                  text=True, timeout=15, creationflags=subprocess.CREATE_NO_WINDOW)
-                        changes = subprocess.run(["git", "diff", "--no-ext-diff"], cwd=ROOT, capture_output=True,
-                                                 timeout=15, creationflags=subprocess.CREATE_NO_WINDOW)
+                        revision = subprocess.run(
+                            ["git", "rev-parse", "HEAD"],
+                            cwd=ROOT,
+                            capture_output=True,
+                            text=True,
+                            timeout=15,
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                        )
+                        changes = subprocess.run(
+                            ["git", "diff", "--no-ext-diff"],
+                            cwd=ROOT,
+                            capture_output=True,
+                            timeout=15,
+                            creationflags=subprocess.CREATE_NO_WINDOW,
+                        )
                         if revision.returncode or changes.returncode:
                             raise OSError("저장소 변경 상태를 확인하지 못했습니다.")
-                        evidence = digest([report["evidence"], revision.stdout.strip(),
-                                           digest(changes.stdout.hex())])
+                        evidence = digest(
+                            [report["evidence"], revision.stdout.strip(), digest(changes.stdout.hex())]
+                        )
                         if due(state, evidence, time.time()):
                             deliver(state, evidence, subprocess.run, time.time())
                         else:
@@ -136,16 +158,16 @@ def main():
     p.add_argument("--thread")
     p.add_argument("--interval", type=int, default=300)
     p.add_argument("--outcome", choices=("continue", "wait", "stop"), default="wait")
-    args = p.parse_args()
-    if args.action == "run":
+    arguments = p.parse_args()
+    if arguments.action == "run":
         run()
         return
     with locked(FOLDER / "state.lock"):
         state = read_state()
-        if args.action == "start":
-            if not args.thread or args.interval < 300:
+        if arguments.action == "start":
+            if not arguments.thread or arguments.interval < 300:
                 p.error("--thread UUID와 300초 이상의 --interval이 필요합니다.")
-            uuid.UUID(args.thread)
+            uuid.UUID(arguments.thread)
             if state.get("pending"):
                 p.error("이전 요청의 완료 또는 전달 여부를 먼저 확인하세요.")
             codex = shutil.which("codex")
@@ -153,19 +175,31 @@ def main():
                 p.error("Codex 명령을 찾지 못했습니다.")
             # 실행 중인 감시자가 있으면 중복 실행하지 않는다.
             with locked(FOLDER / "runner.lock"):
-                state = dict(enabled=True, thread=args.thread, codex=codex, interval=args.interval,
-                             mode="continue", next_at=time.time()+args.interval, pending=None)
+                state = dict(
+                    enabled=True,
+                    thread=arguments.thread,
+                    codex=codex,
+                    interval=arguments.interval,
+                    mode="continue",
+                    next_at=time.time() + arguments.interval,
+                    pending=None,
+                )
                 save_state(state)
             executable = Path(sys.executable).with_name("pythonw.exe")
             with (FOLDER / "runner.log").open("ab") as log:
-                child = subprocess.Popen([str(executable), str(Path(__file__).resolve()), "run"], cwd=ROOT,
-                                         creationflags=subprocess.CREATE_NO_WINDOW, stdout=log, stderr=log)
+                child = subprocess.Popen(
+                    [str(executable), str(Path(__file__).resolve()), "run"],
+                    cwd=ROOT,
+                    creationflags=subprocess.CREATE_NO_WINDOW,
+                    stdout=log,
+                    stderr=log,
+                )
             state["pid"] = child.pid
-        elif args.action == "stop":
+        elif arguments.action == "stop":
             state["enabled"] = False
-        elif args.action == "ack":
-            acknowledge(state, args.request, args.outcome, time.time())
-        if args.action != "status":
+        elif arguments.action == "ack":
+            acknowledge(state, arguments.request, arguments.outcome, time.time())
+        if arguments.action != "status":
             save_state(state)
         print(json.dumps(state, ensure_ascii=False, indent=2))
 

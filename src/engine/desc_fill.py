@@ -5,16 +5,17 @@
 자리표시자 이름과 수치 이름은 대부분 같지만 낱말이 더 끼는 경우가 있다 (damage_pct → kBonusDamagePct,
 min_spawn_cycle → kMinBlockSpawnCycle, lightning_rod_length → kLightningRodCycleLen) → 낱말 순서로 맞춘다.
 """
+
 from __future__ import annotations
 
 import re
 from typing import Dict, List, Optional, Sequence
 
 PLACEHOLDER = re.compile(r"\{\[(\w+)\]\}")
-RANGE = re.compile(r"\{\[(\w+)\]\}\s*[-~]\s*\{\[(\w+)\]\}")      # 최소-최대 한 쌍 → 레벨마다 '4-8/7-11'
-_COMPOUND = {("life", "steal"): "lifesteal"}     # 게임 수치 이름은 LifeSteal, 틀은 lifesteal
+RANGE = re.compile(r"\{\[(\w+)\]\}\s*[-~]\s*\{\[(\w+)\]\}")  # 최소-최대 한 쌍 → 레벨마다 '4-8/7-11'
+_COMPOUND = {("life", "steal"): "lifesteal"}  # 게임 수치 이름은 LifeSteal, 틀은 lifesteal
 _NORM = {"length": "len"}
-_PCT_UNITS = ("pct", "chance")          # 이 낱말로 끝나면 퍼센트 값
+_PCT_UNITS = ("pct", "chance")  # 이 낱말로 끝나면 퍼센트 값
 # 게임 내부 값이 0.1% 단위인 수치 (위키 대조: 명사수의 십자가 600 → 60%, 흡혈 45 → 4.5%, 영혼 흡입자 300 → 30%,
 # 매혹 40 → 4%). 무리어미 생성·광란·질병·사신·좀비·치명타 즉사·가시돋친 껍데기 확률은 그대로 % (위키 대조).
 PERMILLE = {"kCritChance", "kLifeStealChance", "kCharmChance"}
@@ -28,13 +29,13 @@ def _words_key(key: str) -> List[str]:
     body = key[1:] if key.startswith("k") and key[1:2].isupper() else key
     # AOEDmgPct → AOE, Dmg, Pct (대문자 약어를 한 낱말로)
     words = [w.lower() for w in re.findall(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z0-9]+|[A-Z]+", body)]
-    out: List[str] = []
+    result: List[str] = []
     for w in words:
-        if out and (out[-1], w) in _COMPOUND:
-            out[-1] = _COMPOUND[(out[-1], w)]
+        if result and (result[-1], w) in _COMPOUND:
+            result[-1] = _COMPOUND[(result[-1], w)]
         else:
-            out.append(_NORM.get(w, w))
-    return out
+            result.append(_NORM.get(w, w))
+    return result
 
 
 def _subseq(small: Sequence[str], big: Sequence[str]) -> bool:
@@ -46,10 +47,10 @@ def match_key(placeholder: str, keys: Sequence[str]) -> Optional[object]:
     """자리표시자에 맞는 수치 이름. 하나면 str, 최소·최대 짝이면 (min, max), 못 찾거나 애매하면 None."""
     ph = _words_ph(placeholder)
     kw = {k: _words_key(k) for k in keys}
-    for words in (ph, [w for w in ph if w not in ("min", "max")]):     # max_venom_stacks → kVenomStacks
+    for words in (ph, [w for w in ph if w not in ("min", "max")]):  # max_venom_stacks → kVenomStacks
         if not words:
             continue
-        cand = [k for k, w in kw.items() if _subseq(words, w)]
+        cand = [field_name for field_name, w in kw.items() if _subseq(words, w)]
         if not cand:
             continue
         exact = [k for k in cand if kw[k] == words]
@@ -82,21 +83,21 @@ def _num(v) -> str:
 
 
 def _values(rows: Sequence[Dict[str, int]], key) -> Optional[List[str]]:
-    out = []
+    result = []
     for r in rows:
         if isinstance(key, tuple):
             lo, hi = r.get(key[0]), r.get(key[1])
             if lo is None or hi is None:
                 return None
-            out.append(f"{_num(lo)}~{_num(hi)}")
+            result.append(f"{_num(lo)}~{_num(hi)}")
         else:
             if key not in r:
                 return None
-            v = r[key]
+            value = r[key]
             if key in PERMILLE or key.endswith("Tenth"):
-                v = v / 10
-            out.append(_num(v))
-    return out
+                value = value / 10
+            result.append(_num(value))
+    return result
 
 
 def fill(template: str, level_props: Optional[Sequence[Dict[str, int]]], levels: int = 3) -> Optional[str]:
@@ -104,7 +105,7 @@ def fill(template: str, level_props: Optional[Sequence[Dict[str, int]]], levels:
     틀·수치가 없으면 None (호출한 쪽이 추출 때의 설명을 그대로 씀)."""
     if not template or not level_props:
         return None
-    rows = list(level_props[:max(1, levels)])
+    rows = list(level_props[: max(1, levels)])
     keys = sorted({k for r in rows for k in r})
 
     def repl(m: "re.Match") -> str:
@@ -114,7 +115,7 @@ def fill(template: str, level_props: Optional[Sequence[Dict[str, int]]], levels:
         if not vals:
             return "?"
         text = vals[0] if len(set(vals)) == 1 else "/".join(vals)
-        after = m.string[m.end():m.end() + 1]
+        after = m.string[m.end() : m.end() + 1]
         if name.endswith(_PCT_UNITS) and not isinstance(key, tuple) and after != "%":
             text += "%"
         return text

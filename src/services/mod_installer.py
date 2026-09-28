@@ -7,6 +7,7 @@
 - 게임 원본 파일은 바꾸지 않는다. 추가한 파일 목록은 tools/bepinex/installed_files.txt 에 남아
   `bridge.ps1 uninstall` 로 지울 수 있다.
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -34,14 +35,20 @@ BEPINEX_NAME = "BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.788.zip"
 BEPINEX_ZIP = os.path.join(VENDOR, BEPINEX_NAME)
 # 공개판은 BepInEx 를 저장소에 넣지 않는다 — 설치할 때 공식 빌드 서버에서 받아 SHA-256 으로 확인한다.
 BEPINEX_URL = "https://builds.bepinex.dev/projects/bepinex_be/788/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.788%2B5b766a3.zip"
-BEPINEX_CACHE = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion", "cache",
-                             BEPINEX_NAME)
+BEPINEX_CACHE = os.path.join(
+    os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion", "cache", BEPINEX_NAME
+)
 BEPINEX_SHA256 = "F4CC496BD098A0DF4164B81E3737297707F13A47C2478DBA2F60EEFAB784817A"
 PLUGIN_DLL = os.path.join(VENDOR, "BallxPitBridge.dll")
-PLUGIN_VERSION = "1.18.1"          # Plugin.cs 의 Plugin.Version 과 같아야 한다
+PLUGIN_VERSION = "1.18.2"  # Plugin.cs 의 Plugin.Version 과 같아야 한다
 # 추가한 파일 목록 (지우기용). exe 는 설치 폴더가 읽기 전용일 수 있고 tools 폴더도 없어 사용자 자료 폴더에 둔다.
-MANIFEST = (os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion", "installed_files.txt")
-            if getattr(sys, "frozen", False) else os.path.join(ROOT, "tools", "bepinex", "installed_files.txt"))
+MANIFEST = (
+    os.path.join(
+        os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "BallxPitCompanion", "installed_files.txt"
+    )
+    if getattr(sys, "frozen", False)
+    else os.path.join(ROOT, "tools", "bepinex", "installed_files.txt")
+)
 APP_ID = "2062430"
 GAME_EXE = "Balls.exe"
 STATE_PATH = os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "BallxPitCompanion", "mod_state.json")
@@ -51,22 +58,23 @@ STATE_PATH = os.path.join(os.environ.get("LOCALAPPDATA", ROOT), "BallxPitCompani
 def find_game_dir() -> Optional[str]:
     try:
         import winreg
+
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Valve\Steam") as k:
             steam = winreg.QueryValueEx(k, "SteamPath")[0]
     except OSError:
         return None
     libs = [steam]
-    vdf = os.path.join(steam, "steamapps", "libraryfolders.vdf")
-    if os.path.exists(vdf):
-        with open(vdf, encoding="utf-8", errors="replace") as f:
-            libs += [p.replace("\\\\", "\\") for p in re.findall(r'"path"\s+"([^"]+)"', f.read())]
+    library_file = os.path.join(steam, "steamapps", "libraryfolders.vdf")
+    if os.path.exists(library_file):
+        with open(library_file, encoding="utf-8", errors="replace") as file_handle:
+            libs += [p.replace("\\\\", "\\") for p in re.findall(r'"path"\s+"([^"]+)"', file_handle.read())]
     for lib in libs:
         manifest = os.path.join(lib, "steamapps", f"appmanifest_{APP_ID}.acf")
         if os.path.exists(manifest):
-            with open(manifest, encoding="utf-8", errors="replace") as f:
-                m = re.search(r'"installdir"\s+"([^"]+)"', f.read())
-            if m:
-                path = os.path.join(lib, "steamapps", "common", m.group(1))
+            with open(manifest, encoding="utf-8", errors="replace") as file_handle:
+                match = re.search(r'"installdir"\s+"([^"]+)"', file_handle.read())
+            if match:
+                path = os.path.join(lib, "steamapps", "common", match.group(1))
                 if os.path.exists(os.path.join(path, GAME_EXE)):
                     return os.path.normpath(path)
     return None
@@ -75,23 +83,27 @@ def find_game_dir() -> Optional[str]:
 def read_build_id(game_dir: str) -> Optional[str]:
     manifest = os.path.join(os.path.dirname(os.path.dirname(game_dir)), f"appmanifest_{APP_ID}.acf")
     try:
-        with open(manifest, encoding="utf-8", errors="replace") as f:
-            m = re.search(r'"buildid"\s+"(\d+)"', f.read())
-        return m.group(1) if m else None
+        with open(manifest, encoding="utf-8", errors="replace") as file_handle:
+            match = re.search(r'"buildid"\s+"(\d+)"', file_handle.read())
+        return match.group(1) if match else None
     except OSError:
         return None
 
 
 def game_running() -> Optional[bool]:
     try:
-        result = subprocess.run(["tasklist", "/FI", f"IMAGENAME eq {GAME_EXE}", "/NH", "/FO", "CSV"],
-                             capture_output=True, text=True, timeout=10,
-                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        result = subprocess.run(
+            ["tasklist", "/FI", f"IMAGENAME eq {GAME_EXE}", "/NH", "/FO", "CSV"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
         if result.returncode != 0:
             return None
         return GAME_EXE.lower() in result.stdout.lower()
     except (OSError, subprocess.SubprocessError):
-        return None                     # 조회 실패는 종료 확인이 아니다.
+        return None  # 조회 실패는 종료 확인이 아니다.
 
 
 # ---- 파일 버전 (Windows 버전 리소스) ----
@@ -99,30 +111,32 @@ def file_version(path: str) -> Optional[str]:
     if not os.path.exists(path):
         return None
     try:
-        ver = ctypes.WinDLL("version")
-        size = ver.GetFileVersionInfoSizeW(path, None)
+        version_library = ctypes.WinDLL("version")
+        size = version_library.GetFileVersionInfoSizeW(path, None)
         if not size:
             return None
-        buf = ctypes.create_string_buffer(size)
-        if not ver.GetFileVersionInfoW(path, 0, size, buf):
+        buffer = ctypes.create_string_buffer(size)
+        if not version_library.GetFileVersionInfoW(path, 0, size, buffer):
             return None
-        p = ctypes.c_void_p()
-        n = wintypes.UINT()
-        if not ver.VerQueryValueW(buf, "\\", ctypes.byref(p), ctypes.byref(n)):
+        version_pointer = ctypes.c_void_p()
+        version_size = wintypes.UINT()
+        if not version_library.VerQueryValueW(
+            buffer, "\\", ctypes.byref(version_pointer), ctypes.byref(version_size)
+        ):
             return None
-        ffi = ctypes.cast(p, ctypes.POINTER(wintypes.DWORD * 13)).contents
-        ms, ls = ffi[2], ffi[3]
-        return f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}"
+        fixed_file_info = ctypes.cast(version_pointer, ctypes.POINTER(wintypes.DWORD * 13)).contents
+        version_high, version_low = fixed_file_info[2], fixed_file_info[3]
+        return f"{version_high >> 16}.{version_high & 0xFFFF}.{version_low >> 16}"
     except OSError:
         return None
 
 
 def _doorstop_enabled(game_dir: str) -> Optional[bool]:
-    ini = os.path.join(game_dir, "doorstop_config.ini")
+    config_path = os.path.join(game_dir, "doorstop_config.ini")
     try:
-        with open(ini, encoding="utf-8", errors="replace") as f:
-            m = re.search(r"^\s*enabled\s*=\s*(\w+)", f.read(), re.M)
-        return None if m is None else m.group(1).lower() == "true"
+        with open(config_path, encoding="utf-8", errors="replace") as file_handle:
+            match = re.search(r"^\s*enabled\s*=\s*(\w+)", file_handle.read(), re.M)
+        return None if match is None else match.group(1).lower() == "true"
     except OSError:
         return None
 
@@ -161,22 +175,27 @@ class ModStatus:
         if self.plugin_version is None:
             return tr("연동 플러그인 없음")
         if not self.plugin_current:
-            return tr("연동 플러그인 옛 버전 {plugin_version} (최신 {PLUGIN_VERSION})", plugin_version=self.plugin_version, PLUGIN_VERSION=PLUGIN_VERSION)
+            return tr(
+                "연동 플러그인 옛 버전 {plugin_version} (최신 {PLUGIN_VERSION})",
+                plugin_version=self.plugin_version,
+                PLUGIN_VERSION=PLUGIN_VERSION,
+            )
         return tr("설치됨 · 플러그인 {plugin_version}", plugin_version=self.plugin_version)
 
 
 def check(game_dir: Optional[str] = None) -> ModStatus:
     game_dir = game_dir or find_game_dir()
-    st = ModStatus(game_dir, vendor_ok=os.path.exists(PLUGIN_DLL))     # BepInEx 는 없으면 설치 때 받는다
+    status = ModStatus(game_dir, vendor_ok=os.path.exists(PLUGIN_DLL))  # BepInEx 는 없으면 설치 때 받는다
     if not game_dir:
-        return st
-    st.build_id = read_build_id(game_dir)
-    st.bepinex = (os.path.exists(os.path.join(game_dir, "BepInEx", "core", "BepInEx.Core.dll"))
-                  and os.path.exists(os.path.join(game_dir, "winhttp.dll")))
-    st.enabled = _doorstop_enabled(game_dir) if st.bepinex else None
-    st.plugin_version = file_version(os.path.join(game_dir, "BepInEx", "plugins", "BallxPitBridge.dll"))
-    st.running = game_running()
-    return st
+        return status
+    status.build_id = read_build_id(game_dir)
+    status.bepinex = os.path.exists(
+        os.path.join(game_dir, "BepInEx", "core", "BepInEx.Core.dll")
+    ) and os.path.exists(os.path.join(game_dir, "winhttp.dll"))
+    status.enabled = _doorstop_enabled(game_dir) if status.bepinex else None
+    status.plugin_version = file_version(os.path.join(game_dir, "BepInEx", "plugins", "BallxPitBridge.dll"))
+    status.running = game_running()
+    return status
 
 
 # ---- 설치 ----
@@ -196,6 +215,7 @@ def require_game_closed():
 def uninstall_bridge(game_dir: str) -> bool:
     """이 도구의 DLL 하나만 제거한다. 공유 BepInEx·다른 모드·설정·로그는 보존한다."""
     from pathlib import Path
+
     require_game_closed()
     root = Path(game_dir).resolve(strict=True)
     if not (root / GAME_EXE).is_file():
@@ -214,40 +234,42 @@ def uninstall_bridge(game_dir: str) -> bool:
 
 
 def _sha256(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest().upper()
+    hasher = hashlib.sha256()
+    with open(path, "rb") as file_handle:
+        for chunk in iter(lambda: file_handle.read(1 << 20), b""):
+            hasher.update(chunk)
+    return hasher.hexdigest().upper()
 
 
 def _record(files: List[str]):
     try:
         existing = []
         if os.path.exists(MANIFEST):
-            with open(MANIFEST, encoding="utf-8") as f:
-                existing = [x.strip() for x in f if x.strip()]
+            with open(MANIFEST, encoding="utf-8") as file_handle:
+                existing = [x.strip() for x in file_handle if x.strip()]
         merged = list(dict.fromkeys(existing + files))
         os.makedirs(os.path.dirname(MANIFEST), exist_ok=True)
-        with open(MANIFEST, "w", encoding="utf-8") as f:
-            f.write("\n".join(merged) + "\n")
+        with open(MANIFEST, "w", encoding="utf-8") as file_handle:
+            file_handle.write("\n".join(merged) + "\n")
     except OSError:
         log.exception("설치 파일 목록 기록 실패")
 
 
-def _save_state(st: ModStatus):
+def _save_state(status: ModStatus):
     try:
         os.makedirs(os.path.dirname(STATE_PATH), exist_ok=True)
-        with open(STATE_PATH, "w", encoding="utf-8") as f:
-            json.dump({"build_id": st.build_id, "plugin": st.plugin_version, "at": time.time()}, f)
+        with open(STATE_PATH, "w", encoding="utf-8") as file_handle:
+            json.dump(
+                {"build_id": status.build_id, "plugin": status.plugin_version, "at": time.time()}, file_handle
+            )
     except OSError:
         pass
 
 
 def load_state() -> dict:
     try:
-        with open(STATE_PATH, encoding="utf-8") as f:
-            return json.load(f)
+        with open(STATE_PATH, encoding="utf-8") as file_handle:
+            return json.load(file_handle)
     except (OSError, ValueError):
         return {}
 
@@ -258,80 +280,83 @@ def bepinex_zip(say: Callable[[str], None] = log.info) -> str:
         if os.path.exists(path) and _sha256(path) == BEPINEX_SHA256:
             return path
     import urllib.request
+
     os.makedirs(os.path.dirname(BEPINEX_CACHE), exist_ok=True)
-    tmp = BEPINEX_CACHE + ".part"
+    temporary_path = BEPINEX_CACHE + ".part"
     say(tr("BepInEx 내려받는 중 (공식 빌드 서버, 약 34MB): {BEPINEX_URL}", BEPINEX_URL=BEPINEX_URL))
     try:
-        with urllib.request.urlopen(BEPINEX_URL, timeout=60) as r, open(tmp, "wb") as f:
-            shutil.copyfileobj(r, f)
-    except OSError as e:
-        raise InstallError(f"BepInEx 를 내려받지 못했습니다: {e}")
-    if _sha256(tmp) != BEPINEX_SHA256:
-        os.remove(tmp)
+        with urllib.request.urlopen(BEPINEX_URL, timeout=60) as r, open(temporary_path, "wb") as file_handle:
+            shutil.copyfileobj(r, file_handle)
+    except OSError as error:
+        raise InstallError(f"BepInEx 를 내려받지 못했습니다: {error}")
+    if _sha256(temporary_path) != BEPINEX_SHA256:
+        os.remove(temporary_path)
         raise InstallError("내려받은 BepInEx 가 예상 파일과 다릅니다 (SHA-256 불일치) — 설치 중단")
-    os.replace(tmp, BEPINEX_CACHE)
+    os.replace(temporary_path, BEPINEX_CACHE)
     return BEPINEX_CACHE
 
 
-def install(st: Optional[ModStatus] = None, say: Callable[[str], None] = log.info) -> ModStatus:
+def install(status: Optional[ModStatus] = None, say: Callable[[str], None] = log.info) -> ModStatus:
     """없는 것만 설치한다: BepInEx(없을 때) + 플러그인(없거나 옛 버전일 때). 게임이 꺼져 있어야 한다."""
-    st = st or check()
-    if not st.game_dir:
+    status = status or check()
+    if not status.game_dir:
         raise InstallError("게임 설치 폴더를 찾지 못했습니다")
     require_game_closed()
-    if not st.vendor_ok:
+    if not status.vendor_ok:
         raise InstallError(f"설치 파일이 없습니다: {VENDOR}")
     added: List[str] = []
-    if not st.bepinex:
+    if not status.bepinex:
         say(tr("BepInEx 설치 파일 확인 중 (SHA-256)"))
         zip_path = bepinex_zip(say)
         with zipfile.ZipFile(zip_path) as z:
             for info in z.infolist():
                 name = info.filename.replace("/", os.sep)
-                dst = os.path.normpath(os.path.join(st.game_dir, name))
-                if not dst.startswith(os.path.normpath(st.game_dir) + os.sep):
+                destination = os.path.normpath(os.path.join(status.game_dir, name))
+                if not destination.startswith(os.path.normpath(status.game_dir) + os.sep):
                     raise InstallError(f"압축 파일 경로가 이상합니다: {info.filename}")
                 if info.is_dir():
-                    os.makedirs(dst, exist_ok=True)
+                    os.makedirs(destination, exist_ok=True)
                     continue
-                if os.path.exists(dst):
-                    continue          # 이미 있는 파일은 건드리지 않는다
-                os.makedirs(os.path.dirname(dst), exist_ok=True)
-                with z.open(info) as src, open(dst, "wb") as out:
-                    shutil.copyfileobj(src, out)
+                if os.path.exists(destination):
+                    continue  # 이미 있는 파일은 건드리지 않는다
+                os.makedirs(os.path.dirname(destination), exist_ok=True)
+                with z.open(info) as source, open(destination, "wb") as result:
+                    shutil.copyfileobj(source, result)
                 added.append(name)
         say(tr("BepInEx 설치 완료 (파일 {v0}개)", v0=len(added)))
-    plugins = os.path.join(st.game_dir, "BepInEx", "plugins")
+    plugins = os.path.join(status.game_dir, "BepInEx", "plugins")
     os.makedirs(plugins, exist_ok=True)
-    dst = os.path.join(plugins, "BallxPitBridge.dll")
-    if file_version(dst) != PLUGIN_VERSION:
+    destination = os.path.join(plugins, "BallxPitBridge.dll")
+    if file_version(destination) != PLUGIN_VERSION:
         # 임시 파일 준비 중 게임이 재실행되면 기존 DLL을 그대로 둔다. 최종 교체는 원자적으로 한다.
         import tempfile
-        fd, pending = tempfile.mkstemp(prefix="BallxPitBridge-", suffix=".pending", dir=plugins)
-        os.close(fd)
+
+        file_descriptor, pending = tempfile.mkstemp(prefix="BallxPitBridge-", suffix=".pending", dir=plugins)
+        os.close(file_descriptor)
         try:
             shutil.copy2(PLUGIN_DLL, pending)
             require_game_closed()
-            os.replace(pending, dst)
+            os.replace(pending, destination)
         finally:
             if os.path.exists(pending):
                 os.unlink(pending)
         added.append(os.path.join("BepInEx", "plugins", "BallxPitBridge.dll"))
         say(tr("연동 플러그인 {PLUGIN_VERSION} 설치", PLUGIN_VERSION=PLUGIN_VERSION))
     _record(added)
-    new = check(st.game_dir)
+    new = check(status.game_dir)
     _save_state(new)
     if not new.plugin_current:
         raise InstallError(f"설치 뒤 확인 실패: {new.summary}")
     return new
 
 
-def wait_and_install(say: Callable[[str], None] = log.info, poll: float = 5.0,
-                     stop: Callable[[], bool] = lambda: False) -> Optional[ModStatus]:
+def wait_and_install(
+    say: Callable[[str], None] = log.info, poll: float = 5.0, stop: Callable[[], bool] = lambda: False
+) -> Optional[ModStatus]:
     """게임이 꺼질 때까지 기다렸다가 설치한다 (도우미 앱 백그라운드용)."""
     while not stop():
         if game_running() is False:
-            time.sleep(2.0)   # 게임이 파일을 놓을 시간
+            time.sleep(2.0)  # 게임이 파일을 놓을 시간
             return install(say=say)
         time.sleep(poll)
     return None
@@ -341,15 +366,16 @@ def bepinex_log_problems(game_dir: str, max_bytes: int = 200_000) -> List[str]:
     """BepInEx 로그에서 우리 플러그인 오류만 뽑는다 (게임 업데이트로 깨졌는지 판단용)."""
     path = os.path.join(game_dir, "BepInEx", "LogOutput.log")
     try:
-        with open(path, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            f.seek(max(0, f.tell() - max_bytes))
-            text = f.read().decode("utf-8", errors="replace")
+        with open(path, "rb") as file_handle:
+            file_handle.seek(0, os.SEEK_END)
+            file_handle.seek(max(0, file_handle.tell() - max_bytes))
+            text = file_handle.read().decode("utf-8", errors="replace")
     except OSError:
         return []
-    out = []
+    result = []
     for line in text.splitlines():
-        if ("BALL x PIT Bridge" in line or "BallxPitBridge" in line) and ("Error" in line or "실패" in line
-                                                                         or "Exception" in line):
-            out.append(line.strip()[:300])
-    return out[-5:]
+        if ("BALL x PIT Bridge" in line or "BallxPitBridge" in line) and (
+            "Error" in line or "실패" in line or "Exception" in line
+        ):
+            result.append(line.strip()[:300])
+    return result[-5:]

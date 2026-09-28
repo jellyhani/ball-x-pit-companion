@@ -4,6 +4,7 @@
 - 엔진은 신뢰도 수치를 주지 않는다. 그래서 이 앱도 'OCR 몇 %' 같은 수치를 만들지 않는다.
 - 작업 스레드 안에서 전용 asyncio 루프로 기다린다. GUI 스레드에서는 호출하지 않는다.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -15,8 +16,10 @@ from PIL import Image
 
 from ..domain import OcrLine
 
-INSTALL_HINT = ('관리자 PowerShell에서: Add-WindowsCapability -Online -Name "Language.OCR~~~ko-KR~0.0.1.0" '
-                '(또는 설정 > 시간 및 언어 > 언어에서 한국어 기본 입력 기능 설치)')
+INSTALL_HINT = (
+    '관리자 PowerShell에서: Add-WindowsCapability -Online -Name "Language.OCR~~~ko-KR~0.0.1.0" '
+    "(또는 설정 > 시간 및 언어 > 언어에서 한국어 기본 입력 기능 설치)"
+)
 
 
 @dataclass(frozen=True)
@@ -30,15 +33,17 @@ def check_ocr(lang: str = "ko") -> OcrStatus:
     try:
         from winrt.windows.globalization import Language
         from winrt.windows.media.ocr import OcrEngine
-    except ImportError as e:
-        return OcrStatus(False, f"OCR 모듈을 불러오지 못했습니다: {e}. requirements.txt 의 패키지를 설치하세요.")
+    except ImportError as error:
+        return OcrStatus(
+            False, f"OCR 모듈을 불러오지 못했습니다: {error}. requirements.txt 의 패키지를 설치하세요."
+        )
     try:
         langs = tuple(l.language_tag for l in OcrEngine.available_recognizer_languages)
         if not OcrEngine.is_language_supported(Language(lang)):
             return OcrStatus(False, f"Windows 한국어 OCR이 설치되어 있지 않습니다. {INSTALL_HINT}", langs)
         return OcrStatus(True, "Windows 한국어 OCR 사용 가능", langs)
-    except Exception as e:  # WinRT 예외 형식이 일정하지 않다
-        return OcrStatus(False, f"Windows OCR 초기화 실패: {e}")
+    except Exception as error:  # WinRT 예외 형식이 일정하지 않다
+        return OcrStatus(False, f"Windows OCR 초기화 실패: {error}")
 
 
 Word = Tuple[str, float, float, float, float]  # text, x, y, w, h
@@ -49,29 +54,34 @@ def split_lines(lines: List[List[Word]], inv_scale: float = 1.0) -> List[OcrLine
 
     나란히 놓인 카드 제목('대출혈   무쇠   바람')이 한 줄로 합쳐져 이름 대조가 실패하는 것을 막는다.
     """
-    out: List[OcrLine] = []
+    result: List[OcrLine] = []
     for words in lines:
         seg: List[Word] = []
         for wd in sorted(words, key=lambda w: w[1]):
             if seg:
-                prev = seg[-1]
-                gap = wd[1] - (prev[1] + prev[3])
-                if gap > 1.5 * max(prev[4], wd[4]):
-                    out.append(_make_line(seg, inv_scale))
+                previous = seg[-1]
+                gap = wd[1] - (previous[1] + previous[3])
+                if gap > 1.5 * max(previous[4], wd[4]):
+                    result.append(_make_line(seg, inv_scale))
                     seg = []
             seg.append(wd)
         if seg:
-            out.append(_make_line(seg, inv_scale))
-    return out
+            result.append(_make_line(seg, inv_scale))
+    return result
 
 
 def _make_line(seg: List[Word], inv: float) -> OcrLine:
-    x0 = min(w[1] for w in seg)
-    y0 = min(w[2] for w in seg)
-    x1 = max(w[1] + w[3] for w in seg)
-    y1 = max(w[2] + w[4] for w in seg)
-    return OcrLine(text=" ".join(w[0] for w in seg), x=int(x0 * inv), y=int(y0 * inv),
-                   w=int((x1 - x0) * inv), h=int((y1 - y0) * inv))
+    left_x = min(w[1] for w in seg)
+    bottom_y = min(w[2] for w in seg)
+    right_x = max(w[1] + w[3] for w in seg)
+    top_y = max(w[2] + w[4] for w in seg)
+    return OcrLine(
+        text=" ".join(w[0] for w in seg),
+        x=int(left_x * inv),
+        y=int(bottom_y * inv),
+        w=int((right_x - left_x) * inv),
+        h=int((top_y - bottom_y) * inv),
+    )
 
 
 class OcrReader:
@@ -80,6 +90,7 @@ class OcrReader:
     def __init__(self, lang: str = "ko", target_height: int = 810):
         from winrt.windows.globalization import Language
         from winrt.windows.media.ocr import OcrEngine
+
         self._engine = OcrEngine.try_create_from_language(Language(lang))
         if self._engine is None:
             raise RuntimeError("OCR 엔진을 만들지 못했습니다")
@@ -93,16 +104,25 @@ class OcrReader:
         from winrt.windows.storage.streams import DataWriter
 
         scale = min(1.0, self.target_height / max(1, img.height))
-        work = img if scale >= 0.999 else img.resize((round(img.width * scale), round(img.height * scale)),
-                                                     Image.Resampling.BILINEAR)
+        work = (
+            img
+            if scale >= 0.999
+            else img.resize((round(img.width * scale), round(img.height * scale)), Image.Resampling.BILINEAR)
+        )
         rgba = work.convert("RGBA")
         writer = DataWriter()
         writer.write_bytes(rgba.tobytes())
-        bmp = SoftwareBitmap.create_copy_from_buffer(writer.detach_buffer(), BitmapPixelFormat.RGBA8,
-                                                     rgba.width, rgba.height)
+        bmp = SoftwareBitmap.create_copy_from_buffer(
+            writer.detach_buffer(), BitmapPixelFormat.RGBA8, rgba.width, rgba.height
+        )
         result = self._loop.run_until_complete(self._recognize(bmp))
-        words = [[(w.text, w.bounding_rect.x, w.bounding_rect.y, w.bounding_rect.width, w.bounding_rect.height)
-                  for w in line.words] for line in result.lines]
+        words = [
+            [
+                (w.text, w.bounding_rect.x, w.bounding_rect.y, w.bounding_rect.width, w.bounding_rect.height)
+                for w in line.words
+            ]
+            for line in result.lines
+        ]
         return split_lines(words, 1.0 / scale)
 
     async def _recognize(self, bmp):

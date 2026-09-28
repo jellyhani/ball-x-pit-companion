@@ -5,6 +5,7 @@
 - 캡처는 게임 클라이언트 영역만 가져온다. 게임이 앞에 있으면 화면 영역(mss), 뒤에 있으면 PrintWindow.
   오버레이 창은 SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)로 캡처에서 빠진다.
 """
+
 from __future__ import annotations
 
 import ctypes
@@ -51,12 +52,23 @@ gdi32.SelectObject.argtypes = [wintypes.HDC, wintypes.HGDIOBJ]
 gdi32.SelectObject.restype = wintypes.HGDIOBJ
 gdi32.DeleteObject.argtypes = [wintypes.HGDIOBJ]
 gdi32.DeleteDC.argtypes = [wintypes.HDC]
-gdi32.GetDIBits.argtypes = [wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, wintypes.UINT,
-                            ctypes.c_void_p, ctypes.c_void_p, wintypes.UINT]
+gdi32.GetDIBits.argtypes = [
+    wintypes.HDC,
+    wintypes.HBITMAP,
+    wintypes.UINT,
+    wintypes.UINT,
+    ctypes.c_void_p,
+    ctypes.c_void_p,
+    wintypes.UINT,
+]
 kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 kernel32.OpenProcess.restype = wintypes.HANDLE
-kernel32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR,
-                                                ctypes.POINTER(wintypes.DWORD)]
+kernel32.QueryFullProcessImageNameW.argtypes = [
+    wintypes.HANDLE,
+    wintypes.DWORD,
+    wintypes.LPWSTR,
+    ctypes.POINTER(wintypes.DWORD),
+]
 kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 
 
@@ -64,8 +76,8 @@ kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 class GameWindow:
     hwnd: int
     pid: int
-    origin: Tuple[int, int]      # 클라이언트 영역 왼쪽 위 (화면 물리 좌표)
-    size: Tuple[int, int]        # 클라이언트 영역 크기 (물리 픽셀)
+    origin: Tuple[int, int]  # 클라이언트 영역 왼쪽 위 (화면 물리 좌표)
+    size: Tuple[int, int]  # 클라이언트 영역 크기 (물리 픽셀)
     dpi: int
     minimized: bool
     foreground: bool
@@ -80,10 +92,10 @@ def _process_path(pid: int) -> str:
     if not h:
         return ""
     try:
-        buf = ctypes.create_unicode_buffer(1024)
-        n = wintypes.DWORD(len(buf))
-        if kernel32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(n)):
-            return buf.value
+        buffer = ctypes.create_unicode_buffer(1024)
+        item_count = wintypes.DWORD(len(buffer))
+        if kernel32.QueryFullProcessImageNameW(h, 0, buffer, ctypes.byref(item_count)):
+            return buffer.value
         return ""
     finally:
         kernel32.CloseHandle(h)
@@ -126,8 +138,12 @@ def describe_window(hwnd: int, pid: int = 0) -> Optional[GameWindow]:
     if fg:
         user32.GetWindowThreadProcessId(fg, ctypes.byref(fg_pid))
     return GameWindow(
-        hwnd=hwnd, pid=pid, origin=(pt.x, pt.y), size=(rc.right - rc.left, rc.bottom - rc.top),
-        dpi=dpi, minimized=bool(user32.IsIconic(hwnd)),
+        hwnd=hwnd,
+        pid=pid,
+        origin=(pt.x, pt.y),
+        size=(rc.right - rc.left, rc.bottom - rc.top),
+        dpi=dpi,
+        minimized=bool(user32.IsIconic(hwnd)),
         foreground=(fg == hwnd or (pid != 0 and fg_pid.value == pid)),
     )
 
@@ -149,10 +165,10 @@ def capture_print_window(win: GameWindow) -> Optional[Image.Image]:
         if not user32.PrintWindow(win.hwnd, hdc_mem, PW_RENDERFULLCONTENT):
             return None
         bmi = struct.pack("<IiiHHIIiiII", 40, w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
-        buf = ctypes.create_string_buffer(w * h * 4)
-        if not gdi32.GetDIBits(hdc_mem, hbm, 0, h, buf, bmi, DIB_RGB_COLORS):
+        buffer = ctypes.create_string_buffer(w * h * 4)
+        if not gdi32.GetDIBits(hdc_mem, hbm, 0, h, buffer, bmi, DIB_RGB_COLORS):
             return None
-        img = Image.frombuffer("RGB", (w, h), buf.raw, "raw", "BGRX", 0, 1)
+        img = Image.frombuffer("RGB", (w, h), buffer.raw, "raw", "BGRX", 0, 1)
         return None if _is_blank(img) else img.copy()
     finally:
         gdi32.SelectObject(hdc_mem, old)
@@ -163,6 +179,7 @@ def capture_print_window(win: GameWindow) -> Optional[Image.Image]:
 
 def capture_screen_region(win: GameWindow) -> Optional[Image.Image]:
     import mss
+
     x, y, w, h = win.rect
     with mss.MSS() as sct:
         shot = sct.grab({"left": x, "top": y, "width": w, "height": h})
@@ -185,13 +202,15 @@ def capture_game(win: GameWindow) -> Tuple[Optional[Image.Image], str]:
     for method in order:
         try:
             img = capture_screen_region(win) if method == "screen" else capture_print_window(win)
-        except Exception as e:  # mss·GDI 오류는 형식이 다양하다
-            reasons.append(f"{method}: {e}")
+        except Exception as error:  # mss·GDI 오류는 형식이 다양하다
+            reasons.append(f"{method}: {error}")
             continue
         if img is not None:
             return img, tr("화면 영역") if method == "screen" else "PrintWindow"
         reasons.append(tr("{method}: 검은 화면", method=method))
-    return None, tr("캡처 실패 (") + ", ".join(reasons) + tr(") — 독점 전체 화면이면 '전체 창 모드'로 바꿔 주세요")
+    return None, tr("캡처 실패 (") + ", ".join(reasons) + tr(
+        ") — 독점 전체 화면이면 '전체 창 모드'로 바꿔 주세요"
+    )
 
 
 WDA_EXCLUDEFROMCAPTURE = 0x11
@@ -202,17 +221,20 @@ user32.GetWindowDisplayAffinity.argtypes = [wintypes.HWND, ctypes.POINTER(wintyp
 def set_capture_exclusion(hwnd: int, on: bool) -> bool:
     """on=True 면 캡처에서 제외, False 면 스크린샷·녹화에 보이게 한다. 실제 적용된 상태(제외 여부)를 돌려준다."""
     user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE if on else 0)
-    v = wintypes.DWORD()
-    user32.GetWindowDisplayAffinity(hwnd, ctypes.byref(v))
-    return v.value == WDA_EXCLUDEFROMCAPTURE
+    value = wintypes.DWORD()
+    user32.GetWindowDisplayAffinity(hwnd, ctypes.byref(value))
+    return value.value == WDA_EXCLUDEFROMCAPTURE
 
 
 def exclude_from_capture(hwnd: int) -> bool:
     """오버레이 창을 화면 캡처에서 제외한다. 실제로 적용됐는지 다시 읽어서 확인한다."""
     if not user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE):
         return False
-    v = wintypes.DWORD()
-    return bool(user32.GetWindowDisplayAffinity(hwnd, ctypes.byref(v))) and v.value == WDA_EXCLUDEFROMCAPTURE
+    value = wintypes.DWORD()
+    return (
+        bool(user32.GetWindowDisplayAffinity(hwnd, ctypes.byref(value)))
+        and value.value == WDA_EXCLUDEFROMCAPTURE
+    )
 
 
 GWL_EXSTYLE = -20

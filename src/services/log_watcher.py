@@ -17,6 +17,7 @@
   "skippin kX since it was just in the pool" + 스택에 _AnimateReroll   강화 새로고침
   "Launched version '...'"                                  게임 버전
 """
+
 from __future__ import annotations
 
 import logging
@@ -41,7 +42,7 @@ _VERSION_RE = re.compile(r"^Launched version '([^']+)'")
 
 @dataclass(frozen=True)
 class LogEvent:
-    kind: str            # version | base_state | run_started | run_ended | level_complete | game_over | reroll | pool_skip
+    kind: str  # version | base_state | run_started | run_ended | level_complete | game_over | reroll | pool_skip
     value: str = ""
     extra: str = ""
 
@@ -60,7 +61,7 @@ class PlayerLogParser:
         if cut < 0:
             self._pending = text
             return []
-        self._pending = text[cut + 2:]
+        self._pending = text[cut + 2 :]
         events: List[LogEvent] = []
         for block in text[:cut].split("\n\n"):
             events.extend(self._parse_block(block))
@@ -71,48 +72,52 @@ class PlayerLogParser:
         if not lines:
             return []
         try:
-            k = next(i for i, ln in enumerate(lines) if ln.startswith("UnityEngine.DebugLogHandler:Internal_Log"))
+            step_index = next(
+                index
+                for index, ln in enumerate(lines)
+                if ln.startswith("UnityEngine.DebugLogHandler:Internal_Log")
+            )
         except StopIteration:
             return []
-        message = lines[k - 1].strip() if k > 0 else ""
-        stack = [ln for ln in lines[k + 1:] if not ln.startswith("UnityEngine.")]
+        message = lines[step_index - 1].strip() if step_index > 0 else ""
+        stack = [ln for ln in lines[step_index + 1 :] if not ln.startswith("UnityEngine.")]
         caller = stack[0] if stack else ""
         stack_text = "\n".join(stack)
-        out: List[LogEvent] = []
+        result: List[LogEvent] = []
 
         m = _VERSION_RE.match(message)
         if m:
-            out.append(LogEvent("version", m.group(1)))
+            result.append(LogEvent("version", m.group(1)))
         m = _STATE_RE.match(message)
         if m and caller.startswith("BaseMgr:SetState"):
             old, new = m.groups()
-            out.append(LogEvent("base_state", new, old))
+            result.append(LogEvent("base_state", new, old))
             if new == "kEnteringLvl":
-                out.append(LogEvent("run_started"))
+                result.append(LogEvent("run_started"))
             elif new == "kReturningFromLvl":
-                out.append(LogEvent("run_ended"))
+                result.append(LogEvent("run_ended"))
         if caller.startswith("GameMgr:MarkLevelComplete"):
-            out.append(LogEvent("level_complete"))
+            result.append(LogEvent("level_complete"))
         if "_EnterGameOver" in stack_text:
-            out.append(LogEvent("game_over"))
+            result.append(LogEvent("game_over"))
         m = _SKIP_RE.match(message)
         if m:
             if "_AnimateReroll" in stack_text:
-                out.append(LogEvent("reroll", m.group(1)))
+                result.append(LogEvent("reroll", m.group(1)))
             else:
-                out.append(LogEvent("pool_skip", m.group(1)))
-        return out
+                result.append(LogEvent("pool_skip", m.group(1)))
+        return result
 
 
 def summarize_phase(events: List[LogEvent]) -> str:
     """기존 로그 전체에서 현재 위치를 판단한다: in_run | base | unknown."""
     phase = "unknown"
-    for ev in events:
-        if ev.kind == "run_started":
+    for event in events:
+        if event.kind == "run_started":
             phase = "in_run"
-        elif ev.kind == "run_ended":
+        elif event.kind == "run_ended":
             phase = "base"
-        elif ev.kind == "base_state" and phase == "unknown":
+        elif event.kind == "base_state" and phase == "unknown":
             phase = "base"
     return phase
 
@@ -120,8 +125,8 @@ def summarize_phase(events: List[LogEvent]) -> str:
 class PlayerLogWatcher(QObject):
     """Player.log 를 주기적으로 읽는다. 게임이 다시 시작되어 파일이 줄어들면 처음부터 읽는다."""
 
-    log_event = Signal(object, float)          # LogEvent, monotonic time
-    synced = Signal(str, str)              # phase, game_version
+    log_event = Signal(object, float)  # LogEvent, monotonic time
+    synced = Signal(str, str)  # phase, game_version
     status_changed = Signal(str)
 
     def __init__(self, log_dir: str = DEFAULT_LOG_DIR, interval_ms: int = 250, parent=None):
@@ -143,11 +148,11 @@ class PlayerLogWatcher(QObject):
     def stop(self):
         self._timer.stop()
 
-    def _read_from(self, pos: int) -> str:
-        with open(self.path, "rb") as f:
-            f.seek(pos)
-            data = f.read()
-        self._pos = pos + len(data)
+    def _read_from(self, position: int) -> str:
+        with open(self.path, "rb") as file_handle:
+            file_handle.seek(position)
+            data = file_handle.read()
+        self._pos = position + len(data)
         return data.decode("utf-8", errors="replace")
 
     def _initial_sync(self):
@@ -181,11 +186,11 @@ class PlayerLogWatcher(QObject):
         if size == self._pos:
             return
         now = time.monotonic()
-        for ev in self._parser.feed(self._read_from(self._pos)):
-            if ev.kind == "version":
-                self.game_version = ev.value
-            elif ev.kind == "run_started":
+        for event in self._parser.feed(self._read_from(self._pos)):
+            if event.kind == "version":
+                self.game_version = event.value
+            elif event.kind == "run_started":
                 self.phase = "in_run"
-            elif ev.kind == "run_ended":
+            elif event.kind == "run_ended":
                 self.phase = "base"
-            self.log_event.emit(ev, now)
+            self.log_event.emit(event, now)

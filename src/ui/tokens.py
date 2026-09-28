@@ -3,6 +3,7 @@
 색은 어두운 중성 배경, 밝은 본문, 강조색 하나(파랑). 주황은 주의, 빨강은 경고에만 쓴다.
 QSS 의 rgba 알파는 Qt 규칙대로 0–255 정수로 쓴다.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,7 +15,7 @@ from ..i18n import tr
 
 RGBA = Tuple[int, int, int, int]
 
-BG: RGBA = (24, 24, 27, 238)          # HUD 배경 (반투명)
+BG: RGBA = (24, 24, 27, 238)  # HUD 배경 (반투명)
 BG_SOLID: RGBA = (24, 24, 27, 255)
 SURFACE: RGBA = (36, 36, 40, 255)
 SURFACE_2: RGBA = (48, 48, 54, 255)
@@ -34,7 +35,7 @@ VERDICT = {
     "banish": (WARN, tr("삭제 추천")),
     "skip": (DANGER, tr("비추천")),
     "neutral": (TEXT_2, tr("보류")),
-    "pick": (ACCENT, tr("보류")),        # 판단 보류 중 그나마 나은 하나 (이름표는 '1위 무난')
+    "pick": (ACCENT, tr("보류")),  # 판단 보류 중 그나마 나은 하나 (이름표는 '1위 무난')
     "unknown": (TEXT_3, tr("읽지 못함")),
 }
 
@@ -55,6 +56,7 @@ def families() -> Tuple[str, ...]:
     global _families_cache
     if _families_cache is None:
         from ..i18n import current_lang
+
         available = set(QFontDatabase.families())
         want = _LANG_FAMILIES.get(current_lang(), ()) + _KO_FAMILIES
         _families_cache = tuple(f for f in want if f in available)
@@ -73,11 +75,11 @@ def css_families() -> str:
 
 def base_font() -> QFont:
     """글꼴 목록이 들어간 QFont (크기·굵기는 호출한 쪽이 정한다)."""
-    f = QFont()
+    font = QFont()
     fs = families()
     if fs:
-        f.setFamilies(list(fs))
-    return f
+        font.setFamilies(list(fs))
+    return font
 
 
 def qcolor(c: RGBA) -> QColor:
@@ -91,25 +93,35 @@ def css(c: RGBA) -> str:
 @dataclass(frozen=True)
 class Type:
     """글자 크기(px, 100% 배율 기준). scale 로 한꺼번에 키운다."""
+
     scale: float = 1.0
 
     def px(self, base: float) -> int:
         return round(base * self.scale)
 
     @property
-    def headline(self) -> int: return self.px(19)
+    def headline(self) -> int:
+        return self.px(19)
+
     @property
-    def title(self) -> int: return self.px(16)
+    def title(self) -> int:
+        return self.px(16)
+
     @property
-    def body(self) -> int: return self.px(14)
+    def body(self) -> int:
+        return self.px(14)
+
     @property
-    def caption(self) -> int: return self.px(12)
+    def caption(self) -> int:
+        return self.px(12)
+
     @property
-    def space(self) -> int: return self.px(8)
+    def space(self) -> int:
+        return self.px(8)
 
     def font(self, size: int, weight: QFont.Weight = QFont.Weight.Normal) -> QFont:
-        f = base_font()
-        f.setPixelSize(size)
-        f.setWeight(weight)
-        f.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
-        return f
+        font = base_font()
+        font.setPixelSize(size)
+        font.setWeight(weight)
+        font.setHintingPreference(QFont.HintingPreference.PreferNoHinting)
+        return font

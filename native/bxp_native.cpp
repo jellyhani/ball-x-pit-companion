@@ -59,68 +59,74 @@ enum
     U_PIERCE_WOOD = 4
 }; // 작업자 채집 강화
 
-inline double fabs_(double x)
+inline double fabs_(double value)
 {
-    return x < 0 ? -x : x;
+    return value < 0 ? -value : value;
 }
-inline double sqrt_(double x)
+inline double sqrt_(double value)
 {
-    return _mm_cvtsd_f64(_mm_sqrt_sd(_mm_set_sd(x), _mm_set_sd(x)));
+    return _mm_cvtsd_f64(_mm_sqrt_sd(_mm_set_sd(value), _mm_set_sd(value)));
 }
-inline double min_(double a, double b)
+inline double min_(double first_value, double second_value)
 {
-    return b < a ? b : a;
+    return second_value < first_value ? second_value : first_value;
 } // 같으면 a (파이썬 min 과 같음)
-inline double max_(double a, double b)
+inline double max_(double first_value, double second_value)
 {
-    return a < b ? b : a;
+    return first_value < second_value ? second_value : first_value;
 }
 
-bool ray_segment(double ox, double oy, double dx, double dy, double ax, double ay, double bx, double by,
-                 double &t, double &nx, double &ny)
+bool ray_segment(double origin_x, double origin_y, double direction_x, double direction_y, double start_x,
+                 double start_y, double end_x, double end_y, double &distance, double &normal_x,
+                 double &normal_y)
 {
-    double ex = bx - ax, ey = by - ay;
-    double den = dx * ey - dy * ex;
-    if (fabs_(den) < EPS)
+    double edge_x = end_x - start_x, edge_y = end_y - start_y;
+    double denominator = direction_x * edge_y - direction_y * edge_x;
+    if (fabs_(denominator) < EPS)
         return false;
-    double tt = ((ax - ox) * ey - (ay - oy) * ex) / den;
-    double u = ((ax - ox) * dy - (ay - oy) * dx) / den;
-    if (tt <= EPS || u < -EPS || u > 1 + EPS)
+    double intersection_distance =
+        ((start_x - origin_x) * edge_y - (start_y - origin_y) * edge_x) / denominator;
+    double segment_fraction =
+        ((start_x - origin_x) * direction_y - (start_y - origin_y) * direction_x) / denominator;
+    if (intersection_distance <= EPS || segment_fraction < -EPS || segment_fraction > 1 + EPS)
         return false;
-    double n1 = -ey, n2 = ex;
-    if (n1 * dx + n2 * dy > 0)
+    double perpendicular_x = -edge_y, perpendicular_y = edge_x;
+    if (perpendicular_x * direction_x + perpendicular_y * direction_y > 0)
     {
-        n1 = -n1;
-        n2 = -n2;
+        perpendicular_x = -perpendicular_x;
+        perpendicular_y = -perpendicular_y;
     }
-    t = tt;
-    nx = n1;
-    ny = n2;
+    distance = intersection_distance;
+    normal_x = perpendicular_x;
+    normal_y = perpendicular_y;
     return true;
 }
 
-bool misses_box(const double *bb, double ox, double oy, double dx, double dy, double r)
+bool misses_box(const double *bounds, double origin_x, double origin_y, double delta_x, double delta_y,
+                double radius)
 {
-    double lo[2] = {bb[0] - r, bb[1] - r}, hi[2] = {bb[2] + r, bb[3] + r};
-    double o[2] = {ox, oy}, d[2] = {dx, dy};
+    double lower_bounds[2] = {bounds[0] - radius, bounds[1] - radius},
+           upper_bounds[2] = {bounds[2] + radius, bounds[3] + radius};
+    double origin[2] = {origin_x, origin_y}, direction[2] = {delta_x, delta_y};
     double tmin = -1e18, tmax = 1e18;
-    for (int k = 0; k < 2; k++)
+    for (int axis = 0; axis < 2; axis++)
     {
-        if (fabs_(d[k]) < EPS)
+        if (fabs_(direction[axis]) < EPS)
         {
-            if (o[k] < lo[k] || o[k] > hi[k])
+            if (origin[axis] < lower_bounds[axis] || origin[axis] > upper_bounds[axis])
                 return true;
             continue;
         }
-        double t1 = (lo[k] - o[k]) / d[k], t2 = (hi[k] - o[k]) / d[k];
-        if (t1 > t2)
+        double entry_distance = (lower_bounds[axis] - origin[axis]) / direction[axis],
+               exit_distance = (upper_bounds[axis] - origin[axis]) / direction[axis];
+        if (entry_distance > exit_distance)
         {
-            double s = t1;
-            t1 = t2;
-            t2 = s;
+            double temporary_distance = entry_distance;
+            entry_distance = exit_distance;
+            exit_distance = temporary_distance;
         }
-        tmin = max_(tmin, t1);
-        tmax = min_(tmax, t2);
+        tmin = max_(tmin, entry_distance);
+        tmax = min_(tmax, exit_distance);
         if (tmin > tmax)
             return true;
     }
@@ -137,118 +143,136 @@ struct Geo
     const double *bb; // 경계 상자 4개씩 (파이썬이 계산해 넘김 — Shape.bb 와 같은 값)
 };
 
-bool inside_shape(const Geo &g, int i, double x, double y, double r);
+bool inside_shape(const Geo &geometry, int shape_index, double x, double y, double radius);
 
-bool hit_shape(const Geo &g, int i, double ox, double oy, double dx, double dy, double r, double &t,
-               double &nx, double &ny)
+bool hit_shape(const Geo &geometry, int shape_index, double origin_x, double origin_y, double direction_x,
+               double direction_y, double radius, double &distance, double &normal_x, double &normal_y)
 {
-    const double *bb = g.bb + 4 * i;
-    if (misses_box(bb, ox, oy, dx, dy, r + 1e-3))
+    const double *bounds = geometry.bb + 4 * shape_index;
+    if (misses_box(bounds, origin_x, origin_y, direction_x, direction_y, radius + 1e-3))
         return false;
-    if (inside_shape(g, i, ox, oy, r))
+    if (inside_shape(geometry, shape_index, origin_x, origin_y, radius))
         return false; // 게임 QueriesStartInColliders=false
-    if ((g.kind[i] & 7) == K_CIRCLE)
+    if ((geometry.kind[shape_index] & 7) == K_CIRCLE)
     {
-        double cx = g.circ[3 * i], cy = g.circ[3 * i + 1];
-        double R = g.circ[3 * i + 2] + r;
-        double fx = ox - cx, fy = oy - cy;
-        double b = fx * dx + fy * dy;
-        double c = fx * fx + fy * fy - R * R;
-        double disc = b * b - c;
-        if (disc < 0)
+        double center_x = geometry.circ[3 * shape_index], center_y = geometry.circ[3 * shape_index + 1];
+        double expanded_radius = geometry.circ[3 * shape_index + 2] + radius;
+        double offset_x = origin_x - center_x, offset_y = origin_y - center_y;
+        double projection = offset_x * direction_x + offset_y * direction_y;
+        double squared_offset = offset_x * offset_x + offset_y * offset_y - expanded_radius * expanded_radius;
+        double discriminant = projection * projection - squared_offset;
+        if (discriminant < 0)
             return false;
-        double tt = -b - sqrt_(disc);
-        if (tt <= EPS)
+        double intersection_distance = -projection - sqrt_(discriminant);
+        if (intersection_distance <= EPS)
             return false;
-        t = tt;
-        nx = ox + dx * tt - cx;
-        ny = oy + dy * tt - cy;
+        distance = intersection_distance;
+        normal_x = origin_x + direction_x * intersection_distance - center_x;
+        normal_y = origin_y + direction_y * intersection_distance - center_y;
         return true;
     }
-    const double *p = g.pts + 2 * g.pt_off[i];
-    int n = g.pt_cnt[i];
-    if (((g.kind[i] & 7) == K_BOX || g.kind[i] == K_WALL) && r > 0)
+    const double *vertices = geometry.pts + 2 * geometry.pt_off[shape_index];
+    int vertex_count = geometry.pt_cnt[shape_index];
+    if (((geometry.kind[shape_index] & 7) == K_BOX || geometry.kind[shape_index] == K_WALL) && radius > 0)
     {
-        double x0 = bb[0], y0 = bb[1], x1 = bb[2], y1 = bb[3];
-        double edges[4][4] = {{x0, y0 - r, x1, y0 - r},
-                              {x1 + r, y0, x1 + r, y1},
-                              {x1, y1 + r, x0, y1 + r},
-                              {x0 - r, y1, x0 - r, y0}};
+        double left_x = bounds[0], bottom_y = bounds[1], right_x = bounds[2], top_y = bounds[3];
+        double edges[4][4] = {{left_x, bottom_y - radius, right_x, bottom_y - radius},
+                              {right_x + radius, bottom_y, right_x + radius, top_y},
+                              {right_x, top_y + radius, left_x, top_y + radius},
+                              {left_x - radius, top_y, left_x - radius, bottom_y}};
         bool have = false;
-        for (int j = 0; j < 4; j++)
+        for (int next_index = 0; next_index < 4; next_index++)
         {
-            double ht, hx, hy;
-            const double *a = edges[j];
-            if (ray_segment(ox, oy, dx, dy, a[0], a[1], a[2], a[3], ht, hx, hy) && (!have || ht < t))
+            double hit_distance, hit_normal_x, hit_normal_y;
+            const double *boundary = edges[next_index];
+            if (ray_segment(origin_x, origin_y, direction_x, direction_y, boundary[0], boundary[1],
+                            boundary[2], boundary[3], hit_distance, hit_normal_x, hit_normal_y) &&
+                (!have || hit_distance < distance))
             {
                 have = true;
-                t = ht;
-                nx = hx;
-                ny = hy;
+                distance = hit_distance;
+                normal_x = hit_normal_x;
+                normal_y = hit_normal_y;
             }
         }
-        double corners[4][4] = {{x0, y0, -1, -1}, {x1, y0, 1, -1}, {x1, y1, 1, 1}, {x0, y1, -1, 1}};
-        for (int j = 0; j < 4; j++)
+        double corners[4][4] = {{left_x, bottom_y, -1, -1},
+                                {right_x, bottom_y, 1, -1},
+                                {right_x, top_y, 1, 1},
+                                {left_x, top_y, -1, 1}};
+        for (int next_index = 0; next_index < 4; next_index++)
         {
-            const double *a = corners[j];
-            double fx = ox - a[0], fy = oy - a[1];
-            double b = fx * dx + fy * dy, disc = b * b - (fx * fx + fy * fy - r * r);
-            if (disc < 0)
+            const double *boundary = corners[next_index];
+            double offset_x = origin_x - boundary[0], offset_y = origin_y - boundary[1];
+            double projection = offset_x * direction_x + offset_y * direction_y,
+                   discriminant = projection * projection -
+                                  (offset_x * offset_x + offset_y * offset_y - radius * radius);
+            if (discriminant < 0)
                 continue;
-            double ht = -b - sqrt_(disc), hx = ox + dx * ht - a[0], hy = oy + dy * ht - a[1];
-            if (ht > EPS && a[2] * hx >= -EPS && a[3] * hy >= -EPS && (!have || ht < t))
+            double hit_distance = -projection - sqrt_(discriminant),
+                   hit_normal_x = origin_x + direction_x * hit_distance - boundary[0],
+                   hit_normal_y = origin_y + direction_y * hit_distance - boundary[1];
+            if (hit_distance > EPS && boundary[2] * hit_normal_x >= -EPS &&
+                boundary[3] * hit_normal_y >= -EPS && (!have || hit_distance < distance))
             {
                 have = true;
-                t = ht;
-                nx = hx;
-                ny = hy;
+                distance = hit_distance;
+                normal_x = hit_normal_x;
+                normal_y = hit_normal_y;
             }
         }
         return have;
     }
     bool have = false;
-    for (int k = 0; k < n - ((g.kind[i] & 7) == 4 ? 1 : 0); k++)
+    for (int entry_index = 0; entry_index < vertex_count - ((geometry.kind[shape_index] & 7) == 4 ? 1 : 0);
+         entry_index++)
     {
-        int j = (k + 1) % n;
-        double ht, hx, hy;
-        if (ray_segment(ox, oy, dx, dy, p[2 * k], p[2 * k + 1], p[2 * j], p[2 * j + 1], ht, hx, hy) &&
-            (!have || ht < t))
+        int next_index = (entry_index + 1) % vertex_count;
+        double hit_distance, hit_normal_x, hit_normal_y;
+        if (ray_segment(origin_x, origin_y, direction_x, direction_y, vertices[2 * entry_index],
+                        vertices[2 * entry_index + 1], vertices[2 * next_index], vertices[2 * next_index + 1],
+                        hit_distance, hit_normal_x, hit_normal_y) &&
+            (!have || hit_distance < distance))
         {
             have = true;
-            t = ht;
-            nx = hx;
-            ny = hy;
+            distance = hit_distance;
+            normal_x = hit_normal_x;
+            normal_y = hit_normal_y;
         }
     }
     return have;
 }
 
-bool inside_shape(const Geo &g, int i, double x, double y, double r)
+bool inside_shape(const Geo &geometry, int shape_index, double x, double y, double radius)
 {
-    if ((g.kind[i] & 7) == 4)
+    if ((geometry.kind[shape_index] & 7) == 4)
         return false;
-    if ((g.kind[i] & 7) == K_CIRCLE)
+    if ((geometry.kind[shape_index] & 7) == K_CIRCLE)
     {
-        double dx = x - g.circ[3 * i], dy = y - g.circ[3 * i + 1], rr = g.circ[3 * i + 2] + r;
-        return dx * dx + dy * dy < rr * rr;
+        double delta_x = x - geometry.circ[3 * shape_index], delta_y = y - geometry.circ[3 * shape_index + 1],
+               expanded_radius = geometry.circ[3 * shape_index + 2] + radius;
+        return delta_x * delta_x + delta_y * delta_y < expanded_radius * expanded_radius;
     }
-    if ((g.kind[i] & 7) == K_BOX || g.kind[i] == K_WALL)
+    if ((geometry.kind[shape_index] & 7) == K_BOX || geometry.kind[shape_index] == K_WALL)
     {
-        const double *bb = g.bb + 4 * i;
-        if (r > 0)
+        const double *bounds = geometry.bb + 4 * shape_index;
+        if (radius > 0)
         {
-            double dx = max_(max_(bb[0] - x, 0.), x - bb[2]), dy = max_(max_(bb[1] - y, 0.), y - bb[3]);
-            return dx * dx + dy * dy <= r * r;
+            double delta_x = max_(max_(bounds[0] - x, 0.), x - bounds[2]),
+                   delta_y = max_(max_(bounds[1] - y, 0.), y - bounds[3]);
+            return delta_x * delta_x + delta_y * delta_y <= radius * radius;
         }
-        return bb[0] - r < x && x < bb[2] + r && bb[1] - r < y && y < bb[3] + r;
+        return bounds[0] - radius < x && x < bounds[2] + radius && bounds[1] - radius < y &&
+               y < bounds[3] + radius;
     }
-    const double *p = g.pts + 2 * g.pt_off[i];
+    const double *vertices = geometry.pts + 2 * geometry.pt_off[shape_index];
     bool inside = false;
-    for (int k = 0; k < g.pt_cnt[i]; k++)
+    for (int vertex_index = 0; vertex_index < geometry.pt_cnt[shape_index]; vertex_index++)
     {
-        int j = (k + 1) % g.pt_cnt[i];
-        double ax = p[2 * k], ay = p[2 * k + 1], bx = p[2 * j], by = p[2 * j + 1];
-        if ((ay > y) != (by > y) && x < (bx - ax) * (y - ay) / (by - ay) + ax)
+        int next_vertex = (vertex_index + 1) % geometry.pt_cnt[shape_index];
+        double start_x = vertices[2 * vertex_index], start_y = vertices[2 * vertex_index + 1],
+               end_x = vertices[2 * next_vertex], end_y = vertices[2 * next_vertex + 1];
+        if ((start_y > y) != (end_y > y) &&
+            x < (end_x - start_x) * (y - start_y) / (end_y - start_y) + start_x)
             inside = !inside;
     }
     return inside;
@@ -269,274 +293,289 @@ BXP_API int bxp_version()
 //   비트) 작업 공간: event_values (4 * n_workers), event_kinds (2 * n_workers)
 // 결과: out_total[4], out_gain[4*n_workers], out_counts[슬롯] (부딪힌 횟수),
 //       out_path: (작업자, x, y, t) 4개씩 path_cap 개까지. 돌려주는 값 = 경로 점 수 (넘치면 -1).
-BXP_API int bxp_simulate_team(const double *world, int n_shapes, const int *kind, const int *slot,
-                              const int *bid, const int *pt_off, const int *pt_cnt, const double *pts,
-                              const double *circ, const double *bb, const int *flags, const int *rtype,
-                              int *res, int n_workers, double *wk, const int *ups, double duration,
-                              int max_events, int *out_total, int *out_gain, int *out_counts,
-                              double *out_path, int path_cap, double *event_values, int *event_kinds,
+BXP_API int bxp_simulate_team(const double *world, int shape_count, const int *kind, const int *slot,
+                              const int *building_ids, const int *point_offsets, const int *point_counts,
+                              const double *points, const double *circles, const double *bounds,
+                              const int *flags, const int *resource_types, int *resource_stocks,
+                              int worker_count, double *worker_states, const int *upgrade_flags,
+                              double duration, int max_events, int *out_total, int *out_gain, int *out_counts,
+                              double *out_path, int path_capacity, double *event_values, int *event_kinds,
                               const int *build_bonus, int *out_build_points, const int *harvest_amount,
                               const int *clock_bonus, const double *pickup_radius, int *clock_counts,
-                              int *out_collected, int n_roads, const double *roads, double road_mult,
-                              int n_slots, int *touching, int *just_bounced)
+                              int *out_collected, int road_count, const double *roads, double road_mult,
+                              int slot_count, int *touching, int *just_bounced)
 {
-    const double left = world[0], right = world[1], bottom = world[2], top = world[3], r = world[4];
-    Geo g{kind, pt_off, pt_cnt, pts, circ, bb};
-    int npath = 0;
+    const double left = world[0], right = world[1], bottom = world[2], top = world[3], ball_radius = world[4];
+    Geo geometry{kind, point_offsets, point_counts, points, circles, bounds};
+    int path_point_count = 0;
     bool overflow = false;
-    auto path_point = [&](int i) {
-        if (npath >= path_cap)
+    auto path_point = [&](int index) {
+        if (path_point_count >= path_capacity)
         {
             overflow = true;
             return;
         }
-        double *q = out_path + 4 * npath++;
-        q[0] = i;
-        q[1] = wk[6 * i];
-        q[2] = wk[6 * i + 1];
-        q[3] = wk[6 * i + 5];
+        double *other_worker_state = out_path + 4 * path_point_count++;
+        other_worker_state[0] = index;
+        other_worker_state[1] = worker_states[6 * index];
+        other_worker_state[2] = worker_states[6 * index + 1];
+        other_worker_state[3] = worker_states[6 * index + 5];
     };
-    for (int i = 0; i < n_workers; i++)
-        path_point(i);
-    const double walls[4][4] = {{left + r, -1e3, left + r, 1e3},
-                                {right - r, -1e3, right - r, 1e3},
-                                {-1e3, top - r, 1e3, top - r},
-                                {-1e3, bottom + r, 1e3, bottom + r}};
-    auto moving_speed = [&](const double *w) {
-        double x = w[0] + w[2] * 1e-7, y = w[1] + w[3] * 1e-7;
-        for (int i = 0; i < n_roads; i++)
+    for (int index = 0; index < worker_count; index++)
+        path_point(index);
+    const double walls[4][4] = {{left + ball_radius, -1e3, left + ball_radius, 1e3},
+                                {right - ball_radius, -1e3, right - ball_radius, 1e3},
+                                {-1e3, top - ball_radius, 1e3, top - ball_radius},
+                                {-1e3, bottom + ball_radius, 1e3, bottom + ball_radius}};
+    auto moving_speed = [&](const double *worker_state) {
+        double x = worker_state[0] + worker_state[2] * 1e-7, y = worker_state[1] + worker_state[3] * 1e-7;
+        for (int index = 0; index < road_count; index++)
         {
-            const double *box = roads + i * 4;
+            const double *box = roads + index * 4;
             if (box[0] <= x && x < box[2] && box[1] <= y && y < box[3])
-                return w[4] * road_mult;
+                return worker_state[4] * road_mult;
         }
-        return w[4];
+        return worker_state[4];
     };
-    auto blocks = [&](int sl, int wi) {
-        const int f = flags[sl], wu = ups[wi];
-        if ((f & F_WHEAT) || ((wu & U_PIERCE_BUILDINGS) && !(f & F_RESOURCE)))
+    auto blocks = [&](int slot_index, int worker_index) {
+        const int building_flags = flags[slot_index], worker_upgrades = upgrade_flags[worker_index];
+        if ((building_flags & F_WHEAT) ||
+            ((worker_upgrades & U_PIERCE_BUILDINGS) && !(building_flags & F_RESOURCE)))
             return false;
-        if (f & F_TILE)
+        if (building_flags & F_TILE)
         {
-            if (res[sl] <= 0)
+            if (resource_stocks[slot_index] <= 0)
                 return false;
         }
-        int k = rtype[sl];
-        if ((f & F_RESOURCE) && ((k == 3 && (wu & U_PIERCE_STONE)) || (k == 2 && (wu & U_PIERCE_WOOD))))
+        int resource_type = resource_types[slot_index];
+        if ((building_flags & F_RESOURCE) && ((resource_type == 3 && (worker_upgrades & U_PIERCE_STONE)) ||
+                                              (resource_type == 2 && (worker_upgrades & U_PIERCE_WOOD))))
             return false;
         return true;
     };
     // 사건 값: 시각, 거리, 법선 x/y. 종류: 충돌 모양(-2 없음/-1 벽), 반사 여부.
-    auto next_event = [&](int wi) {
-        double *w = wk + 6 * wi;
-        double *e = event_values + 4 * wi;
-        int *ek = event_kinds + 2 * wi;
-        ek[0] = -2;
-        if (w[5] >= duration || w[4] <= 0)
+    auto next_event = [&](int worker_index) {
+        double *worker_state = worker_states + 6 * worker_index;
+        double *event = event_values + 4 * worker_index;
+        int *event_kind = event_kinds + 2 * worker_index;
+        event_kind[0] = -2;
+        if (worker_state[5] >= duration || worker_state[4] <= 0)
             return;
         bool have = false;
-        double bt = 0, bnx = 0, bny = 0;
+        double closest_distance = 0, closest_normal_x = 0, closest_normal_y = 0;
         int bshape = -1, solid = 1;
-        for (int i = 0; i < (world[5] ? 4 : 0); i++)
+        for (int index = 0; index < (world[5] ? 4 : 0); index++)
         {
-            const double *a = walls[i];
-            bool inside = (i == 0)   ? w[0] >= a[0] - 1e-6
-                          : (i == 1) ? w[0] <= a[0] + 1e-6
-                          : (i == 2) ? w[1] <= a[1] + 1e-6
-                                     : w[1] >= a[1] - 1e-6;
-            bool toward = (i == 0) ? w[2] < 0 : (i == 1) ? w[2] > 0 : (i == 2) ? w[3] > 0 : w[3] < 0;
-            double t, nx, ny;
-            if (inside && toward && ray_segment(w[0], w[1], w[2], w[3], a[0], a[1], a[2], a[3], t, nx, ny) &&
-                (!have || t < bt))
+            const double *edge = walls[index];
+            bool inside = (index == 0)   ? worker_state[0] >= edge[0] - 1e-6
+                          : (index == 1) ? worker_state[0] <= edge[0] + 1e-6
+                          : (index == 2) ? worker_state[1] <= edge[1] + 1e-6
+                                         : worker_state[1] >= edge[1] - 1e-6;
+            bool toward = (index == 0)   ? worker_state[2] < 0
+                          : (index == 1) ? worker_state[2] > 0
+                          : (index == 2) ? worker_state[3] > 0
+                                         : worker_state[3] < 0;
+            double distance, normal_x, normal_y;
+            if (inside && toward &&
+                ray_segment(worker_state[0], worker_state[1], worker_state[2], worker_state[3], edge[0],
+                            edge[1], edge[2], edge[3], distance, normal_x, normal_y) &&
+                (!have || distance < closest_distance))
             {
                 have = true;
-                bt = t;
-                bnx = nx;
-                bny = ny;
+                closest_distance = distance;
+                closest_normal_x = normal_x;
+                closest_normal_y = normal_y;
                 bshape = -1;
                 solid = 1;
             }
         }
-        for (int i = 0; i < n_shapes; i++)
+        for (int index = 0; index < shape_count; index++)
         {
-            if (!is_wall(kind[i]) && (flags[slot[i]] & F_NO_RAY))
+            if (!is_wall(kind[index]) && (flags[slot[index]] & F_NO_RAY))
                 continue;
-            bool blocking = is_wall(kind[i]) || blocks(slot[i], wi);
-            bool pickup = (flags[slot[i]] & F_WHEAT) != 0;
-            double pickup_r = pickup ? pickup_radius[wi] : r;
-            int ci = wi * n_slots + slot[i];
-            if (!blocking && (flags[slot[i]] & F_TILE) && res[slot[i]] <= 0)
+            bool blocking = is_wall(kind[index]) || blocks(slot[index], worker_index);
+            bool pickup = (flags[slot[index]] & F_WHEAT) != 0;
+            double pickup_radius_value = pickup ? pickup_radius[worker_index] : ball_radius;
+            int contact_index = worker_index * slot_count + slot[index];
+            if (!blocking && (flags[slot[index]] & F_TILE) && resource_stocks[slot[index]] <= 0)
             {
-                touching[ci] = 0;
+                touching[contact_index] = 0;
                 continue;
             }
-            bool inside = inside_shape(g, i, w[0], w[1], pickup_r);
-            double t, nx, ny;
+            bool inside =
+                inside_shape(geometry, index, worker_state[0], worker_state[1], pickup_radius_value);
+            double distance, normal_x, normal_y;
             bool hit = false;
             if (pickup && inside)
             {
-                if (touching[ci] && !just_bounced[wi])
+                if (touching[contact_index] && !just_bounced[worker_index])
                     continue;
-                t = 0;
-                nx = -w[2];
-                ny = -w[3];
+                distance = 0;
+                normal_x = -worker_state[2];
+                normal_y = -worker_state[3];
                 hit = true;
             }
             else
             {
                 if (!inside)
-                    touching[ci] = 0;
+                    touching[contact_index] = 0;
                 if (!blocking && inside)
                     continue;
-                hit = hit_shape(g, i, w[0], w[1], w[2], w[3], pickup_r, t, nx, ny);
+                hit = hit_shape(geometry, index, worker_state[0], worker_state[1], worker_state[2],
+                                worker_state[3], pickup_radius_value, distance, normal_x, normal_y);
             }
-            if (hit && (!have || t < bt))
+            if (hit && (!have || distance < closest_distance))
             {
                 have = true;
-                bt = t;
-                bnx = nx;
-                bny = ny;
-                bshape = i;
+                closest_distance = distance;
+                closest_normal_x = normal_x;
+                closest_normal_y = normal_y;
+                bshape = index;
                 solid = blocking ? 1 : 0;
             }
         }
-        for (int i = 0; i < n_roads; i++)
+        for (int index = 0; index < road_count; index++)
         {
-            const double *b = roads + 4 * i;
-            double edges[4][4] = {{b[0], b[1], b[2], b[1]},
-                                  {b[2], b[1], b[2], b[3]},
-                                  {b[2], b[3], b[0], b[3]},
-                                  {b[0], b[3], b[0], b[1]}};
-            for (int j = 0; j < 4; j++)
+            const double *road_bounds = roads + 4 * index;
+            double edges[4][4] = {{road_bounds[0], road_bounds[1], road_bounds[2], road_bounds[1]},
+                                  {road_bounds[2], road_bounds[1], road_bounds[2], road_bounds[3]},
+                                  {road_bounds[2], road_bounds[3], road_bounds[0], road_bounds[3]},
+                                  {road_bounds[0], road_bounds[3], road_bounds[0], road_bounds[1]}};
+            for (int next_index = 0; next_index < 4; next_index++)
             {
-                double t, nx, ny;
-                const double *a = edges[j];
-                if (ray_segment(w[0], w[1], w[2], w[3], a[0], a[1], a[2], a[3], t, nx, ny) &&
-                    (!have || t < bt))
+                double distance, normal_x, normal_y;
+                const double *edge = edges[next_index];
+                if (ray_segment(worker_state[0], worker_state[1], worker_state[2], worker_state[3], edge[0],
+                                edge[1], edge[2], edge[3], distance, normal_x, normal_y) &&
+                    (!have || distance < closest_distance))
                 {
                     have = true;
-                    bt = t;
-                    bnx = nx;
-                    bny = ny;
+                    closest_distance = distance;
+                    closest_normal_x = normal_x;
+                    closest_normal_y = normal_y;
                     bshape = -3;
                     solid = 0;
                 }
             }
         }
-        if (!have || w[5] + bt / moving_speed(w) >= duration)
+        if (!have || worker_state[5] + closest_distance / moving_speed(worker_state) >= duration)
             return;
-        e[0] = w[5] + bt / moving_speed(w);
-        e[1] = bt;
-        e[2] = bnx;
-        e[3] = bny;
-        ek[0] = bshape;
-        ek[1] = solid;
+        event[0] = worker_state[5] + closest_distance / moving_speed(worker_state);
+        event[1] = closest_distance;
+        event[2] = closest_normal_x;
+        event[3] = closest_normal_y;
+        event_kind[0] = bshape;
+        event_kind[1] = solid;
     };
-    for (int i = 0; i < n_workers; i++)
-        next_event(i);
-    for (int ev = 0; ev < max_events; ev++)
+    for (int index = 0; index < worker_count; index++)
+        next_event(index);
+    for (int event_index = 0; event_index < max_events; event_index++)
     {
-        int wi = -1;
-        for (int i = 0; i < n_workers; i++)
-            if (event_kinds[2 * i] != -2 && (wi < 0 || event_values[4 * i] < event_values[4 * wi]))
-                wi = i;
-        if (wi < 0)
+        int worker_index = -1;
+        for (int index = 0; index < worker_count; index++)
+            if (event_kinds[2 * index] != -2 &&
+                (worker_index < 0 || event_values[4 * index] < event_values[4 * worker_index]))
+                worker_index = index;
+        if (worker_index < 0)
         {
-            for (int i = 0; i < n_workers; i++)
+            for (int index = 0; index < worker_count; index++)
             {
-                double *q = wk + 6 * i;
-                if (q[5] >= duration)
+                double *other_worker_state = worker_states + 6 * index;
+                if (other_worker_state[5] >= duration)
                     continue;
-                double distance = (duration - q[5]) * moving_speed(q);
-                q[0] = q[0] + q[2] * distance;
-                q[1] = q[1] + q[3] * distance;
-                q[5] = duration;
-                path_point(i);
+                double distance = (duration - other_worker_state[5]) * moving_speed(other_worker_state);
+                other_worker_state[0] = other_worker_state[0] + other_worker_state[2] * distance;
+                other_worker_state[1] = other_worker_state[1] + other_worker_state[3] * distance;
+                other_worker_state[5] = duration;
+                path_point(index);
             }
             break;
         }
-        double *w = wk + 6 * wi;
-        const double *e = event_values + 4 * wi;
-        double when = e[0], distance = e[1], nx = e[2], ny = e[3];
-        int shape = event_kinds[2 * wi], solid = event_kinds[2 * wi + 1];
-        w[0] = w[0] + w[2] * distance;
-        w[1] = w[1] + w[3] * distance;
-        w[5] = when;
+        double *worker_state = worker_states + 6 * worker_index;
+        const double *event = event_values + 4 * worker_index;
+        double when = event[0], distance = event[1], normal_x = event[2], normal_y = event[3];
+        int shape = event_kinds[2 * worker_index], solid = event_kinds[2 * worker_index + 1];
+        worker_state[0] = worker_state[0] + worker_state[2] * distance;
+        worker_state[1] = worker_state[1] + worker_state[3] * distance;
+        worker_state[5] = when;
         bool changed = false;
         if (shape >= 0 && !is_wall(kind[shape]))
         {
-            int sl = slot[shape], n = res[sl], kd = rtype[sl];
-            if (flags[sl] & F_WHEAT)
+            int slot_index = slot[shape], remaining_stock = resource_stocks[slot_index],
+                resource_kind = resource_types[slot_index];
+            if (flags[slot_index] & F_WHEAT)
             {
-                touching[wi * n_slots + sl] = 1;
-                just_bounced[wi] = 0;
+                touching[worker_index * slot_count + slot_index] = 1;
+                just_bounced[worker_index] = 0;
             }
-            changed = n > 0;
-            if (n > 0 && kd >= 0)
+            changed = remaining_stock > 0;
+            if (remaining_stock > 0 && resource_kind >= 0)
             {
-                const int idx = 4 * wi + kd;
-                if (n > harvest_amount[idx])
-                    n = harvest_amount[idx];
-                res[sl] -= n;
-                out_gain[4 * wi + kd] += n;
-                out_total[kd] += n;
-                out_collected[sl] += n; // 반사하지 않는 관통 채집도 별도로 기록한다.
+                const int resource_index = 4 * worker_index + resource_kind;
+                if (remaining_stock > harvest_amount[resource_index])
+                    remaining_stock = harvest_amount[resource_index];
+                resource_stocks[slot_index] -= remaining_stock;
+                out_gain[4 * worker_index + resource_kind] += remaining_stock;
+                out_total[resource_kind] += remaining_stock;
+                out_collected[slot_index] += remaining_stock; // 반사하지 않는 관통 채집도 별도로 기록한다.
                 // 게임 BaseMgr.IncreaseHarvestClock: 캐릭터·자원마다 최대 20회.
-                if (clock_bonus[idx] > 0 && clock_counts[idx] < 20)
+                if (clock_bonus[resource_index] > 0 && clock_counts[resource_index] < 20)
                 {
-                    duration += clock_bonus[idx] * 0.2;
-                    clock_counts[idx]++;
+                    duration += clock_bonus[resource_index] * 0.2;
+                    clock_counts[resource_index]++;
                 }
             }
-            if (!(flags[sl] & F_WHEAT))
-                out_counts[sl] += 1;
-            if ((flags[sl] & F_BUILD) && !(flags[sl] & F_WHEAT))
-                out_build_points[sl] += 1 + build_bonus[wi];
+            if (!(flags[slot_index] & F_WHEAT))
+                out_counts[slot_index] += 1;
+            if ((flags[slot_index] & F_BUILD) && !(flags[slot_index] & F_WHEAT))
+                out_build_points[slot_index] += 1 + build_bonus[worker_index];
         }
         if (solid)
         {
-            path_point(wi);
-            const double norm2 = nx * nx + ny * ny;
+            path_point(worker_index);
+            const double norm2 = normal_x * normal_x + normal_y * normal_y;
             if (norm2 > 0)
             {
-                double scale = 2.0 * (w[2] * nx + w[3] * ny) / norm2;
-                double rx = w[2] - scale * nx, ry = w[3] - scale * ny;
-                double len = sqrt_(rx * rx + ry * ry);
-                if (len > 0)
+                double scale = 2.0 * (worker_state[2] * normal_x + worker_state[3] * normal_y) / norm2;
+                double reflected_x = worker_state[2] - scale * normal_x,
+                       reflected_y = worker_state[3] - scale * normal_y;
+                double length = sqrt_(reflected_x * reflected_x + reflected_y * reflected_y);
+                if (length > 0)
                 {
-                    w[2] = rx / len;
-                    w[3] = ry / len;
+                    worker_state[2] = reflected_x / length;
+                    worker_state[3] = reflected_y / length;
                 }
             }
-            w[4] = min_(MAX_SPEED, w[4] + SPEED_UP);
-            just_bounced[wi] = 1;
+            worker_state[4] = min_(MAX_SPEED, worker_state[4] + SPEED_UP);
+            just_bounced[worker_index] = 1;
         }
         else if (shape == -3)
-            path_point(wi);
-        w[0] = w[0] + w[2] * 1e-4;
-        w[1] = w[1] + w[3] * 1e-4;
+            path_point(worker_index);
+        worker_state[0] = worker_state[0] + worker_state[2] * 1e-4;
+        worker_state[1] = worker_state[1] + worker_state[3] * 1e-4;
         if (changed)
         {
             // 자원이 바뀐 시각까지 동료를 진행한 뒤 그 이후 사건을 새로 계산한다.
-            for (int j = 0; j < n_workers; j++)
+            for (int next_index = 0; next_index < worker_count; next_index++)
             {
-                double *q = wk + 6 * j;
-                double *old = event_values + 4 * j;
-                int *old_kind = event_kinds + 2 * j;
+                double *other_worker_state = worker_states + 6 * next_index;
+                double *old = event_values + 4 * next_index;
+                int *old_kind = event_kinds + 2 * next_index;
                 int target = old_kind[0];
-                bool simultaneous = j != wi && target != -2 && old[0] == when;
+                bool simultaneous = next_index != worker_index && target != -2 && old[0] == when;
                 bool blocking =
+                    simultaneous && (target == -1 || (target >= 0 && (is_wall(kind[target]) ||
+                                                                      blocks(slot[target], next_index))));
+                bool keep =
                     simultaneous &&
-                    (target == -1 || (target >= 0 && (is_wall(kind[target]) || blocks(slot[target], j))));
-                bool keep = simultaneous &&
-                            (target == -3 || blocking ||
-                             (target >= 0 && (!(flags[slot[target]] & F_TILE) || res[slot[target]] > 0)));
-                if (j != wi && q[5] < when)
+                    (target == -3 || blocking ||
+                     (target >= 0 && (!(flags[slot[target]] & F_TILE) || resource_stocks[slot[target]] > 0)));
+                if (next_index != worker_index && other_worker_state[5] < when)
                 {
-                    double d = (when - q[5]) * moving_speed(q);
-                    q[0] = q[0] + q[2] * d;
-                    q[1] = q[1] + q[3] * d;
-                    q[5] = when;
+                    double distance = (when - other_worker_state[5]) * moving_speed(other_worker_state);
+                    other_worker_state[0] = other_worker_state[0] + other_worker_state[2] * distance;
+                    other_worker_state[1] = other_worker_state[1] + other_worker_state[3] * distance;
+                    other_worker_state[5] = when;
                 }
                 if (keep)
                 {
@@ -544,13 +583,13 @@ BXP_API int bxp_simulate_team(const double *world, int n_shapes, const int *kind
                     old_kind[1] = blocking ? 1 : 0;
                 }
                 else
-                    next_event(j);
+                    next_event(next_index);
             }
         }
         else
-            next_event(wi);
+            next_event(worker_index);
     }
-    return overflow ? -1 : npath;
+    return overflow ? -1 : path_point_count;
 }
 
 // ================================================================================================
@@ -576,404 +615,438 @@ enum
 struct Model
 {
     // 격자: 타일 (c, r) → 칸 (r - gy0) * gw + (c - gx0)
-    int gx0, gy0, gw, gh;
-    const unsigned char *tile; // 산 땅이면 1
-    double ox, oy, size;
-    int square; // 범위 모양: 1 사각형 (게임 표시), 0 원
+    int grid_column_start, grid_row_start, grid_width, grid_height;
+    const unsigned char *purchased_tiles; // 산 땅이면 1
+    double world_origin_x, world_origin_y, cell_size;
+    int square_range; // 범위 모양: 1 사각형 (게임 표시), 0 원
     // 건물 n 개
-    int n;
-    const int *pw;
-    const int *ph;
+    int piece_count;
+    const int *piece_widths;
+    const int *piece_heights;
     const int *movable;
-    const int *rel_off;
-    const int *rel_cnt;
-    const int *rel;     // 실제로 차지하는 칸 (dx, dy)
-    const int *origin0; // 처음 자리 (c, r) — 옮긴 수 벌점
+    const int *cell_offsets;
+    const int *cell_counts;
+    const int *relative_cells;  // 실제로 차지하는 칸 (dx, dy)
+    const int *initial_origins; // 처음 자리 (c, r) — 옮긴 수 벌점
     // 발사대 앞 구역
-    const double *lane;      // 칸별 값 (없으면 nullptr)
-    const int *lane_idle;    // 치여도 얻는 게 없는 건물
-    const double *lane_tile; // 자원 타일이면 자원 가중 × 용량, 아니면 0
-    double lane_w, lane_tile_w;
+    const double *lane_values;          // 칸별 값 (없으면 nullptr)
+    const int *nonproductive_pieces;    // 치여도 얻는 게 없는 건물
+    const double *resource_tile_values; // 자원 타일이면 자원 가중 × 용량, 아니면 0
+    double lane_weight, resource_lane_weight;
     // 공략 프리셋 (금광 U자)
-    int n_spots;
-    const int *spots;
+    int preset_spot_count;
+    const int *preset_spots;
     const int *is_preset;
-    double preset_w, preset_clear;
+    double preset_weight, preset_clear_weight;
     // 효과 m 개
-    int m;
-    const int *eff_piece;
-    const double *eff_rr;
-    const double *eff_r2;
-    const int *eff_mode;
-    const int *eff_group;
-    const int *eff_off;
-    const int *eff_cnt;
-    const int *tgt;
-    const double *tgt_val;
-    int harvest_cap, n_groups;
+    int effect_count;
+    const int *effect_pieces;
+    const double *effect_ranges;
+    const double *effect_ranges_squared;
+    const int *effect_modes;
+    const int *effect_groups;
+    const int *effect_target_offsets;
+    const int *effect_target_counts;
+    const int *effect_targets;
+    const double *effect_target_values;
+    int harvest_limit, regeneration_group_count;
     // 담금질 '관련 자리' 후보: 건물마다 (상대 건물, 범위)
-    const int *part_off;
-    const int *part_cnt;
-    const int *part_piece;
-    const double *part_r;
+    const int *partner_offsets;
+    const int *partner_counts;
+    const int *partner_pieces;
+    const double *partner_ranges;
     // 크기 (w, h) 별 가능한 왼쪽 아래 자리: key = w * 32 + h
-    const int *sz_off;
-    const int *sz_cnt;
-    const int *sz_org;
-    const int *range_off;
-    const int *range_cnt;
+    const int *size_origin_offsets;
+    const int *size_origin_counts;
+    const int *size_origins;
+    const int *range_box_offsets;
+    const int *range_box_counts;
     const double *range_boxes;
-    double range_pad;
+    double range_padding;
 };
 
 struct Work
 {
-    int *occ; // gw * gh, 비어 있으면 -1
-    double *cx;
-    double *cy;               // n
-    double *regen;            // n_groups * n
-    unsigned char *regen_set; // n_groups * n
-    double *h1;
-    double *h2;           // n (채집 건물 값 1·2위)
-    unsigned char *h_set; // n
-    int *stamp;           // n (영역 안 건물 중복 제거)
-    int *tmp_ids;         // 2 * n
-    int *undo;            // 3 * n (건물, 이전 c, 이전 r)
-    int *best_org;        // 2 * n
-    int *cand;            // 2 * gw * gh (관련 자리 후보)
-    unsigned __int64 rng;
-    int stamp_gen;
+    int *occupancy; // gw * gh, 비어 있으면 -1
+    double *centers_x;
+    double *centers_y;               // n
+    double *regeneration;            // n_groups * n
+    unsigned char *regeneration_set; // n_groups * n
+    double *highest_harvest_values;
+    double *second_harvest_values; // n (채집 건물 값 1·2위)
+    unsigned char *harvest_set;    // n
+    int *stamp;                    // n (영역 안 건물 중복 제거)
+    int *temporary_piece_ids;      // 2 * n
+    int *undo;                     // 3 * n (건물, 이전 c, 이전 r)
+    int *best_origins;             // 2 * n
+    int *candidate_origins;        // 2 * gw * gh (관련 자리 후보)
+    unsigned __int64 random_state;
+    int stamp_generation;
 };
 
-inline double floor_(double x)
+inline double floor_(double value)
 {
-    double t = (double)(__int64)x;
-    return t > x ? t - 1 : t;
+    double truncated_value = (double)(__int64)value;
+    return truncated_value > value ? truncated_value - 1 : truncated_value;
 }
 
 // e^x (x 가 매우 작으면 0). 받아들일 확률 계산용이라 상대 오차 1e-12 정도면 충분
-double exp_(double x)
+double exp_(double exponent)
 {
-    if (x < -700)
+    if (exponent < -700)
         return 0.0;
-    if (x > 700)
-        x = 700;
+    if (exponent > 700)
+        exponent = 700;
     const double LN2 = 0.6931471805599453;
-    double k = floor_(x / LN2 + 0.5);
-    double r = x - k * LN2;
+    double binary_exponent = floor_(exponent / LN2 + 0.5);
+    double remainder = exponent - binary_exponent * LN2;
     double term = 1, sum = 1;
-    for (int i = 1; i < 18; i++)
+    for (int index = 1; index < 18; index++)
     {
-        term *= r / i;
+        term *= remainder / index;
         sum += term;
     }
-    __int64 ki = (__int64)k;
+    __int64 integer_exponent = (__int64)binary_exponent;
     union {
         double d;
         unsigned __int64 u;
-    } v;
-    v.u = (unsigned __int64)(ki + 1023) << 52;
-    return sum * v.d;
+    } power_of_two;
+    power_of_two.u = (unsigned __int64)(integer_exponent + 1023) << 52;
+    return sum * power_of_two.d;
 }
 
-inline double rnd(Work &W)
+inline double rnd(Work &workspace)
 { // [0, 1)
-    W.rng ^= W.rng >> 12;
-    W.rng ^= W.rng << 25;
-    W.rng ^= W.rng >> 27;
-    unsigned __int64 x = W.rng * 2685821657736338717ULL;
-    return (double)(x >> 11) * (1.0 / 9007199254740992.0);
+    workspace.random_state ^= workspace.random_state >> 12;
+    workspace.random_state ^= workspace.random_state << 25;
+    workspace.random_state ^= workspace.random_state >> 27;
+    unsigned __int64 random_bits = workspace.random_state * 2685821657736338717ULL;
+    return (double)(random_bits >> 11) * (1.0 / 9007199254740992.0);
 }
-inline int rint_(Work &W, int n)
+inline int rint_(Work &workspace, int upper_limit)
 {
-    int k = (int)(rnd(W) * n);
-    return k < n ? k : n - 1;
-}
-
-inline bool in_grid(const Model &M, int c, int r)
-{
-    return c >= M.gx0 && r >= M.gy0 && c < M.gx0 + M.gw && r < M.gy0 + M.gh;
-}
-inline bool is_tile(const Model &M, int c, int r)
-{
-    return in_grid(M, c, r) && M.tile[(r - M.gy0) * M.gw + (c - M.gx0)];
-}
-inline int &occ_at(const Model &M, Work &W, int c, int r)
-{
-    return W.occ[(r - M.gy0) * M.gw + (c - M.gx0)];
+    int sample = (int)(rnd(workspace) * upper_limit);
+    return sample < upper_limit ? sample : upper_limit - 1;
 }
 
-inline bool in_range(const Model &M, double dx, double dy, double r, double r2)
+inline bool in_grid(const Model &model, int column, int row)
 {
-    if (M.square)
-        return fabs_(dx) <= r + 1e-6 && fabs_(dy) <= r + 1e-6;
-    return dx * dx + dy * dy <= r2 + 1e-6;
+    return column >= model.grid_column_start && row >= model.grid_row_start &&
+           column < model.grid_column_start + model.grid_width &&
+           row < model.grid_row_start + model.grid_height;
+}
+inline bool is_tile(const Model &model, int column, int row)
+{
+    return in_grid(model, column, row) &&
+           model.purchased_tiles[(row - model.grid_row_start) * model.grid_width +
+                                 (column - model.grid_column_start)];
+}
+inline int &occ_at(const Model &model, Work &workspace, int column, int row)
+{
+    return workspace
+        .occupancy[(row - model.grid_row_start) * model.grid_width + (column - model.grid_column_start)];
 }
 
-inline bool target_in_range(const Model &M, int target, double dx, double dy, double radius)
+inline bool in_range(const Model &model, double delta_x, double delta_y, double radius, double radius_squared)
 {
-    if (M.range_cnt[target] < 0)
-        return in_range(M, dx, dy, radius, radius * radius);
-    double r = radius - M.range_pad;
-    for (int k = 0; k < M.range_cnt[target]; k++)
+    if (model.square_range)
+        return fabs_(delta_x) <= radius + 1e-6 && fabs_(delta_y) <= radius + 1e-6;
+    return delta_x * delta_x + delta_y * delta_y <= radius_squared + 1e-6;
+}
+
+inline bool target_in_range(const Model &model, int target, double delta_x, double delta_y, double radius)
+{
+    if (model.range_box_counts[target] < 0)
+        return in_range(model, delta_x, delta_y, radius, radius * radius);
+    double radius_without_padding = radius - model.range_padding;
+    for (int entry_index = 0; entry_index < model.range_box_counts[target]; entry_index++)
     {
-        const double *b = M.range_boxes + 4 * (M.range_off[target] + k);
-        if (dx + b[0] <= r && dx + b[2] >= -r && dy + b[1] <= r && dy + b[3] >= -r)
+        const double *target_bounds = model.range_boxes + 4 * (model.range_box_offsets[target] + entry_index);
+        if (delta_x + target_bounds[0] <= radius_without_padding &&
+            delta_x + target_bounds[2] >= -radius_without_padding &&
+            delta_y + target_bounds[1] <= radius_without_padding &&
+            delta_y + target_bounds[3] >= -radius_without_padding)
             return true;
     }
     return false;
 }
 
-inline double center_x(const Model &M, int c0, int w)
+inline double center_x(const Model &model, int origin_column, int width)
 {
-    return M.ox + (c0 + w / 2.0) * M.size;
+    return model.world_origin_x + (origin_column + width / 2.0) * model.cell_size;
 }
-inline double center_y(const Model &M, int r0, int h)
+inline double center_y(const Model &model, int origin_row, int height)
 {
-    return M.oy + (r0 + h / 2.0) * M.size;
-}
-
-inline int cell_c(const Model &M, const int *org, int i, int q)
-{
-    return org[2 * i] + M.rel[2 * (M.rel_off[i] + q)];
-}
-inline int cell_r(const Model &M, const int *org, int i, int q)
-{
-    return org[2 * i + 1] + M.rel[2 * (M.rel_off[i] + q) + 1];
+    return model.world_origin_y + (origin_row + height / 2.0) * model.cell_size;
 }
 
-void build_occ(const Model &M, Work &W, const int *org)
+inline int cell_c(const Model &model, const int *origins, int index, int cell_index)
 {
-    for (int k = 0; k < M.gw * M.gh; k++)
-        W.occ[k] = -1;
-    for (int i = 0; i < M.n; i++)
-        for (int q = 0; q < M.rel_cnt[i]; q++)
+    return origins[2 * index] + model.relative_cells[2 * (model.cell_offsets[index] + cell_index)];
+}
+inline int cell_r(const Model &model, const int *origins, int index, int cell_index)
+{
+    return origins[2 * index + 1] + model.relative_cells[2 * (model.cell_offsets[index] + cell_index) + 1];
+}
+
+void build_occ(const Model &model, Work &workspace, const int *origins)
+{
+    for (int entry_index = 0; entry_index < model.grid_width * model.grid_height; entry_index++)
+        workspace.occupancy[entry_index] = -1;
+    for (int index = 0; index < model.piece_count; index++)
+        for (int cell_index = 0; cell_index < model.cell_counts[index]; cell_index++)
         {
-            int c = cell_c(M, org, i, q), r = cell_r(M, org, i, q);
-            if (in_grid(M, c, r))
-                occ_at(M, W, c, r) = i;
+            int column = cell_c(model, origins, index, cell_index),
+                row = cell_r(model, origins, index, cell_index);
+            if (in_grid(model, column, row))
+                occ_at(model, workspace, column, row) = index;
         }
 }
 
 // Scorer.score (범위 효과 + 발사대 앞 구역 + 프리셋)
-double score(const Model &M, Work &W, const int *org)
+double score(const Model &model, Work &workspace, const int *origins)
 {
-    for (int i = 0; i < M.n; i++)
+    for (int index = 0; index < model.piece_count; index++)
     {
-        W.cx[i] = center_x(M, org[2 * i], M.pw[i]);
-        W.cy[i] = center_y(M, org[2 * i + 1], M.ph[i]);
-        W.h_set[i] = 0;
+        workspace.centers_x[index] = center_x(model, origins[2 * index], model.piece_widths[index]);
+        workspace.centers_y[index] = center_y(model, origins[2 * index + 1], model.piece_heights[index]);
+        workspace.harvest_set[index] = 0;
     }
-    for (int k = 0; k < M.n_groups * M.n; k++)
-        W.regen_set[k] = 0;
+    for (int entry_index = 0; entry_index < model.regeneration_group_count * model.piece_count; entry_index++)
+        workspace.regeneration_set[entry_index] = 0;
     double total = 0;
-    for (int e = 0; e < M.m; e++)
+    for (int effect_index = 0; effect_index < model.effect_count; effect_index++)
     {
-        int p = M.eff_piece[e], mode = M.eff_mode[e];
-        double ex = W.cx[p], ey = W.cy[p], rr = M.eff_rr[e], r2 = M.eff_r2[e];
-        int cnt = 0;
-        for (int k = M.eff_off[e]; k < M.eff_off[e] + M.eff_cnt[e]; k++)
+        int effect_piece = model.effect_pieces[effect_index], mode = model.effect_modes[effect_index];
+        double effect_x = workspace.centers_x[effect_piece], effect_y = workspace.centers_y[effect_piece],
+               expanded_radius = model.effect_ranges[effect_index],
+               radius_squared = model.effect_ranges_squared[effect_index];
+        int count = 0;
+        for (int entry_index = model.effect_target_offsets[effect_index];
+             entry_index <
+             model.effect_target_offsets[effect_index] + model.effect_target_counts[effect_index];
+             entry_index++)
         {
-            int t = M.tgt[k];
-            if (t == p)
+            int target_index = model.effect_targets[entry_index];
+            if (target_index == effect_piece)
                 continue;
-            if (!target_in_range(M, t, W.cx[t] - ex, W.cy[t] - ey, rr))
+            if (!target_in_range(model, target_index, workspace.centers_x[target_index] - effect_x,
+                                 workspace.centers_y[target_index] - effect_y, expanded_radius))
                 continue;
-            cnt++;
-            if (mode == M_HARVEST && cnt > M.harvest_cap)
+            count++;
+            if (mode == M_HARVEST && count > model.harvest_limit)
                 continue;
-            double v = M.tgt_val[k];
+            double target_value = model.effect_target_values[entry_index];
             if (mode == M_REGEN)
             {
-                int g = M.eff_group[e] * M.n + t;
-                if (!W.regen_set[g] || v > W.regen[g])
+                int group_index = model.effect_groups[effect_index] * model.piece_count + target_index;
+                if (!workspace.regeneration_set[group_index] ||
+                    target_value > workspace.regeneration[group_index])
                 {
-                    W.regen[g] = v;
-                    W.regen_set[g] = 1;
+                    workspace.regeneration[group_index] = target_value;
+                    workspace.regeneration_set[group_index] = 1;
                 }
             }
             else if (mode == M_HARVEST)
             {
-                if (!W.h_set[t])
+                if (!workspace.harvest_set[target_index])
                 {
-                    W.h1[t] = v;
-                    W.h2[t] = 0;
-                    W.h_set[t] = 1;
+                    workspace.highest_harvest_values[target_index] = target_value;
+                    workspace.second_harvest_values[target_index] = 0;
+                    workspace.harvest_set[target_index] = 1;
                 }
-                else if (v > W.h1[t])
+                else if (target_value > workspace.highest_harvest_values[target_index])
                 {
-                    W.h2[t] = W.h1[t];
-                    W.h1[t] = v;
+                    workspace.second_harvest_values[target_index] =
+                        workspace.highest_harvest_values[target_index];
+                    workspace.highest_harvest_values[target_index] = target_value;
                 }
-                else if (v > W.h2[t])
-                    W.h2[t] = v;
+                else if (target_value > workspace.second_harvest_values[target_index])
+                    workspace.second_harvest_values[target_index] = target_value;
             }
             else
             {
-                total += v;
+                total += target_value;
             }
         }
     }
-    for (int k = 0; k < M.n_groups * M.n; k++)
-        if (W.regen_set[k])
-            total += W.regen[k];
-    for (int i = 0; i < M.n; i++)
-        if (W.h_set[i])
-            total += W.h1[i] + 0.5 * W.h2[i];
-    if (M.lane)
+    for (int entry_index = 0; entry_index < model.regeneration_group_count * model.piece_count; entry_index++)
+        if (workspace.regeneration_set[entry_index])
+            total += workspace.regeneration[entry_index];
+    for (int index = 0; index < model.piece_count; index++)
+        if (workspace.harvest_set[index])
+            total += workspace.highest_harvest_values[index] + 0.5 * workspace.second_harvest_values[index];
+    if (model.lane_values)
     {
         double blocked = 0, front = 0;
-        for (int i = 0; i < M.n; i++)
+        for (int index = 0; index < model.piece_count; index++)
         {
-            bool idle = M.lane_idle[i] != 0, tile_ = M.lane_tile[i] > 0 && !W.h_set[i];
+            bool idle = model.nonproductive_pieces[index] != 0,
+                 tile_ = model.resource_tile_values[index] > 0 && !workspace.harvest_set[index];
             if (!idle && !tile_)
                 continue;
-            for (int q = 0; q < M.rel_cnt[i]; q++)
+            for (int cell_index = 0; cell_index < model.cell_counts[index]; cell_index++)
             {
-                int c = cell_c(M, org, i, q), r = cell_r(M, org, i, q);
-                if (!in_grid(M, c, r))
+                int column = cell_c(model, origins, index, cell_index),
+                    row = cell_r(model, origins, index, cell_index);
+                if (!in_grid(model, column, row))
                     continue;
-                double lv = M.lane[(r - M.gy0) * M.gw + (c - M.gx0)];
+                double lane_value = model.lane_values[(row - model.grid_row_start) * model.grid_width +
+                                                      (column - model.grid_column_start)];
                 if (idle)
-                    blocked += lv;
+                    blocked += lane_value;
                 if (tile_)
-                    front += lv * M.lane_tile[i];
+                    front += lane_value * model.resource_tile_values[index];
             }
         }
-        total -= M.lane_w * blocked;
-        total += M.lane_tile_w * front;
+        total -= model.lane_weight * blocked;
+        total += model.resource_lane_weight * front;
     }
-    if (M.n_spots)
+    if (model.preset_spot_count)
     {
         int filled = 0;
-        for (int s = 0; s < M.n_spots; s++)
+        for (int spot_index = 0; spot_index < model.preset_spot_count; spot_index++)
         {
-            int sc = M.spots[2 * s], sr = M.spots[2 * s + 1];
-            bool f = false;
-            for (int i = 0; i < M.n && !f; i++)
-                if (M.is_preset[i] && org[2 * i] == sc && org[2 * i + 1] == sr)
-                    f = true;
-            if (f)
+            int shift_column = model.preset_spots[2 * spot_index],
+                shift_row = model.preset_spots[2 * spot_index + 1];
+            bool blocked = false;
+            for (int index = 0; index < model.piece_count && !blocked; index++)
+                if (model.is_preset[index] && origins[2 * index] == shift_column &&
+                    origins[2 * index + 1] == shift_row)
+                    blocked = true;
+            if (blocked)
             {
                 filled++;
                 continue;
             }
             int occd = 0;
-            for (int dx = 0; dx < 2; dx++)
-                for (int dy = 0; dy < 2; dy++)
-                    if (in_grid(M, sc + dx, sr + dy) && occ_at(M, W, sc + dx, sr + dy) >= 0)
+            for (int delta_x = 0; delta_x < 2; delta_x++)
+                for (int delta_y = 0; delta_y < 2; delta_y++)
+                    if (in_grid(model, shift_column + delta_x, shift_row + delta_y) &&
+                        occ_at(model, workspace, shift_column + delta_x, shift_row + delta_y) >= 0)
                         occd++;
-            total -= M.preset_clear * occd;
+            total -= model.preset_clear_weight * occd;
         }
-        total += M.preset_w * filled;
+        total += model.preset_weight * filled;
     }
     return total;
 }
 
-double objective(const Model &M, Work &W, const int *org, double cost)
+double objective(const Model &model, Work &workspace, const int *origins, double cost)
 {
     int moved = 0;
-    for (int i = 0; i < M.n; i++)
-        if (org[2 * i] != M.origin0[2 * i] || org[2 * i + 1] != M.origin0[2 * i + 1])
+    for (int index = 0; index < model.piece_count; index++)
+        if (origins[2 * index] != model.initial_origins[2 * index] ||
+            origins[2 * index + 1] != model.initial_origins[2 * index + 1])
             moved++;
-    return score(M, W, org) - cost * moved;
+    return score(model, workspace, origins) - cost * moved;
 }
 
-void lift(const Model &M, Work &W, const int *org, int i)
+void lift(const Model &model, Work &workspace, const int *origins, int index)
 {
-    for (int q = 0; q < M.rel_cnt[i]; q++)
+    for (int cell_index = 0; cell_index < model.cell_counts[index]; cell_index++)
     {
-        int c = cell_c(M, org, i, q), r = cell_r(M, org, i, q);
-        if (in_grid(M, c, r) && occ_at(M, W, c, r) == i)
-            occ_at(M, W, c, r) = -1;
+        int column = cell_c(model, origins, index, cell_index),
+            row = cell_r(model, origins, index, cell_index);
+        if (in_grid(model, column, row) && occ_at(model, workspace, column, row) == index)
+            occ_at(model, workspace, column, row) = -1;
     }
 }
 
-void place(const Model &M, Work &W, const int *org, int i)
+void place(const Model &model, Work &workspace, const int *origins, int index)
 {
-    for (int q = 0; q < M.rel_cnt[i]; q++)
+    for (int cell_index = 0; cell_index < model.cell_counts[index]; cell_index++)
     {
-        int c = cell_c(M, org, i, q), r = cell_r(M, org, i, q);
-        if (in_grid(M, c, r))
-            occ_at(M, W, c, r) = i;
+        int column = cell_c(model, origins, index, cell_index),
+            row = cell_r(model, origins, index, cell_index);
+        if (in_grid(model, column, row))
+            occ_at(model, workspace, column, row) = index;
     }
 }
 
 // 같은 크기 두 영역의 내용 맞바꾸기 (Layout.swap_regions). 성공하면 되돌리기 항목 수, 아니면 -1
-int swap_regions(const Model &M, Work &W, int *org, int ac, int ar, int bc, int br, int w, int h)
+int swap_regions(const Model &model, Work &workspace, int *origins, int first_column, int first_row,
+                 int second_column, int second_row, int width, int height)
 {
-    if ((ac - bc < w && bc - ac < w) && (ar - br < h && br - ar < h))
+    if ((first_column - second_column < width && second_column - first_column < width) &&
+        (first_row - second_row < height && second_row - first_row < height))
         return -1; // 겹치는 영역
-    int na = 0, nb = 0;
-    int *ids = W.tmp_ids;
+    int first_count = 0, second_count = 0;
+    int *ids = workspace.temporary_piece_ids;
     for (int side = 0; side < 2; side++)
     {
-        int c0 = side ? bc : ac, r0 = side ? br : ar;
-        int gen = ++W.stamp_gen;
-        int start = side ? na : 0, cnt = 0;
-        for (int dx = 0; dx < w; dx++)
-            for (int dy = 0; dy < h; dy++)
+        int origin_column = side ? second_column : first_column, origin_row = side ? second_row : first_row;
+        int generation = ++workspace.stamp_generation;
+        int start = side ? first_count : 0, count = 0;
+        for (int delta_x = 0; delta_x < width; delta_x++)
+            for (int delta_y = 0; delta_y < height; delta_y++)
             {
-                if (!in_grid(M, c0 + dx, r0 + dy))
+                if (!in_grid(model, origin_column + delta_x, origin_row + delta_y))
                     continue;
-                int i = occ_at(M, W, c0 + dx, r0 + dy);
-                if (i < 0 || W.stamp[i] == gen)
+                int index = occ_at(model, workspace, origin_column + delta_x, origin_row + delta_y);
+                if (index < 0 || workspace.stamp[index] == generation)
                     continue;
-                W.stamp[i] = gen;
-                int oc = org[2 * i], orr = org[2 * i + 1];
-                if (!M.movable[i] || oc < c0 || orr < r0 || oc + M.pw[i] > c0 + w || orr + M.ph[i] > r0 + h)
+                workspace.stamp[index] = generation;
+                int original_column = origins[2 * index], original_row = origins[2 * index + 1];
+                if (!model.movable[index] || original_column < origin_column || original_row < origin_row ||
+                    original_column + model.piece_widths[index] > origin_column + width ||
+                    original_row + model.piece_heights[index] > origin_row + height)
                     return -1;
-                ids[start + cnt++] = i;
+                ids[start + count++] = index;
             }
         if (side)
-            nb = cnt;
+            second_count = count;
         else
-            na = cnt;
+            first_count = count;
     }
-    if (na + nb == 0)
+    if (first_count + second_count == 0)
         return -1;
-    for (int k = 0; k < na + nb; k++)
+    for (int entry_index = 0; entry_index < first_count + second_count; entry_index++)
     { // 새 자리가 모두 산 땅 안인가
-        int i = ids[k];
-        int sc = k < na ? bc - ac : ac - bc, sr = k < na ? br - ar : ar - br;
-        for (int q = 0; q < M.rel_cnt[i]; q++)
-            if (!is_tile(M, cell_c(M, org, i, q) + sc, cell_r(M, org, i, q) + sr))
+        int index = ids[entry_index];
+        int shift_column =
+                entry_index < first_count ? second_column - first_column : first_column - second_column,
+            shift_row = entry_index < first_count ? second_row - first_row : first_row - second_row;
+        for (int cell_index = 0; cell_index < model.cell_counts[index]; cell_index++)
+            if (!is_tile(model, cell_c(model, origins, index, cell_index) + shift_column,
+                         cell_r(model, origins, index, cell_index) + shift_row))
                 return -1;
     }
-    for (int k = 0; k < na + nb; k++)
+    for (int entry_index = 0; entry_index < first_count + second_count; entry_index++)
     { // Layout.apply: 모두 지운 뒤 다시 놓는다
-        int i = ids[k];
-        W.undo[3 * k] = i;
-        W.undo[3 * k + 1] = org[2 * i];
-        W.undo[3 * k + 2] = org[2 * i + 1];
-        lift(M, W, org, i);
+        int index = ids[entry_index];
+        workspace.undo[3 * entry_index] = index;
+        workspace.undo[3 * entry_index + 1] = origins[2 * index];
+        workspace.undo[3 * entry_index + 2] = origins[2 * index + 1];
+        lift(model, workspace, origins, index);
     }
-    for (int k = 0; k < na + nb; k++)
+    for (int entry_index = 0; entry_index < first_count + second_count; entry_index++)
     {
-        int i = ids[k];
-        org[2 * i] += k < na ? bc - ac : ac - bc;
-        org[2 * i + 1] += k < na ? br - ar : ar - br;
-        place(M, W, org, i);
+        int index = ids[entry_index];
+        origins[2 * index] +=
+            entry_index < first_count ? second_column - first_column : first_column - second_column;
+        origins[2 * index + 1] += entry_index < first_count ? second_row - first_row : first_row - second_row;
+        place(model, workspace, origins, index);
     }
-    return na + nb;
+    return first_count + second_count;
 }
 
-void undo_swap(const Model &M, Work &W, int *org, int nu)
+void undo_swap(const Model &model, Work &workspace, int *origins, int undo_count)
 {
-    for (int k = 0; k < nu; k++)
-        lift(M, W, org, W.undo[3 * k]);
-    for (int k = 0; k < nu; k++)
+    for (int entry_index = 0; entry_index < undo_count; entry_index++)
+        lift(model, workspace, origins, workspace.undo[3 * entry_index]);
+    for (int entry_index = 0; entry_index < undo_count; entry_index++)
     {
-        int i = W.undo[3 * k];
-        org[2 * i] = W.undo[3 * k + 1];
-        org[2 * i + 1] = W.undo[3 * k + 2];
-        place(M, W, org, i);
+        int index = workspace.undo[3 * entry_index];
+        origins[2 * index] = workspace.undo[3 * entry_index + 1];
+        origins[2 * index + 1] = workspace.undo[3 * entry_index + 2];
+        place(model, workspace, origins, index);
     }
 }
 
-inline int size_key(int w, int h)
+inline int size_key(int width, int height)
 {
-    return (w < 32 && h < 32) ? w * 32 + h : -1;
+    return (width < 32 && height < 32) ? width * 32 + height : -1;
 }
 
 } // namespace
@@ -983,203 +1056,215 @@ BXP_API unsigned __int64 bxp_ticks()
     return __rdtsc();
 }
 
-BXP_API double bxp_layout_score(const Model *M, Work *W, const int *org)
+BXP_API double bxp_layout_score(const Model *model, Work *workspace, const int *origins)
 {
-    build_occ(*M, *W, org);
-    return score(*M, *W, org);
+    build_occ(*model, *workspace, origins);
+    return score(*model, *workspace, origins);
 }
 
 // 담금질 (layout_opt.anneal). org: 시작 배치 → 가장 좋았던 배치. 돌려주는 값: 그 배치의 목표값(벌점 포함)
-BXP_API double bxp_layout_anneal(const Model *Mp, Work *Wp, int *org, double cost, double t0, double ln_ratio,
-                                 unsigned __int64 ticks, unsigned __int64 seed, int *out_iters)
+BXP_API double bxp_layout_anneal(const Model *model_pointer, Work *workspace_pointer, int *origins,
+                                 double cost, double initial_temperature, double log_temperature_ratio,
+                                 unsigned __int64 ticks, unsigned __int64 seed, int *output_iterations)
 {
-    const Model &M = *Mp;
-    Work &W = *Wp;
-    W.rng = seed ? seed : 0x9E3779B97F4A7C15ULL;
-    W.stamp_gen = 0;
-    for (int i = 0; i < M.n; i++)
-        W.stamp[i] = 0;
-    build_occ(M, W, org);
+    const Model &model = *model_pointer;
+    Work &workspace = *workspace_pointer;
+    workspace.random_state = seed ? seed : 0x9E3779B97F4A7C15ULL;
+    workspace.stamp_generation = 0;
+    for (int index = 0; index < model.piece_count; index++)
+        workspace.stamp[index] = 0;
+    build_occ(model, workspace, origins);
     int nmov = 0;
-    for (int i = 0; i < M.n; i++)
-        if (M.movable[i])
+    for (int index = 0; index < model.piece_count; index++)
+        if (model.movable[index])
             nmov++;
-    double cur = objective(M, W, org, cost);
-    double best = cur;
-    for (int k = 0; k < 2 * M.n; k++)
-        W.best_org[k] = org[k];
+    double current_score = objective(model, workspace, origins, cost);
+    double best = current_score;
+    for (int entry_index = 0; entry_index < 2 * model.piece_count; entry_index++)
+        workspace.best_origins[entry_index] = origins[entry_index];
     if (!nmov)
     {
-        *out_iters = 0;
+        *output_iterations = 0;
         return best;
     }
     unsigned __int64 start = __rdtsc();
-    double temp = t0;
-    int it = 0;
+    double temp = initial_temperature;
+    int iteration = 0;
     for (;;)
     {
-        it++;
-        if (it % 64 == 0)
+        iteration++;
+        if (iteration % 64 == 0)
         {
-            double el = (double)(__rdtsc() - start) / (double)ticks;
-            if (el >= 1)
+            double elapsed_seconds = (double)(__rdtsc() - start) / (double)ticks;
+            if (elapsed_seconds >= 1)
                 break;
-            temp = t0 * exp_(ln_ratio * el);
+            temp = initial_temperature * exp_(log_temperature_ratio * elapsed_seconds);
         }
-        int pick = rint_(W, nmov), i = -1;
-        for (int k = 0; k < M.n; k++)
-            if (M.movable[k] && pick-- == 0)
+        int pick = rint_(workspace, nmov), index = -1;
+        for (int entry_index = 0; entry_index < model.piece_count; entry_index++)
+            if (model.movable[entry_index] && pick-- == 0)
             {
-                i = k;
+                index = entry_index;
                 break;
             }
-        int w = M.pw[i], h = M.ph[i];
-        if (rnd(W) < 0.25)
+        int width = model.piece_widths[index], height = model.piece_heights[index];
+        if (rnd(workspace) < 0.25)
         {
-            w += rint_(W, 3);
-            h += rint_(W, 3);
+            width += rint_(workspace, 3);
+            height += rint_(workspace, 3);
         } // 가끔 더 큰 묶음 영역
-        int key = size_key(w, h);
-        if (key < 0 || M.sz_cnt[key] <= 0)
+        int key = size_key(width, height);
+        if (key < 0 || model.size_origin_counts[key] <= 0)
             continue;
-        const int *cand = M.sz_org + 2 * M.sz_off[key];
-        int ncand = M.sz_cnt[key];
-        int ac = org[2 * i], ar = org[2 * i + 1];
-        if (w != M.pw[i] || h != M.ph[i])
+        const int *cand = model.size_origins + 2 * model.size_origin_offsets[key];
+        int candidate_count = model.size_origin_counts[key];
+        int first_column = origins[2 * index], first_row = origins[2 * index + 1];
+        if (width != model.piece_widths[index] || height != model.piece_heights[index])
         {
-            ac -= rint_(W, w - M.pw[i] + 1);
-            ar -= rint_(W, h - M.ph[i] + 1);
+            first_column -= rint_(workspace, width - model.piece_widths[index] + 1);
+            first_row -= rint_(workspace, height - model.piece_heights[index] + 1);
             bool ok = true;
-            for (int dx = 0; dx < w && ok; dx++)
-                for (int dy = 0; dy < h && ok; dy++)
-                    ok = is_tile(M, ac + dx, ar + dy);
+            for (int delta_x = 0; delta_x < width && ok; delta_x++)
+                for (int delta_y = 0; delta_y < height && ok; delta_y++)
+                    ok = is_tile(model, first_column + delta_x, first_row + delta_y);
             if (!ok)
                 continue;
         }
-        int bc, br;
-        if (rnd(W) < 0.6)
+        int second_column, second_row;
+        if (rnd(workspace) < 0.6)
         {
             // 관련 자리 (_near_spots): 프리셋 자리 → 상대 건물의 범위 안 → 아무 자리
-            int nc = 0;
-            if (M.n_spots && M.is_preset[i])
+            int nearby_count = 0;
+            if (model.preset_spot_count && model.is_preset[index])
             {
-                for (int q = 0; q < ncand; q++)
-                    for (int s = 0; s < M.n_spots; s++)
-                        if (cand[2 * q] == M.spots[2 * s] && cand[2 * q + 1] == M.spots[2 * s + 1])
+                for (int cell_index = 0; cell_index < candidate_count; cell_index++)
+                    for (int candidate_score = 0; candidate_score < model.preset_spot_count;
+                         candidate_score++)
+                        if (cand[2 * cell_index] == model.preset_spots[2 * candidate_score] &&
+                            cand[2 * cell_index + 1] == model.preset_spots[2 * candidate_score + 1])
                         {
-                            W.cand[2 * nc] = cand[2 * q];
-                            W.cand[2 * nc + 1] = cand[2 * q + 1];
-                            nc++;
+                            workspace.candidate_origins[2 * nearby_count] = cand[2 * cell_index];
+                            workspace.candidate_origins[2 * nearby_count + 1] = cand[2 * cell_index + 1];
+                            nearby_count++;
                         }
             }
-            if (!nc && M.part_cnt[i] > 0)
+            if (!nearby_count && model.partner_counts[index] > 0)
             {
-                int pk = M.part_off[i] + rint_(W, M.part_cnt[i]);
-                int pp = M.part_piece[pk];
-                double px = center_x(M, org[2 * pp], M.pw[pp]);
-                double py = center_y(M, org[2 * pp + 1], M.ph[pp]);
-                double rr = M.part_r[pk];
-                for (int q = 0; q < ncand; q++)
-                    if (in_range(M, center_x(M, cand[2 * q], w) - px, center_y(M, cand[2 * q + 1], h) - py,
-                                 rr, rr * rr))
+                int partner_index =
+                    model.partner_offsets[index] + rint_(workspace, model.partner_counts[index]);
+                int partner_piece = model.partner_pieces[partner_index];
+                double partner_x =
+                    center_x(model, origins[2 * partner_piece], model.piece_widths[partner_piece]);
+                double partner_y =
+                    center_y(model, origins[2 * partner_piece + 1], model.piece_heights[partner_piece]);
+                double partner_radius = model.partner_ranges[partner_index];
+                for (int cell_index = 0; cell_index < candidate_count; cell_index++)
+                    if (in_range(model, center_x(model, cand[2 * cell_index], width) - partner_x,
+                                 center_y(model, cand[2 * cell_index + 1], height) - partner_y,
+                                 partner_radius, partner_radius * partner_radius))
                     {
-                        W.cand[2 * nc] = cand[2 * q];
-                        W.cand[2 * nc + 1] = cand[2 * q + 1];
-                        nc++;
+                        workspace.candidate_origins[2 * nearby_count] = cand[2 * cell_index];
+                        workspace.candidate_origins[2 * nearby_count + 1] = cand[2 * cell_index + 1];
+                        nearby_count++;
                     }
             }
-            if (nc)
+            if (nearby_count)
             {
-                int q = rint_(W, nc);
-                bc = W.cand[2 * q];
-                br = W.cand[2 * q + 1];
+                int cell_index = rint_(workspace, nearby_count);
+                second_column = workspace.candidate_origins[2 * cell_index];
+                second_row = workspace.candidate_origins[2 * cell_index + 1];
             }
             else
             {
-                int q = rint_(W, ncand);
-                bc = cand[2 * q];
-                br = cand[2 * q + 1];
+                int cell_index = rint_(workspace, candidate_count);
+                second_column = cand[2 * cell_index];
+                second_row = cand[2 * cell_index + 1];
             }
         }
         else
         {
-            int q = rint_(W, ncand);
-            bc = cand[2 * q];
-            br = cand[2 * q + 1];
+            int cell_index = rint_(workspace, candidate_count);
+            second_column = cand[2 * cell_index];
+            second_row = cand[2 * cell_index + 1];
         }
-        int nu = swap_regions(M, W, org, ac, ar, bc, br, w, h);
-        if (nu < 0)
+        int undo_count = swap_regions(model, workspace, origins, first_column, first_row, second_column,
+                                      second_row, width, height);
+        if (undo_count < 0)
             continue;
-        double s = objective(M, W, org, cost);
-        double d = s - cur;
-        if (d >= 0 || rnd(W) < exp_(d / (temp > 1e-6 ? temp : 1e-6)))
+        double candidate_score = objective(model, workspace, origins, cost);
+        double score_delta = candidate_score - current_score;
+        if (score_delta >= 0 || rnd(workspace) < exp_(score_delta / (temp > 1e-6 ? temp : 1e-6)))
         {
-            cur = s;
-            if (s > best + 1e-9)
+            current_score = candidate_score;
+            if (candidate_score > best + 1e-9)
             {
-                best = s;
-                for (int k = 0; k < 2 * M.n; k++)
-                    W.best_org[k] = org[k];
+                best = candidate_score;
+                for (int entry_index = 0; entry_index < 2 * model.piece_count; entry_index++)
+                    workspace.best_origins[entry_index] = origins[entry_index];
             }
         }
         else
         {
-            undo_swap(M, W, org, nu);
+            undo_swap(model, workspace, origins, undo_count);
         }
     }
-    for (int k = 0; k < 2 * M.n; k++)
-        org[k] = W.best_org[k];
-    *out_iters = it;
+    for (int entry_index = 0; entry_index < 2 * model.piece_count; entry_index++)
+        origins[entry_index] = workspace.best_origins[entry_index];
+    *output_iterations = iteration;
     return best;
 }
 
 // 마무리 (layout_opt.polish): 건물마다 같은 크기의 모든 자리와 맞바꿔 보고 가장 좋은 것을 받아들인다
-BXP_API double bxp_layout_polish(const Model *Mp, Work *Wp, int *org, double cost, unsigned __int64 ticks)
+BXP_API double bxp_layout_polish(const Model *model_pointer, Work *workspace_pointer, int *origins,
+                                 double cost, unsigned __int64 ticks)
 {
-    const Model &M = *Mp;
-    Work &W = *Wp;
-    W.stamp_gen = 0;
-    for (int i = 0; i < M.n; i++)
-        W.stamp[i] = 0;
-    build_occ(M, W, org);
-    double cur = objective(M, W, org, cost);
+    const Model &model = *model_pointer;
+    Work &workspace = *workspace_pointer;
+    workspace.stamp_generation = 0;
+    for (int index = 0; index < model.piece_count; index++)
+        workspace.stamp[index] = 0;
+    build_occ(model, workspace, origins);
+    double current_score = objective(model, workspace, origins, cost);
     unsigned __int64 start = __rdtsc();
     bool improved = true;
     while (improved && __rdtsc() - start < ticks)
     {
         improved = false;
-        for (int i = 0; i < M.n; i++)
+        for (int index = 0; index < model.piece_count; index++)
         {
-            if (!M.movable[i])
+            if (!model.movable[index])
                 continue;
-            int key = size_key(M.pw[i], M.ph[i]);
-            if (key < 0 || M.sz_cnt[key] <= 0)
+            int key = size_key(model.piece_widths[index], model.piece_heights[index]);
+            if (key < 0 || model.size_origin_counts[key] <= 0)
                 continue;
-            const int *cand = M.sz_org + 2 * M.sz_off[key];
-            double bv = cur;
-            int bq = -1;
-            for (int q = 0; q < M.sz_cnt[key]; q++)
+            const int *cand = model.size_origins + 2 * model.size_origin_offsets[key];
+            double best_score = current_score;
+            int best_candidate_index = -1;
+            for (int cell_index = 0; cell_index < model.size_origin_counts[key]; cell_index++)
             {
-                int nu = swap_regions(M, W, org, org[2 * i], org[2 * i + 1], cand[2 * q], cand[2 * q + 1],
-                                      M.pw[i], M.ph[i]);
-                if (nu < 0)
+                int undo_count =
+                    swap_regions(model, workspace, origins, origins[2 * index], origins[2 * index + 1],
+                                 cand[2 * cell_index], cand[2 * cell_index + 1], model.piece_widths[index],
+                                 model.piece_heights[index]);
+                if (undo_count < 0)
                     continue;
-                double v = objective(M, W, org, cost);
-                if (v > bv + 1e-9)
+                double candidate_score = objective(model, workspace, origins, cost);
+                if (candidate_score > best_score + 1e-9)
                 {
-                    bv = v;
-                    bq = q;
+                    best_score = candidate_score;
+                    best_candidate_index = cell_index;
                 }
-                undo_swap(M, W, org, nu);
+                undo_swap(model, workspace, origins, undo_count);
             }
-            if (bq >= 0)
+            if (best_candidate_index >= 0)
             {
-                swap_regions(M, W, org, org[2 * i], org[2 * i + 1], cand[2 * bq], cand[2 * bq + 1], M.pw[i],
-                             M.ph[i]);
-                cur = bv;
+                swap_regions(model, workspace, origins, origins[2 * index], origins[2 * index + 1],
+                             cand[2 * best_candidate_index], cand[2 * best_candidate_index + 1],
+                             model.piece_widths[index], model.piece_heights[index]);
+                current_score = best_score;
                 improved = true;
             }
         }
     }
-    return cur;
+    return current_score;
 }

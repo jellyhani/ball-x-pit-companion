@@ -6,6 +6,7 @@
 - 결과에는 오차와, 2위 항목과의 오차 차이(margin)를 함께 돌려준다. 이것은 이 앱이 계산한 비교 값이지
   엔진이 준 신뢰도가 아니다. 차이가 작으면 호출하는 쪽이 '미확인'으로 처리한다.
 """
+
 from __future__ import annotations
 
 import glob
@@ -24,21 +25,22 @@ from ..gamedata import DATA_DIR  # 설치 때 게임에서 추출한 자료 폴�
 @dataclass(frozen=True)
 class IconMatch:
     ident: str
-    error: float          # 상대 오차 + 모양 밖 픽셀 비율. 0에 가까울수록 일치 (이 앱이 계산한 비교 값)
-    margin: float         # 2위(다른 항목)와의 오차 차이
-    center: Tuple[int, int]   # 영역 기준 아이콘 중심(원본 픽셀)
+    error: float  # 상대 오차 + 모양 밖 픽셀 비율. 0에 가까울수록 일치 (이 앱이 계산한 비교 값)
+    margin: float  # 2위(다른 항목)와의 오차 차이
+    center: Tuple[int, int]  # 영역 기준 아이콘 중심(원본 픽셀)
     scale: float
-    raw_error: float = 0.0    # 가려진 픽셀 평균 색 차이(0–255)
+    raw_error: float = 0.0  # 가려진 픽셀 평균 색 차이(0–255)
 
     def confident(self, max_error: float = 0.45, min_margin: float = 0.05) -> bool:
         return self.error <= max_error and self.margin >= min_margin
 
+
 def _load_dir(folder: str) -> Dict[str, Image.Image]:
-    out = {}
+    result = {}
     for path in glob.glob(os.path.join(folder, "*.png")):
         ident = os.path.splitext(os.path.basename(path))[0].replace("_", ":", 1)
-        out[ident] = Image.open(path).convert("RGBA")
-    return out
+        result[ident] = Image.open(path).convert("RGBA")
+    return result
 
 
 class IconLibrary:
@@ -69,24 +71,29 @@ class IconLibrary:
             self._cache[key] = hit
         return hit
 
-    def match(self, region: Image.Image, scale: float, candidates: Optional[Iterable[str]] = None,
-              work_size: int = 20) -> List[IconMatch]:
+    def match(
+        self,
+        region: Image.Image,
+        scale: float,
+        candidates: Optional[Iterable[str]] = None,
+        work_size: int = 20,
+    ) -> List[IconMatch]:
         """region 안에서 가장 잘 맞는 항목 순서대로. scale 은 원본 1픽셀이 화면 몇 픽셀인지."""
         ids = list(candidates) if candidates is not None else list(self.sprites)
         if not ids:
             return []
-        typical = max(max(self.sprites[i].size) for i in ids)
-        ds = max(1.0, typical * scale / work_size)      # 비교용 축소 비율
+        typical = max(max(self.sprites[index].size) for index in ids)
+        ds = max(1.0, typical * scale / work_size)  # 비교용 축소 비율
         rw, rh = max(1, round(region.width / ds)), max(1, round(region.height / ds))
         reg = np.asarray(region.convert("RGB").resize((rw, rh), Image.Resampling.BOX), dtype=np.int16)
         # 배경색: 영역 가장자리의 중앙값. 아이콘 대신 배경만 있다고 볼 때의 오차와 비교한다.
         border = np.concatenate([reg[0], reg[-1], reg[:, 0], reg[:, -1]])
         bg = np.median(border, axis=0).astype(np.int16)
-        bg_diff = np.abs(reg - bg).sum(axis=-1, dtype=np.int32)          # (H, W)
-        fg = (bg_diff > 75).astype(np.int32)                              # 배경과 뚜렷이 다른 픽셀
+        bg_diff = np.abs(reg - bg).sum(axis=-1, dtype=np.int32)  # (H, W)
+        fg = (bg_diff > 75).astype(np.int32)  # 배경과 뚜렷이 다른 픽셀
         total_fg = int(fg.sum())
         if total_fg < 0.02 * fg.size:
-            return []   # 아이콘이 없는 빈 영역
+            return []  # 아이콘이 없는 빈 영역
         scored = []
         for ident in ids:
             color, mask = self._template(ident, scale / ds)
@@ -94,26 +101,34 @@ class IconLibrary:
             n = int(mask.sum())
             if th > rh or tw > rw or n < 6:
                 continue
-            win = sliding_window_view(reg, (th, tw, 3))[:, :, 0]          # (Y, X, th, tw, 3)
-            diff = np.abs(win[:, :, mask] - color[mask]).sum(axis=-1, dtype=np.int32)   # (Y, X, n)
-            err = diff.sum(axis=-1) / (3.0 * n)
+            win = sliding_window_view(reg, (th, tw, 3))[:, :, 0]  # (Y, X, th, tw, 3)
+            diff = np.abs(win[:, :, mask] - color[mask]).sum(axis=-1, dtype=np.int32)  # (Y, X, n)
+            error = diff.sum(axis=-1) / (3.0 * n)
             bgwin = sliding_window_view(bg_diff, (th, tw))[:, :, mask].sum(axis=-1) / (3.0 * n)
             covered = sliding_window_view(fg, (th, tw))[:, :, mask].sum(axis=-1)
             # 상대 오차 + 영역의 아이콘 픽셀 중 원본 모양 밖에 남는 비율 (큰 아이콘 일부에만 맞는 경우 배제)
-            rel = err / np.maximum(bgwin, 12.0) + COVERAGE_WEIGHT * (1.0 - covered / total_fg)
+            rel = error / np.maximum(bgwin, 12.0) + COVERAGE_WEIGHT * (1.0 - covered / total_fg)
             y, x = np.unravel_index(int(np.argmin(rel)), rel.shape)
-            cx = (x + tw / 2) * ds
-            cy = (y + th / 2) * ds
-            scored.append((float(rel[y, x]), ident, (int(cx), int(cy)), float(err[y, x])))
+            center_x = (x + tw / 2) * ds
+            center_y = (y + th / 2) * ds
+            scored.append((float(rel[y, x]), ident, (int(center_x), int(center_y)), float(error[y, x])))
         scored.sort()
         if not scored:
             return []
         second = scored[1][0] if len(scored) > 1 else scored[0][0] + 1.0
-        return [IconMatch(ident, e, (second - e) if i == 0 else (scored[0][0] - e), c, scale, raw)
-                for i, (e, ident, c, raw) in enumerate(scored)]
+        return [
+            IconMatch(ident, e, (second - e) if index == 0 else (scored[0][0] - e), c, scale, raw)
+            for index, (e, ident, c, raw) in enumerate(scored)
+        ]
 
-    def identify(self, region: Image.Image, scale: float, candidates: Optional[Iterable[str]] = None,
-                 spread: Sequence[float] = (0.94, 1.0, 1.06), shortlist: int = 6) -> Optional[IconMatch]:
+    def identify(
+        self,
+        region: Image.Image,
+        scale: float,
+        candidates: Optional[Iterable[str]] = None,
+        spread: Sequence[float] = (0.94, 1.0, 1.06),
+        shortlist: int = 6,
+    ) -> Optional[IconMatch]:
         """두 단계 비교: 작게 줄여 후보를 추린 뒤, 추린 후보만 여러 배율로 자세히 비교한다.
 
         볼과 패시브 원본 크기가 달라서(50px / 25–27px) 패시브는 '같은 픽셀 배율'과
@@ -140,12 +155,12 @@ class IconLibrary:
         return IconMatch(top.ident, top.error, second - top.error, top.center, top.scale, top.raw_error)
 
     def _variants(self, ids: List[str], scale: float):
-        small = [i for i in ids if i.startswith("passive:")]
-        balls = [i for i in ids if not i.startswith("passive:")]
-        out = []
+        small = [index for index in ids if index.startswith("passive:")]
+        balls = [index for index in ids if not index.startswith("passive:")]
+        result = []
         if balls:
-            out.append((scale, balls))
+            result.append((scale, balls))
         if small:
-            out.append((scale, small))
-            out.append((scale * 50 / 27, small))
-        return out
+            result.append((scale, small))
+            result.append((scale * 50 / 27, small))
+        return result

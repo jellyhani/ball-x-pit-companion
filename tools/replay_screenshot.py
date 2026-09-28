@@ -4,6 +4,7 @@
 
     .venv\\Scripts\\python.exe tools\\replay_screenshot.py 스크린샷.png [출력폴더]
 """
+
 from __future__ import annotations
 
 import os
@@ -45,30 +46,46 @@ def main(argv) -> int:
     if parsed.kind != ScreenKind.LEVEL_UP:
         return 1
     from src.recognition.text_match import NameIndex
-    names = NameIndex((i.id, i.name_ko) for i in data.items.values())
-    obs = LevelUpReader(OcrReader(target_height=100000).read, names=names).read(img, frame, parsed.layout)
+
+    names = NameIndex((index.id, index.name_ko) for index in data.items.values())
+    observation = LevelUpReader(OcrReader(target_height=100000).read, names=names).read(
+        img, frame, parsed.layout
+    )
 
     run = RunState()
     run.start_run()
     tracker = ChoiceTracker()
-    ev = tracker.observe(obs, 0.0, forced=True)[0]
-    s = ev.session
+    event = tracker.observe(observation, 0.0, forced=True)[0]
+    s = event.session
     run.apply_character(s.character_id)
     if s.inventory is not None:
         run.apply_inventory(s.inventory, data)
-    rec = Recommender(data).recommend(s, run)
-    print("설명 패널:", data.name(obs.hover_item_id) if obs.hover_item_id else "-")
+    record = Recommender(data).recommend(s, run)
+    print("설명 패널:", data.name(observation.hover_item_id) if observation.hover_item_id else "-")
     print("캐릭터:", data.name(s.character_id), "골드:", s.gold, "새로고침 비용:", s.reroll_cost)
     print("보유:", [(data.name(o.item_id), o.level) for o in run.owned.values()])
-    print("카드:", [(c.position, data.name(c.item_id), c.label and c.label.value, c.shown_level) for c in s.cards])
-    print("추천:", rec.status, rec.headline, "|", rec.reroll_text)
-    for e in rec.evals:
-        print("  ", e.card.position, data.name(e.card.item_id), e.action_text, f"{e.score:.0f}",
-              [r.text for r in e.reasons], [w.text for w in e.warnings])
+    print(
+        "카드:",
+        [
+            (card.position, data.name(card.item_id), card.label and card.label.value, card.shown_level)
+            for card in s.cards
+        ],
+    )
+    print("추천:", record.status, record.headline, "|", record.reroll_text)
+    for evaluation in record.evals:
+        print(
+            "  ",
+            evaluation.card.position,
+            data.name(evaluation.card.item_id),
+            evaluation.action_text,
+            f"{evaluation.score:.0f}",
+            [reason.text for reason in evaluation.reasons],
+            [warning.text for warning in evaluation.warnings],
+        )
 
     for scale, name in ((1.0, "normal"), (1.2, "large")):
         hud = RecommendationHud(data, scale)
-        hud.show_recommendation(rec, s.points_left)
+        hud.show_recommendation(record, s.points_left)
         hud.adjustSize()
         hud.show()
         app.processEvents()
@@ -76,15 +93,23 @@ def main(argv) -> int:
         hud_path = os.path.join(out_dir, f"hud_{name}.png")
         pix.save(hud_path)
         # 게임 화면 위에 실제 배치 위치로 합성 (재생 이미지는 배율 1로 본다)
-        game = QRect(0, 0, img.width, img.height)
-        cards = [QRect(*c.rect) for c in s.cards]
-        p = geo.place_hud(game, cards, pix.width(), pix.height(), panel=QRect(*s.panel_rect) if s.panel_rect else None)
+        rectangle = QRect(0, 0, img.width, img.height)
+        cards = [QRect(*card.rect) for card in s.cards]
+        p = geo.place_hud(
+            rectangle, cards, pix.width(), pix.height(), panel=QRect(*s.panel_rect) if s.panel_rect else None
+        )
         hud_img = Image.open(hud_path).convert("RGBA")
         comp = img.convert("RGBA")
-        if rec.status not in ("auto", "none"):
+        if record.status not in ("auto", "none"):
             from src.engine.recommender import card_verdict
+
             hl = CardHighlight()
-            hl.set_marks([(QRect(*e.card.rect), card_verdict(rec, e)) for e in rec.evals])
+            hl.set_marks(
+                [
+                    (QRect(*evaluation.card.rect), card_verdict(record, evaluation))
+                    for evaluation in record.evals
+                ]
+            )
             hl.show()
             app.processEvents()
             hl_path = os.path.join(out_dir, "highlight.png")
