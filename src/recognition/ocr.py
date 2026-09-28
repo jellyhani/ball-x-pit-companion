@@ -72,15 +72,15 @@ def split_lines(lines: List[List[Word]], inv_scale: float = 1.0) -> List[OcrLine
 
 def _make_line(seg: List[Word], inv: float) -> OcrLine:
     left_x = min(w[1] for w in seg)
-    bottom_y = min(w[2] for w in seg)
+    top_y = min(w[2] for w in seg)
     right_x = max(w[1] + w[3] for w in seg)
-    top_y = max(w[2] + w[4] for w in seg)
+    bottom_y = max(w[2] + w[4] for w in seg)
     return OcrLine(
         text=" ".join(w[0] for w in seg),
         x=int(left_x * inv),
-        y=int(bottom_y * inv),
+        y=int(top_y * inv),
         w=int((right_x - left_x) * inv),
-        h=int((top_y - bottom_y) * inv),
+        h=int((bottom_y - top_y) * inv),
     )
 
 

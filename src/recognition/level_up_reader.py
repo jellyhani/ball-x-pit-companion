@@ -69,10 +69,10 @@ def _render_prefix() -> Image.Image:
     except OSError:
         return img
     d = ImageDraw.Draw(img)
-    left_x, bottom_y, right_x, top_y = d.textbbox((0, 0), "레벨", font=font)
-    sx, sy = 59 / (right_x - left_x), 32 / (top_y - bottom_y)
-    big = Image.new("RGB", (right_x - left_x + 4, top_y - bottom_y + 4), (36, 18, 21))
-    ImageDraw.Draw(big).text((2 - left_x, 2 - bottom_y), "레벨", font=font, fill=(224, 167, 162))
+    left_x, top_y, right_x, bottom_y = d.textbbox((0, 0), "레벨", font=font)
+    sx, sy = 59 / (right_x - left_x), 32 / (bottom_y - top_y)
+    big = Image.new("RGB", (right_x - left_x + 4, bottom_y - top_y + 4), (36, 18, 21))
+    ImageDraw.Draw(big).text((2 - left_x, 2 - top_y), "레벨", font=font, fill=(224, 167, 162))
     big = big.resize((max(1, int(big.width * sx)), max(1, int(big.height * sy))), Image.LANCZOS)
     img.paste(big, (4 - int(2 * sx), 4 - int(2 * sy)))
     return img

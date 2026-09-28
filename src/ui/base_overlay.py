@@ -201,9 +201,9 @@ class BaseOverlay(QWidget):
         if self._player and self._aim:
             add(*self._player, 10)
             add(*self._aim, 10)
-        for right_x, top_y, x2, y2, _ in self._swap_marks:
-            add(right_x, top_y, 26)
-            add(x2, y2, 26)
+        for first_x, first_y, second_x, second_y, _ in self._swap_marks:
+            add(first_x, first_y, 26)
+            add(second_x, second_y, 26)
         for x, y in self._box_pts:
             add(x, y, 6)
         if self._lines:
@@ -281,10 +281,10 @@ class BaseOverlay(QWidget):
             painter.setBrush(tk.qcolor(tk.ACCENT))
             painter.drawEllipse(QPointF(self._aim[0] * display_scale, self._aim[1] * display_scale), 7, 7)
         # 재배치 안내: 맞바꿀 두 건물에 번호 원과 연결선
-        for right_x, top_y, x2, y2, label in self._swap_marks:
+        for first_x, first_y, second_x, second_y, label in self._swap_marks:
             a, current_point = (
-                QPointF(right_x * display_scale, top_y * display_scale),
-                QPointF(x2 * display_scale, y2 * display_scale),
+                QPointF(first_x * display_scale, first_y * display_scale),
+                QPointF(second_x * display_scale, second_y * display_scale),
             )
             painter.setPen(QPen(tk.qcolor(tk.WARN), 4))
             painter.drawLine(a, current_point)

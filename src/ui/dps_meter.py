@@ -138,7 +138,7 @@ class DpsMeter(QWidget):
             current_rectangle, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, fmt(self._total)
         )
 
-        bottom_y = self.px(38)
+        rows_start_y = self.px(38)
         extra = self._extra_line()
         if extra:
             painter.setFont(body)
@@ -165,19 +165,19 @@ class DpsMeter(QWidget):
                     bh / 2,
                 )
                 painter.fillPath(fill, tk.qcolor(tk.DANGER))
-            bottom_y += self.px(20)
+            rows_start_y += self.px(20)
         if not self._rows:
             painter.setFont(body)
             painter.setPen(tk.qcolor(tk.TEXT_3))
             painter.drawText(
-                QRectF(pad, bottom_y - self.px(2), rectangle.width() - 2 * pad, self.px(24)),
+                QRectF(pad, rows_start_y - self.px(2), rectangle.width() - 2 * pad, self.px(24)),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                 tr("피해 기록을 모으는 중"),
             )
             return
         fm = QFontMetricsF(body)
         icon = self.px(20)
-        y = bottom_y
+        y = rows_start_y
         name_w = self.px(92)
         bar_x = pad + icon + self.px(8) + name_w
         num_w = self.px(40)

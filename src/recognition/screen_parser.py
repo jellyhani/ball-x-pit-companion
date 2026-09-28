@@ -62,10 +62,10 @@ def label_of(line: OcrLine) -> Tuple[Optional[CardLabel], Optional[int]]:
     return None, None
 
 
-def _box(left_x: float, bottom_y: float, right_x: float, top_y: float, size: Tuple[int, int]) -> Rect:
-    left_x, bottom_y = max(0, int(left_x)), max(0, int(bottom_y))
-    right_x, top_y = min(size[0], int(right_x)), min(size[1], int(top_y))
-    return (left_x, bottom_y, max(0, right_x - left_x), max(0, top_y - bottom_y))
+def _box(left_x: float, top_y: float, right_x: float, bottom_y: float, size: Tuple[int, int]) -> Rect:
+    left_x, top_y = max(0, int(left_x)), max(0, int(top_y))
+    right_x, bottom_y = min(size[0], int(right_x)), min(size[1], int(bottom_y))
+    return (left_x, top_y, max(0, right_x - left_x), max(0, bottom_y - top_y))
 
 
 @dataclass(frozen=True)
@@ -211,14 +211,14 @@ def parse_layout(lines: Sequence[OcrLine], frame: FrameInfo) -> ParsedScreen:
     for top, bottom in INV_ROWS:
         for c in range(4):
             center_x = hx + P * (INV_COL_X0 + INV_COL_PITCH * c)
-            bottom_y = hy + top * P
+            top_y = hy + top * P
             slots.append(
-                _box(center_x - INV_HALF_W * P, bottom_y, center_x + INV_HALF_W * P, hy + bottom * P, size)
+                _box(center_x - INV_HALF_W * P, top_y, center_x + INV_HALF_W * P, hy + bottom * P, size)
             )
             icons.append(
                 _box(
                     center_x - INV_ICON_HALF_W * P,
-                    bottom_y + DIGIT_BOTTOM * P,
+                    top_y + DIGIT_BOTTOM * P,
                     center_x + INV_ICON_HALF_W * P,
                     hy + (bottom + INV_ICON_BOTTOM_PAD) * P,
                     size,
@@ -227,9 +227,9 @@ def parse_layout(lines: Sequence[OcrLine], frame: FrameInfo) -> ParsedScreen:
             digits.append(
                 _box(
                     center_x - DIGIT_HALF_W * P,
-                    bottom_y + DIGIT_TOP * P,
+                    top_y + DIGIT_TOP * P,
                     center_x + DIGIT_HALF_W * P,
-                    bottom_y + DIGIT_BOTTOM * P,
+                    top_y + DIGIT_BOTTOM * P,
                     size,
                 )
             )
