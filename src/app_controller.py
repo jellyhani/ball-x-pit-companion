@@ -1934,11 +1934,35 @@ class AppController(QObject):
             if hud.isVisible():
                 hud.hide()
             self.highlight.set_marks([])
+            self._record_hud_display(False)
             return
         self._position_hud()
         if not hud.isVisible():
             hud.show()
         self._update_highlight()
+        self._record_hud_display(True)
+
+    def _record_hud_display(self, wanted: bool):
+        """표시 전환만 기록한다. 추천 계산 성공과 실제 창 표시를 구분할 근거를 남긴다."""
+        session = self.tracker.session
+        game_state = getattr(getattr(self, "bridge_state", None), "game_state", "")
+        signature = (
+            wanted, self.hud.isVisible(), self._game_active(), self.user_hidden,
+            self.settings.hud_auto_show, game_state,
+            session.session_id if session else None,
+            self.recommendation.session_id if self.recommendation else None,
+            self.fusion_rec is not None, self.hud.message_pending,
+            bool(self._echo_sessions),
+        )
+        if signature == getattr(self, "_hud_display_signature", None):
+            return
+        self._hud_display_signature = signature
+        raised = gw.raise_overlay(int(self.hud.winId())) if wanted and self.hud.isVisible() else None
+        log.info(
+            "HUD 표시: 요청=%s 표시=%s 게임활성=%s 사용자숨김=%s 자동=%s 화면=%s "
+            "선택창=%s 추천=%s 융합=%s 알림=%s 잔상보류=%s 위치=%s 전면배치=%s",
+            *signature, self.hud.geometry().getRect(), raised,
+        )
 
     def _update_highlight(self):
         """모든 선택지 카드에 판정 색 테두리와 이름표 (HUD 목록과 같은 색)."""

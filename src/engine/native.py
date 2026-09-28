@@ -32,10 +32,17 @@ def lib():
         return None
     try:
         native_library = ctypes.CDLL(_DLL)
-        if native_library.bxp_version() != 9:
+        if native_library.bxp_version() != 10:
             return None
         pointer_type = ctypes.POINTER
         double_type, integer_type = ctypes.c_double, ctypes.c_int
+        native_library.bxp_next_shape.restype = integer_type
+        native_library.bxp_next_shape.argtypes = [
+            integer_type, *([pointer_type(integer_type)] * 4),
+            *([pointer_type(double_type)] * 3), *([pointer_type(integer_type)] * 3),
+            pointer_type(double_type), integer_type, double_type, double_type,
+            pointer_type(integer_type), integer_type, pointer_type(double_type),
+        ]
         native_library.bxp_simulate_team.restype = integer_type
         native_library.bxp_simulate_team.argtypes = [
             pointer_type(double_type),
@@ -130,6 +137,63 @@ class PackedWorld:
                 index[building_id] = len(self.slot_ids)
                 self.slot_ids.append(building_id)
         self.shape_slots = _arr(ctypes.c_int, [index[building_id] for building_id in self.building_ids])
+
+
+class DynamicShapeQuery:
+    """재생 등 상태 변화는 호출자가 처리하고, 모양의 교차만 DLL에서 계산한다."""
+
+    def __init__(self, world):
+        self.library = lib()
+        self.world = world
+        self.packed = getattr(world, "_packed", None) or PackedWorld(world)
+        world._packed = self.packed
+        self.slots = {building_id: index for index, building_id in enumerate(self.packed.slot_ids)}
+        slot_count = max(1, len(self.slots))
+        self.flags = (ctypes.c_int * slot_count)()
+        self.resource_types = (ctypes.c_int * slot_count)()
+        self.stocks = (ctypes.c_int * slot_count)()
+        self.touching = (ctypes.c_int * slot_count)()
+        self.worker_state = (ctypes.c_double * 4)()
+        self.result = (ctypes.c_double * 5)()
+
+    def refresh(self, buildings, stocks, resource_types, tiles):
+        """동일 시각의 모든 작업자 질의 전에 건물 상태를 한 번 갱신한다."""
+        for building_id, slot in self.slots.items():
+            building = buildings.get(building_id, {})
+            resource_type = resource_types.get(building_id)
+            tile = tiles.get(building_id, False)
+            self.flags[slot] = (
+                (F_WHEAT if tile and building.get("pickup_enabled", resource_type == 1) else 0)
+                | (F_TILE | F_RESOURCE if tile else 0)
+                | (F_NO_RAY if building.get("raycast_enabled") is False else 0)
+            )
+            self.resource_types[slot] = -1 if resource_type is None else resource_type
+            self.stocks[slot] = stocks.get(building_id, 0)
+
+    def nearest(self, worker, pickup_radius):
+        packed = self.packed
+        self.worker_state[:] = worker.x, worker.y, worker.dx, worker.dy
+        contacts = [(building_id, self.slots[building_id]) for building_id in worker.touching
+                    if building_id in self.slots]
+        for _, slot in contacts:
+            self.touching[slot] = 1
+        upgrades = ((U_PIERCE_BUILDINGS if worker.upgrades.get("kPierceBuildings") else 0)
+                    | (U_PIERCE_STONE if worker.upgrades.get("kPierceStone") else 0)
+                    | (U_PIERCE_WOOD if worker.upgrades.get("kPierceWood") else 0))
+        index = self.library.bxp_next_shape(
+            packed.shape_count, packed.shape_types, packed.shape_slots,
+            packed.point_offsets, packed.point_counts, packed.vertices, packed.circles, packed.bounds,
+            self.flags, self.resource_types, self.stocks, self.worker_state, upgrades,
+            self.world.radius, pickup_radius, self.touching, int(worker.just_bounced), self.result,
+        )
+        for building_id, slot in contacts:
+            if not self.touching[slot]:
+                worker.touching.discard(building_id)
+            self.touching[slot] = 0
+        if index < 0:
+            return None
+        distance, normal_x, normal_y, solid, pickup = self.result
+        return distance, normal_x, normal_y, self.world.shapes[index], bool(solid), bool(pickup)
 
 
 def simulate_team(

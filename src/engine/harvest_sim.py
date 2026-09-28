@@ -713,7 +713,10 @@ def simulate_team(
     )
     if total is not None:
         return total, workers
-    return simulate_team_py(world, buildings, workers, duration, max_events, counts, build_points, collected)
+    return simulate_team_py(
+        world, buildings, workers, duration, max_events, counts, build_points, collected,
+        _shape_query=native.DynamicShapeQuery(world) if native.lib() is not None else None,
+    )
 
 
 def simulate_team_py(
@@ -725,6 +728,8 @@ def simulate_team_py(
     counts: Optional[Dict[int, int]] = None,
     build_points: Optional[Dict[int, int]] = None,
     collected: Optional[Dict[int, int]] = None,
+    *,
+    _shape_query=None,
 ) -> Tuple[List[int], List[Worker]]:
     """simulate_team 의 파이썬 구현 (네이티브 모듈이 없을 때, 그리고 결과 비교 기준)."""
     buildings = {building_id: dict(building) for building_id, building in buildings.items()}
@@ -932,7 +937,11 @@ def simulate_team_py(
                 h = _ray_segment(worker.x, worker.y, worker.dx, worker.dy, start_x, start_y, end_x, end_y)
                 if h and (best is None or h[0] < best[0]):
                     best = (h[0], h[1], h[2], None, True, False)
-        for shape in world.shapes:
+        if _shape_query is not None:
+            hit = _shape_query.nearest(worker, effects[id(worker)][2])
+            if hit is not None and (best is None or hit[0] < best[0]):
+                best = hit
+        for shape in (() if _shape_query is not None else world.shapes):
             building = buildings.get(shape.bid, {})
             pickup = is_tile.get(shape.bid) and building.get(
                 "pickup_enabled", resource_types.get(shape.bid) == 1
@@ -976,6 +985,11 @@ def simulate_team_py(
 
     # 사건 구조: (게임 시각, 이동 거리, 법선 x/y, 대상 모양, 반사 여부, 픽업 여부).
     # 접촉과 반사는 별개다. 관통도 공사 점수를 줄 수 있고 픽업은 벽 반사가 아니다.
+    def refresh_shapes():
+        if _shape_query is not None:
+            _shape_query.refresh(buildings, res_left, resource_types, is_tile)
+
+    refresh_shapes()
     events = [next_event(worker) for worker in workers]
     for _ in range(max_events):
         ready = [index for index, event in enumerate(events) if event is not None]
@@ -990,6 +1004,7 @@ def simulate_team_py(
                         when,
                     )
             tasks.tick()
+            refresh_shapes()
             events = [next_event(other) for other in workers]
             continue
         if not ready:
@@ -1056,6 +1071,7 @@ def simulate_team_py(
                         other.y + other.dy * distance,
                         when,
                     )
+            refresh_shapes()
             events = [next_event(other) for other in workers]
             for other_index, event in simultaneous.items():
                 events[other_index] = event

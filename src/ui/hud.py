@@ -377,6 +377,7 @@ class RecommendationHud(QWidget):
 
         for w in self._row_widgets:
             self.rows.removeWidget(w)
+            w.hide()  # 삭제 예약이 처리될 때까지 이전 선택지들이 새 내용 위에 겹치지 않게 한다.
             w.deleteLater()
         self._row_widgets = []
         for r, row in enumerate(v.rows):

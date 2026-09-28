@@ -152,6 +152,26 @@ class ControllerFlowTest(unittest.TestCase):
             self.assertTrue(self.c.hud.isVisible())
             self.assertIs(self.c.recommendation, rec)
 
+    def test_hud_restores_front_position_without_repeating_every_frame(self):
+        self.c._game_active = lambda: True
+        with patch("src.app_controller.gw.raise_overlay", return_value=True) as raise_overlay:
+            self.feed(LEVELUP)
+            self.assertEqual(raise_overlay.call_count, 1)
+            self.feed(LEVELUP)
+            self.assertEqual(raise_overlay.call_count, 1)
+            self.c.toggle_hud()
+            self.c.toggle_hud()
+            self.assertEqual(raise_overlay.call_count, 2)
+
+    def test_replaced_hud_rows_are_hidden_before_deferred_deletion(self):
+        self.c._game_active = lambda: True
+        self.feed(LEVELUP)
+        previous_widgets = list(self.c.hud._row_widgets)
+        self.assertTrue(previous_widgets)
+        self.c.hud.show_recommendation(self.c.recommendation, 1)
+        self.assertTrue(all(widget.isHidden() for widget in previous_widgets))
+        self.assertTrue(all(not widget.isHidden() for widget in self.c.hud._row_widgets))
+
     def test_open_inventory_refreshes_when_fusion_changes_without_choice_event(self):
         before=copy.deepcopy(LEVELUP)
         before.update(game_state="kPlaying",levelup=None)

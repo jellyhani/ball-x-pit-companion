@@ -255,3 +255,15 @@ def set_click_through(hwnd: int, enabled: bool) -> int:
     style = style | WS_EX_TRANSPARENT if enabled else style & ~WS_EX_TRANSPARENT
     user32.SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style)
     return user32.GetWindowLongPtrW(hwnd, GWL_EXSTYLE)
+
+
+user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
+                                ctypes.c_int, ctypes.c_int, wintypes.UINT]
+user32.SetWindowPos.restype = wintypes.BOOL
+
+
+def raise_overlay(hwnd: int) -> bool:
+    """게임 입력 포커스를 유지하며 오버레이를 최상위 창 중 앞으로 옮긴다."""
+    # 최상위 속성만으로는 나중에 앞으로 온 다른 최상위 창보다 앞이라는 보장이 없다.
+    # SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE: 위치·크기·게임 포커스는 유지한다.
+    return bool(user32.SetWindowPos(hwnd, wintypes.HWND(-1), 0, 0, 0, 0, 0x01 | 0x02 | 0x10))

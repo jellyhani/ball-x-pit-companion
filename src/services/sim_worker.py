@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from concurrent.futures import Executor, Future, ProcessPoolExecutor, ThreadPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Dict, Optional, Tuple
@@ -33,6 +34,8 @@ class SimWorker(QObject):
         self._busy: Dict[str, bool] = {}
         self._pending: Dict[str, Tuple[Any, Callable, tuple]] = {}
         self._closed = False
+        self._started_at: Dict[str, float] = {}
+        self._reported_channels = set()
 
     def _executor(self, channel: str) -> Executor:
         lane = LANES.get(channel, "heavy")
@@ -64,6 +67,7 @@ class SimWorker(QObject):
     def _start(self, channel: str, key: Any, fn: Callable, args: tuple):
         if self._closed:
             return
+        self._started_at[channel] = time.perf_counter()
         try:
             fut = self._executor(channel).submit(fn, *args)
         except Exception:
@@ -101,6 +105,12 @@ class SimWorker(QObject):
         """제출 실패도 완료로 알린다. 화면의 '계산 중' 상태와 다음 요청을 함께 해제한다."""
         if self._closed:
             return
+        started = self._started_at.pop(channel, None)
+        if started is not None:
+            elapsed = time.perf_counter() - started
+            if channel not in self._reported_channels or elapsed >= 1.0:
+                log.info("계산 완료: 채널=%s 소요=%.3f초 성공=%s", channel, elapsed, result is not None)
+                self._reported_channels.add(channel)
         self.done.emit(channel, key, result)  # 다른 스레드에서 보내도 Qt 가 화면 스레드로 넘긴다
         with self._lock:
             next_value = self._pending.pop(channel, None)

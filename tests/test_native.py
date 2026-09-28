@@ -56,6 +56,52 @@ class NativeSameAsPythonTest(unittest.TestCase):
                     [dict(m, upgrades={"kPierceBuildings": 1}) for m in self.team[3:5]]
         self.compare(self.full, range(20, 161, 20))
 
+    def test_dynamic_resources_match_python_with_regeneration_and_piercing(self):
+        """실제 형태의 기지에서도 재생 시각마다 충돌·픽업을 같은 순서로 처리한다."""
+        buildings = copy.deepcopy(self.full)
+        for building in buildings.values():
+            if hs.resource_tile(building):
+                building.update(task_target_seconds=5, task_seconds=4)
+        self.assertTrue(hs.needs_dynamic_simulation(buildings))
+        self.team = [dict(member, upgrades={"kPierceWood": 1, "kPierceBuildings": 1})
+                     for member in self.team[:4]]
+        self.compare(buildings, (25, 48, 80, 130), dur=12.)
+
+    def test_dynamic_query_keeps_shared_shape_contacts_and_wall_priority(self):
+        world = hs.World(0, 12, 0, 10, [
+            hs.Shape(1, "circle", c=(3, 3), r=.5),
+            hs.Shape(1, "circle", c=(3.5, 3), r=.5),
+            hs.Shape(2, "circle", c=(6, 3), r=.5),
+            hs.Shape(-1, "wall", pts=[(9, 0), (9, 10)]),
+        ], (1, 3), task_clock=(.5, 1., 1.))
+        buildings = {
+            1: dict(type="kWheatField", state="kNormal", res=3, cap=3, can_harvest=True,
+                    pickup_enabled=True, raycast_enabled=False, task_seconds=0, task_target_seconds=2),
+            2: dict(type="kForest", state="kNormal", res=2, cap=2, can_harvest=True,
+                    pickup_enabled=False, raycast_enabled=True, task_seconds=0, task_target_seconds=3),
+        }
+        for upgrades in ({}, {"kPierceBuildings": 1, "kPierceWood": 1}):
+            results = []
+            for simulator in (hs.simulate_team, hs.simulate_team_py):
+                scene = copy.deepcopy(world)
+                counts, collected = {}, {}
+                total, workers = simulator(scene, buildings,
+                    [hs.Worker(1, 3, 1, 0, 2, 0, upgrades)], 12., counts=counts, collected=collected)
+                results.append((total, workers, counts, collected, scene.automatic_gain, scene.model_notes))
+            self.assertEqual(results[0], results[1])
+
+    def test_dynamic_simulation_uses_native_query_but_reference_does_not(self):
+        from unittest.mock import patch
+
+        world = hs.World(0, 10, 0, 10, [], (1, 1))
+        buildings = {1: dict(type="kForest", task_target_seconds=5)}
+        with patch.object(native.DynamicShapeQuery, "nearest", return_value=None) as query:
+            hs.simulate_team(world, buildings, [hs.Worker(1, 1, 1, 0, 1, 0)], 1.)
+            self.assertTrue(query.called)
+            query.reset_mock()
+            hs.simulate_team_py(world, buildings, [hs.Worker(1, 1, 1, 0, 1, 0)], 1.)
+            query.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

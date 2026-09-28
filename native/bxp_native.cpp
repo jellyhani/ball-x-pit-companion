@@ -282,7 +282,70 @@ bool inside_shape(const Geo &geometry, int shape_index, double x, double y, doub
 
 BXP_API int bxp_version()
 {
-    return 9;
+    return 10;
+}
+
+// 동적 채집의 충돌 질의만 가속한다. 재생·공사·추가 작업자의 시간순 처리는 Python이 맡는다.
+// 결과: 거리, 법선 x/y, 반사 여부, 픽업 여부. 반환값은 모양 번호, -1이면 교차 없음.
+BXP_API int bxp_next_shape(int shape_count, const int *kind, const int *slot,
+                          const int *point_offsets, const int *point_counts,
+                          const double *points, const double *circles, const double *bounds,
+                          const int *flags, const int *resource_types, const int *resource_stocks,
+                          const double *worker, int upgrades, double ball_radius, double pickup_radius,
+                          int *touching, int just_bounced, double *result)
+{
+    Geo geometry{kind, point_offsets, point_counts, points, circles, bounds};
+    int closest = -1;
+    for (int index = 0; index < shape_count; ++index)
+    {
+        int building = slot[index], building_flags = flags[building];
+        bool wall = is_wall(kind[index]);
+        bool pickup = (building_flags & F_WHEAT) != 0;
+        if (!wall && !pickup && (building_flags & F_NO_RAY))
+            continue;
+        bool solid = wall || (!pickup && !(building_flags & F_NO_RAY) &&
+            !((upgrades & U_PIERCE_BUILDINGS) && !(building_flags & F_RESOURCE)) &&
+            !((building_flags & F_TILE) && resource_stocks[building] <= 0) &&
+            !((building_flags & F_RESOURCE) &&
+              ((resource_types[building] == 3 && (upgrades & U_PIERCE_STONE)) ||
+               (resource_types[building] == 2 && (upgrades & U_PIERCE_WOOD)))));
+        if (!solid && (building_flags & F_TILE) && resource_stocks[building] <= 0)
+        {
+            touching[building] = 0;
+            continue;
+        }
+        double radius = pickup ? pickup_radius : ball_radius;
+        bool inside = inside_shape(geometry, index, worker[0], worker[1], radius);
+        double distance, normal_x, normal_y;
+        if (pickup && inside)
+        {
+            if (touching[building] && !just_bounced)
+                continue;
+            distance = 0;
+            normal_x = -worker[2];
+            normal_y = -worker[3];
+        }
+        else
+        {
+            if (!inside)
+                touching[building] = 0;
+            if (!solid && inside)
+                continue;
+            if (!hit_shape(geometry, index, worker[0], worker[1], worker[2], worker[3],
+                           radius, distance, normal_x, normal_y))
+                continue;
+        }
+        if (closest < 0 || distance < result[0])
+        {
+            closest = index;
+            result[0] = distance;
+            result[1] = normal_x;
+            result[2] = normal_y;
+            result[3] = solid ? 1 : 0;
+            result[4] = pickup ? 1 : 0;
+        }
+    }
+    return closest;
 }
 
 // 여러 작업자를 시간 순서로 함께 돌린다 (harvest_sim.simulate_team 과 같음).
