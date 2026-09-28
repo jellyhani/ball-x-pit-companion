@@ -1299,6 +1299,16 @@ def optimize(
         from . import construction_front
         from .layout_guide import preserves_guide
 
+        if entrance & set(lay0.occ):
+            from .layout_guide import repair as repair_access
+
+            # 허브 탐색이 시간 예산을 쓰기 전에 입구 비움·공사 앞배치 후보부터 확보한다.
+            # 후보는 아래의 기존 효과·생산·이동 순서·물리 검사를 모두 거친다.
+            access = repair_access(grid, pieces, origin0, [], pad, lane, entrance, deadline=search_deadline)
+            if access is not None:
+                add_cand(access[0], access[1])
+                starts.append((access[0], access[1], set()))
+
         def preserves_front_move(origins, turns):
             candidate_layout = Layout(grid, shaped_of(turns), origins)
             proposal = FullPlan(origin0, origins,

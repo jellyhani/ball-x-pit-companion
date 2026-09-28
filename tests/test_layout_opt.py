@@ -484,6 +484,25 @@ class GuideFewMovesTest(unittest.TestCase):
         base["geo"]["entrance_chunk"] = [2, 0]
         self.assertEqual(lo.entrance_cells(base["geo"], grid), {(c, 0) for c in range(16, 24)} | {(19, 1), (20, 1)})
 
+    def test_access_candidate_survives_hub_search_exhaustion(self):
+        from src.engine import layout_guide as lg
+        _, base, grid, _, _ = setup()
+        base["geo"]["entrance_grid"] = [2, 0]
+        next(building for building in base["buildings"] if building["id"] == 39)["state"] = "kUpgrading"
+        pieces, _ = lo.pieces_from_base(base, grid, lo.housing_types())
+        original_repair = lg.repair
+
+        def no_hub_result(grid, pieces, origins, groups, *args, **kwargs):
+            return None if groups else original_repair(grid, pieces, origins, groups, *args, **kwargs)
+
+        with patch.object(lg, "repair", side_effect=no_hub_result), \
+                patch("src.engine.native_layout._lib", return_value=None):
+            plan = lo.optimize(base, preset="guide", seconds=2., restarts=0)
+        final = lo.Layout(grid, shaped(pieces, plan), plan.origin_after)
+        self.assertFalse(lo.entrance_cells(base["geo"], grid) & set(final.occ))
+        lane = lo.lane_values(base["geo"], grid)
+        self.assertTrue(any(lane.get(cell, 0.) > 0 for cell in final.cells(39)))
+
     def test_staffed_quarry_gets_free_coverage_move_below_global_cutoff(self):
         """채석장 바위 2→4개는 전체 효과 +4% 미만이어도 한 번 옮겨 챙긴다."""
         from src.engine.layout import buildings_from_base, moved_base
