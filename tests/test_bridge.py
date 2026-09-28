@@ -42,6 +42,35 @@ LEVELUP = {
 
 
 class AdapterTest(unittest.TestCase):
+    def test_starting_bonus_choices_are_recognized_without_levelup_points(self):
+        for bonus_type, item_type, kind in (("kBonusBall", "kBurn", "kHero"),
+                                           ("kBonusPassive", "kEtherealCloak", "kPassive")):
+            with self.subTest(bonus_type=bonus_type):
+                snap = json.loads(json.dumps(LEVELUP))
+                snap["game_state"] = bonus_type
+                snap["ui"] = {"screen": "levelup"}
+                snap["battle"].update(turn=0, gold=0, level_ups_avail=0, free_rerolls=3, banishes=4)
+                snap["levelup"].update(type=bonus_type, page="kPickUpgrade", reroll_cost=0)
+                for choice in snap["levelup"]["choices"]:
+                    choice.update(type=item_type, kind=kind, is_new=True, equip_idx=-1,
+                                  effective={"scope": "current_run_uncombined", "level": 3, "after": {}})
+                result = convert(snap, game_data())
+                self.assertTrue(result.in_run)
+                self.assertEqual(result.observation.kind, ScreenKind.LEVEL_UP)
+                self.assertEqual(len(result.observation.cards), 3)
+                self.assertTrue(all(card.shown_level == 3 for card in result.observation.cards))
+                self.assertIsNone(result.observation.points_left)
+                self.assertEqual(result.observation.banish_left, 0)
+                self.assertEqual(result.observation.free_rerolls, 0)
+                self.assertIsNone(result.observation.pool)
+
+    def test_bonus_choices_are_ignored_after_leaving_bonus_state(self):
+        for state in ("kPlaying", "kPaused", "kPickTreasure", "kBonusPassive"):
+            snap = json.loads(json.dumps(LEVELUP))
+            snap.update(game_state=state, ui={"screen": "levelup"})
+            snap["levelup"]["type"] = "kBonusBall"
+            self.assertEqual(convert(snap, game_data()).observation.kind, ScreenKind.OTHER)
+
     def test_levelup_snapshot(self):
         st = convert(LEVELUP, game_data(), origin=(100, 50))
         obs = st.observation

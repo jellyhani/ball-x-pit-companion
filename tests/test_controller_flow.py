@@ -119,6 +119,25 @@ class ControllerFlowTest(unittest.TestCase):
                 self.feed(LEVELUP)
                 self.assertTrue(self.c.hud.isVisible())
 
+    def test_starting_ball_and_passive_choices_show_and_reopen_hud(self):
+        self.c._game_active = lambda: True
+        for bonus_type in ("kBonusBall", "kBonusPassive"):
+            snapshot = copy.deepcopy(LEVELUP)
+            snapshot.update(game_state=bonus_type, ui={"screen": "levelup"})
+            snapshot["battle"].update(turn=0, gold=0, level_ups_avail=0)
+            snapshot["levelup"].update(type=bonus_type, page="kPickUpgrade", reroll_cost=0)
+            self.feed(snapshot)
+            self.assertIsNotNone(self.c.recommendation)
+            self.assertTrue(self.c.hud.isVisible())
+            self.assertEqual(self.c.recommendation.reroll_status, "none")
+            self.assertFalse(self.c.recommendation.banish_text)
+            closed = copy.deepcopy(snapshot)
+            closed.update(game_state="kPlaying", levelup=None)
+            self.feed(closed)
+            self.feed(snapshot)
+            self.assertIsNotNone(self.c.recommendation)
+            self.assertTrue(self.c.hud.isVisible())
+
     def test_confirmed_pick_echo_expires_even_without_card_changes(self):
         """진짜 선택 직후의 잔상은 숨기되 같은 화면이 유지되면 보호 시간 뒤 복구한다."""
         self.c._game_active = lambda: True

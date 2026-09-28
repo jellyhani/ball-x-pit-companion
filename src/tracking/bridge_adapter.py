@@ -45,6 +45,9 @@ IN_RUN_STATES = {
     "kEnteringLvl",
 }
 
+# 게임 1.301의 LevelUpType: 일반 강화와 별도로 시작 볼·패시브 보상을 사용한다.
+BONUS_CHOICE_TYPES = {"kBonusBall", "kBonusPassive"}
+
 
 def _effective(value):
     if (
@@ -154,6 +157,7 @@ def convert(
     if (
         lvl is not None
         and snapshot.get("game_state") not in (None, "kLevelUp")
+        and not (lvl.get("type") in BONUS_CHOICE_TYPES and state == lvl.get("type"))
         and not (lvl.get("type") == "kFuser" and ui.get("screen") == "fuser")
     ):
         # 실제 게임 확인: 융합기가 필드에 떨어질 때 게임 상태는 kPlaying 인데 선택 UI 가 잠깐 kFuser 로 잡힌다.
@@ -349,9 +353,13 @@ def convert(
             )
         )
 
-    if lvl.get("type") != "kNormal" or not lvl.get("choices"):
+    if lvl.get("type") not in ({"kNormal"} | BONUS_CHOICE_TYPES) or not lvl.get("choices"):
         return result(ScreenObservation(ScreenKind.OTHER, **common))
 
+    bonus_choice = lvl.get("type") in BONUS_CHOICE_TYPES
+    if bonus_choice:
+        # 시작 보상은 강화 포인트·삭제·새로고침 버튼을 쓰지 않는다. 전투 중 횟수를 가져오지 않는다.
+        common["banish_left"] = 0
     raw = list(lvl["choices"])
     if all(_rect(choice.get("rect"), size) for choice in raw):
         raw.sort(key=lambda c: _rect(c.get("rect"), size)[0])
@@ -397,7 +405,7 @@ def convert(
         )
     pool = None
     pr = lvl.get("pool") if isinstance(lvl.get("pool"), dict) else None
-    if pr and any(k in pr for k in ("new_balls", "ball_upgrades")):
+    if not bonus_choice and pr and any(k in pr for k in ("new_balls", "ball_upgrades")):
 
         def ids(key):
             return tuple(x for x in (item(t) for t in pr.get(key) or []) if x)
@@ -414,9 +422,9 @@ def convert(
         kind=ScreenKind.LEVEL_UP,
         cards=tuple(cards),
         pool=pool,
-        reroll_cost=lvl.get("reroll_cost"),
-        free_rerolls=free if free else None,
-        points_left=battle.get("level_ups_avail") if battle else None,
+        reroll_cost=None if bonus_choice else lvl.get("reroll_cost"),
+        free_rerolls=0 if bonus_choice else (free if free else None),
+        points_left=battle.get("level_ups_avail") if battle and not bonus_choice else None,
         panel_rect=_rect(lvl.get("panel"), size),
         **common,
     )

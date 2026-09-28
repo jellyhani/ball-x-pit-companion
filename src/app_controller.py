@@ -406,11 +406,12 @@ class AppController(QObject):
         self.bridge_state = bridge_state
         base_state = snapshot["base"].get("state") if isinstance(snapshot.get("base"), dict) else None
         page = snapshot["levelup"].get("page") if isinstance(snapshot.get("levelup"), dict) else None
+        selection_type = snapshot["levelup"].get("type") if isinstance(snapshot.get("levelup"), dict) else None
         observed_kind = bridge_state.observation.kind.value
         diagnostics.emit("state.interpreted", stream="game",
-                         state=(bridge_state.game_state, base_state, page, observed_kind),
+                         state=(bridge_state.game_state, base_state, page, observed_kind, selection_type),
                          sequence=snapshot.get("seq"), game_state=bridge_state.game_state,
-                         base_state=base_state, page=page, observed=observed_kind,
+                         base_state=base_state, page=page, observed=observed_kind, selection_type=selection_type,
                          choices=len(bridge_state.observation.cards), unknown=len(bridge_state.unknown_types),
                          receive_to_ui_ms=round(max(0., now - at) * 1000, 2))
         self._read_ui_avoid(snapshot, bridge_state)
