@@ -1965,7 +1965,8 @@ class AppController(QObject):
                          state=(bool(now_path), bool(best_path), tuple(sorted(quality_notes))),
                          current_points=len(now_path), recommended_points=len(best_path),
                          limitations=",".join(sorted(quality_notes)),
-                         request=diagnostics.request_token(key))
+                         request=diagnostics.request_token(sweep_key),
+                         current_request=diagnostics.request_token(self._sim_req.get("now")))
         return lines
 
     def _update_dps(self):
