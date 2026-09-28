@@ -1165,6 +1165,7 @@ class AppController(QObject):
                     self._harvest_pending = True
             self._base_state = state
         self._base_snap = base
+        AppController._precompute_harvest(self, base, state)
         self.control.set_base_context(base)
         self._update_char_combo(base, state)
         self._update_base_advice(base, state)
@@ -1628,7 +1629,7 @@ class AppController(QObject):
             self._sim_res[channel] = (key, result)
             if channel == "sweep":
                 # 완료를 먼저 보여 준 다음 새 생산 주기로 갱신한다. 계산 중에는 타이머만으로 요청을 교체하지 않는다.
-                self._sweep_refresh_after = time.monotonic() + 5.0
+                self._sweep_refresh_after = time.monotonic() + (15.0 if getattr(self, "_base_state", "") == "kNormal" else 5.0)
             if self._base_snap and self._base_state == "kAimWorkers":
                 self._render_base(self._base_snap, self._base_state)
         diagnostics.emit("compute.accepted", channel=channel, request=diagnostics.request_token(key),
@@ -1764,6 +1765,58 @@ class AppController(QObject):
             self._sim_req.pop(channel, None)
             self._sim_res.pop(channel, None)
 
+    def _precompute_harvest(self, base, state):
+        """일반 기지·뒤로 간 조준 화면에서도 다음 추천을 준비한다. 화면 표시는 기존 조건을 따른다."""
+        settings = getattr(self, "settings", None)
+        if (not base or state not in ("kNormal", "kAimWorkers") or self.meta is None
+                or settings is None or not settings.hud_auto_show or self.user_hidden):
+            return
+        now = time.monotonic()
+        if now < getattr(self, "_prewarm_next_poll", 0.):
+            return
+        self._prewarm_next_poll = now + 1.0
+        if state == "kNormal" and base.get("harvested_today"):
+            return
+        if state == "kAimWorkers" and AppController._launch_block_message(base):
+            return
+        from .engine import harvest_sim as hs
+        prepared = AppController._layout_input(self, base) if state == "kNormal" else base
+        geometry = prepared.get("geo") or {}
+        launcher = geometry.get("launcher")
+        if (geometry.get("launcher_source") == "unavailable" or not geometry.get("colliders")
+                or not isinstance(launcher, (list, tuple)) or len(launcher) < 2):
+            return
+        team = hs.team_from_base(prepared, self.meta.chars_raw, getattr(self, "_team_order", None))
+        if not team:
+            return
+        duration = hs.initial_harvest_duration(prepared, team, self._harvest_dur)
+        targets = {building.id: building.hits_left for building in unfinished_buildings(prepared, self.meta)}
+        need, _ = need_resource(self.meta, self._shortfalls())
+        AppController._schedule_sweep(self, prepared, team, duration, need, targets, background=True)
+
+    def _schedule_sweep(self, base, team, duration, need, targets, background=False):
+        """예비 계산과 화면 계산은 같은 키와 같은 작업 줄을 공유한다."""
+        from .engine import sim_jobs
+        from .engine.sim_signature import sweep_signature
+        lo, hi = self.aim_range.limits
+        key = sweep_signature(base, team, duration, need, targets, (lo, hi))
+        now = time.monotonic()
+        busy = bool(getattr(self.sim, "busy", lambda _channel: False)("sweep"))
+        refresh_due = now >= getattr(self, "_sweep_refresh_after", float("inf")) and not busy
+        if ((self._sim_req.get("sweep") != key or refresh_due)
+                and now >= getattr(self, "_sim_retry_at", {}).get("sweep", 0)):
+            reason = "inputs_changed" if self._sim_req.get("sweep") != key else "task_clock_refresh"
+            self._sim_req["sweep"] = key
+            buildings = {building["id"]: building for building in base.get("buildings") or [] if "id" in building}
+            diagnostics.emit("compute.input", channel="sweep", request=diagnostics.request_token(key),
+                             sequence=getattr(self, "_trace_identity", {}).get("sequence"),
+                             buildings=len(buildings), workers=len(team), duration=duration,
+                             targets=len(targets), need=need, minimum_angle=lo, maximum_angle=hi,
+                             reason=reason, background=background)
+            self.sim.submit("sweep", key, sim_jobs.job_sweep, base["geo"], buildings, team,
+                            duration, need, targets, lo, hi)
+        return key
+
     def _harvest_sim(self, base: dict, need: int, unf) -> List[tuple]:
         """채집 궤적: 지금 조준·추천 각도의 예상 경로와 결과. 계산은 계산 프로세스에 맡기고(가장 최근 요청만),
         여기서는 요청과 이미 나온 결과 표시만 한다. 표시할 글 줄을 돌려준다."""
@@ -1811,25 +1864,12 @@ class AppController(QObject):
                          dynamic=hs.needs_dynamic_simulation(buildings))
         # 배치·남은 자원·필요 자원·미완성 건물이 바뀔 때만 각도 탐색을 다시 한다
         lo, hi = self.aim_range.limits
-        from .engine.sim_signature import aim_signature, sweep_signature
+        from .engine.sim_signature import aim_signature
 
         key = aim_signature(base, team, duration, need, targets, (lo, hi))
-        sweep_key = sweep_signature(base, team, duration, need, targets, (lo, hi))
+        sweep_key = AppController._schedule_sweep(self, base, team, duration, need, targets)
         retry = getattr(self, "_sim_retry_at", {})
         now = time.monotonic()
-        sweep_busy = bool(getattr(self.sim, "busy", lambda _channel: False)("sweep"))
-        refresh_due = now >= getattr(self, "_sweep_refresh_after", float("inf")) and not sweep_busy
-        if (self._sim_req.get("sweep") != sweep_key or refresh_due) and now >= retry.get("sweep", 0):
-            reason = "inputs_changed" if self._sim_req.get("sweep") != sweep_key else "task_clock_refresh"
-            self._sim_req["sweep"] = sweep_key
-            diagnostics.emit("compute.input", channel="sweep", request=diagnostics.request_token(sweep_key),
-                             sequence=getattr(self, "_trace_identity", {}).get("sequence"),
-                             buildings=len(buildings), workers=len(team), duration=duration,
-                             targets=len(targets), need=need, minimum_angle=lo, maximum_angle=hi,
-                             reason=reason)
-            self.sim.submit(
-                "sweep", sweep_key, sim_jobs.job_sweep, geometry, buildings, team, duration, need, targets, lo, hi
-            )
         lines = []
         quality_notes = set(hs.model_limitations(team, buildings))
         self._stuck_text = ""

@@ -100,7 +100,17 @@ def sweep_signature(base, team, duration, need, targets, limits):
     건물별 10초 경계가 엇갈리면 1초마다 키가 바뀌어 완료 결과가 영원히 폐기된다.
     실제 재고·충돌 역할·위치·공사 상태·참가자는 계속 비교하며, 계산 입력의 task_seconds는 그대로 사용한다.
     """
-    return digest((physical_base(base, task_progress=False), team, duration, need, targets, limits))
+    from .harvest_sim import _game_bonus
+
+    physical = physical_base(base, task_progress=False)
+    physical["geo"].pop("launch_team", None)  # 아래 팀 순서·능력치로 비교한다. 일반 기지에서는 이 배열이 비어 있다.
+    normalized_team = [
+        {"type": member.get("type"), "upgrades": member.get("upgrades") or {},
+         "harvest_bonus": member.get("harvest_bonus") or {},
+         "speed": member.get("speed") if _game_bonus(member.get("harvest_bonus") or {}, "kHarvestSpeed") is None else None}
+        for member in team
+    ]
+    return digest((physical, normalized_team, duration, need, targets, limits))
 
 
 def layout_signature(base, characters, options, resources, duration, need, limits):

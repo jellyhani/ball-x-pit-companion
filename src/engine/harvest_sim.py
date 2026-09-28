@@ -1205,6 +1205,7 @@ class AngleResult:
     build_points: Optional[int] = None  # 목표별 남은 공사 점수로 제한한 진행 점수. None은 구형 결과.
     per_building_points: Dict[int, int] = field(default_factory=dict)
     model_notes: tuple = ()
+    preview: Optional[list] = None  # 각도 탐색에서 이미 구한 표시 경로. 같은 각도를 다시 시뮬레이션하지 않는다.
 
 
 def angle_score(result: AngleResult, need: int) -> float:
@@ -1222,6 +1223,8 @@ def rank_angles(
     need: int,
     targets: Optional[Dict[int, int]] = None,
     angles: Sequence[float] = tuple(range(12, 169, 3)),
+    *,
+    keep_preview: bool = False,
 ) -> List[AngleResult]:
     """각도별 예상 결과. 미완성 건물 건설(targets: 건물 id → 더 필요한 공사 점수)이 먼저, 그다음 필요한 자원,
     다른 자원은 4분의 1 가중."""
@@ -1230,7 +1233,7 @@ def rank_angles(
     for angle in angles:
         counts: Dict[int, int] = {}
         points: Dict[int, int] = {}
-        total, _ = run_angle(world, buildings, team, angle, duration, counts, points)
+        total, workers = run_angle(world, buildings, team, angle, duration, counts, points)
         per = {
             building_id: min(counts.get(building_id, 0), capacity)
             for building_id, capacity in targets.items()
@@ -1253,8 +1256,12 @@ def rank_angles(
                 sum(per_points.values()),
                 per_points,
                 tuple(sorted(world.model_notes)),
+                None,
             )
         )
+        if keep_preview:
+            from .aim_preview import worker_preview
+            result[-1].preview = worker_preview(workers)
     result.sort(key=lambda angle_result: -angle_score(angle_result, need))
     return result
 

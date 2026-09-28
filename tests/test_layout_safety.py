@@ -173,10 +173,11 @@ class FinalStateJobTest(unittest.TestCase):
     def test_fractional_sweep_limits_never_round_outward(self):
         observed = []
 
-        def rank(world, buildings, team, duration, need, targets=None, angles=()):
+        def rank(world, buildings, team, duration, need, targets=None, angles=(), *, keep_preview=False):
             values = list(angles)
             observed.extend(values)
-            return [SimpleNamespace(angle=a, total=[0, 1, 0, 0], build_hits=0, per_building={}) for a in values]
+            return [SimpleNamespace(angle=a, total=[0, 1, 0, 0], build_hits=0, per_building={}, preview=[])
+                    for a in values]
 
         for native_lib in (None, object()):
             with self.subTest(native=bool(native_lib)), \

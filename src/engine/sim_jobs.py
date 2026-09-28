@@ -1,8 +1,8 @@
 """별도 프로세스에서 돌리는 계산 작업 (채집 궤적·배치). 화면 스레드와 파이썬 GIL 을 나눠 쓰지 않게 한다.
 
-실제 측정: 지금 조준 궤적 계산 40ms(작업자 8명, 경계 상자 빠른 제외 뒤 15ms), 각도 탐색 0.7~1.5초,
-배치 계산 수 초 — 같은 프로세스의 스레드에서 돌리면 화면 갱신이 끊겼다(사용자 체감 렉).
-인자와 결과는 모두 피클 가능한 기본 자료형이다.
+입력 규모와 건물 효과에 따라 시간이 달라진다. 각도 묶음은 서로 다른 작업자에서 계산하고,
+화면 스레드에서는 요청·결과만 처리한다. 직렬 경로도 동일한 각도·정렬·결과 조합 함수를 사용한다.
+인자와 결과는 프로세스 간 전달 가능한 자료형이다.
 """
 
 from __future__ import annotations
@@ -56,6 +56,25 @@ def job_now(
     }
 
 
+def sweep_needs_refinement(buildings):
+    return native.lib() is None or hs.needs_dynamic_simulation(buildings)
+
+
+def fine_sweep_angles(coarse, lo, hi):
+    return sorted({angle for result in coarse[:3]
+                   for angle in range(int(result.angle) - 2, int(result.angle) + 3)
+                   if lo <= angle <= hi} - {result.angle for result in coarse})
+
+
+def job_sweep_batch(geo, buildings, team, dur, need, targets, angles):
+    """서로 독립인 각도 묶음. 작업자마다 월드를 만들어 가변 시뮬레이션 상태를 공유하지 않는다."""
+    world = hs.world_from_geo(geo, 0.0)
+    if world is None:
+        return None
+    return hs.rank_angles(world, buildings, team, dur, need, targets,
+                          angles=allowed_angles(geo, angles), keep_preview=True)
+
+
 def job_sweep(
     geo: dict,
     buildings: Dict[int, dict],
@@ -68,32 +87,19 @@ def job_sweep(
 ) -> dict:
     """각도 탐색 결과 상위 5개(top, 1위는 첫 작업자의 초기 경로 포함)와 미완성 건물별 최대 타격 수(reach — 0 이면
     어떤 각도로도 닿지 않음)."""
-    world = hs.world_from_geo(geo, 0.0)
-    if world is None:
+    refine = sweep_needs_refinement(buildings)
+    ranked = job_sweep_batch(geo, buildings, team, dur, need, targets,
+                            _angle_grid((lo, hi), 6 if refine else 1))
+    if ranked is None:
         return {"error": "geometry_unavailable", "model_limitations": ["geometry_unavailable"]}
-    limits = (lo, hi)
-    if native.lib() is not None and not hs.needs_dynamic_simulation(buildings):
-        # 네이티브 계산(각도 하나 약 1ms)이면 1° 간격 전부 — 좁은 틈으로만 닿는 각도도 놓치지 않는다
-        ranked = hs.rank_angles(
-            world, buildings, team, dur, need, targets, angles=allowed_angles(geo, _angle_grid(limits, 1))
-        )
-    else:
-        # 파이썬 계산: 거칠게 6° 간격 → 상위 3개 주변만 1° 간격 (전부 1°로 하면 작업자 10명·20초에 수 초)
-        coarse = hs.rank_angles(
-            world, buildings, team, dur, need, targets, angles=allowed_angles(geo, _angle_grid(limits, 6))
-        )
-        fine = sorted(
-            {
-                a
-                for angle_result in coarse[:3]
-                for a in range(int(angle_result.angle) - 2, int(angle_result.angle) + 3)
-                if lo <= a <= hi
-            }
-            - {angle_result.angle for angle_result in coarse}
-        )
-        ranked = coarse + hs.rank_angles(
-            world, buildings, team, dur, need, targets, angles=allowed_angles(geo, fine)
-        )
+    if refine:
+        ranked += job_sweep_batch(geo, buildings, team, dur, need, targets,
+                                  fine_sweep_angles(ranked, lo, hi))
+    return finish_sweep(ranked, buildings, team, need, targets)
+
+
+def finish_sweep(ranked, buildings, team, need, targets):
+    """완료 순서와 무관하게 기존 각도 순서로 합친 뒤 안정 정렬해 같은 순위를 만든다."""
     ranked.sort(key=lambda r: -hs.angle_score(r, need))
     reach = {building_id: 0 for building_id in targets or {}}
     for angle_result in ranked:
@@ -109,8 +115,6 @@ def job_sweep(
     for angle_result in picked:
         # 남은 공사 점수까지만 반영한다. 충돌 횟수와 실제 건설 강화의 진행량을 혼동하지 않는다.
         score = hs.angle_score(angle_result, need)
-        points: Dict[int, int] = {}
-        _, workers = hs.run_angle(world, buildings, team, angle_result.angle, dur, build_points=points)
         current_result.append(
             {
                 "angle": angle_result.angle,
@@ -120,7 +124,7 @@ def job_sweep(
                 "build_points": getattr(angle_result, "build_points", None),
                 "per_building_points": getattr(angle_result, "per_building_points", {}),
                 "score": score,
-                "path": worker_preview(workers),
+                "path": angle_result.preview,
             }
         )
     notes = set(hs.model_limitations(team, buildings))

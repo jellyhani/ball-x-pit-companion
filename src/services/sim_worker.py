@@ -30,7 +30,9 @@ LANES = {"now": "fast", "sweep": "heavy", "layout": "layout"}
 class JobMeasurement:
     result: Any
     compute_seconds: float
-    process_id: int
+    process_id: Optional[int]
+    worker_count: int = 1
+    worker_seconds_total: Optional[float] = None
 
 
 def _measure_job(function: Callable, args: tuple) -> JobMeasurement:
@@ -38,6 +40,20 @@ def _measure_job(function: Callable, args: tuple) -> JobMeasurement:
     started = time.perf_counter()
     result = function(*args)
     return JobMeasurement(result, time.perf_counter() - started, os.getpid())
+
+
+def _initialize_worker():
+    """계산용 자식 프로세스만 낮은 우선순위로 둔다. 게임·화면 프로세스의 우선순위는 바꾸지 않는다."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.GetCurrentProcess.restype = ctypes.c_void_p
+        kernel.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_ulong]
+        kernel.SetPriorityClass(kernel.GetCurrentProcess(), 0x4000)  # BELOW_NORMAL_PRIORITY_CLASS
+    except (OSError, AttributeError):
+        pass
 
 
 class SimWorker(QObject):
@@ -53,6 +69,7 @@ class SimWorker(QObject):
         self._closed = False
         self._started_at: Dict[str, float] = {}
         self._reported_channels = set()
+        self._inflight: Dict[str, Future] = {}
 
     def _executor(self, channel: str) -> Executor:
         lane = LANES.get(channel, "heavy")
@@ -60,7 +77,9 @@ class SimWorker(QObject):
         if ex is None:
             if self._use_process:
                 try:
-                    ex = ProcessPoolExecutor(max_workers=1)
+                    from .parallel_sweep import worker_count
+                    ex = ProcessPoolExecutor(max_workers=worker_count() if lane == "heavy" else 1,
+                                             initializer=_initialize_worker)
                 except Exception:
                     log.exception("계산 프로세스를 만들지 못해 스레드로 대신합니다")
             if ex is None:
@@ -96,7 +115,17 @@ class SimWorker(QObject):
             diagnostics.emit("compute.started", channel=channel, request=diagnostics.request_token(key),
                              job=getattr(fn, "__name__", type(fn).__name__),
                              executor=type(executor).__name__, wait_ms=round(waited * 1000, 2))
-            fut = executor.submit(_measure_job, fn, args)
+            from ..engine import sim_jobs
+            from . import parallel_sweep
+            if (channel == "sweep" and fn is sim_jobs.job_sweep
+                    and isinstance(executor, ProcessPoolExecutor) and parallel_sweep.worker_count() > 1
+                    and sim_jobs.sweep_needs_refinement(args[1])):
+                diagnostics.emit("compute.parallel", channel=channel, request=diagnostics.request_token(key),
+                                 workers=parallel_sweep.worker_count())
+                fut = parallel_sweep.submit(executor, args)
+            else:
+                fut = executor.submit(_measure_job, fn, args)
+            self._inflight[channel] = fut
         except Exception:
             log.exception("계산 요청 실패 (%s)", channel)
             diagnostics.emit("compute.failed", channel=channel, request=diagnostics.request_token(key),
@@ -139,6 +168,7 @@ class SimWorker(QObject):
         """제출 실패도 완료로 알린다. 화면의 '계산 중' 상태와 다음 요청을 함께 해제한다."""
         if self._closed:
             return
+        self._inflight.pop(channel, None)
         started = self._started_at.pop(channel, None)
         measurement = result if isinstance(result, JobMeasurement) else None
         if measurement is not None:
@@ -149,6 +179,10 @@ class SimWorker(QObject):
                              elapsed_ms=round(elapsed * 1000, 2),
                              compute_ms=round(measurement.compute_seconds * 1000, 2) if measurement else None,
                              worker_pid=measurement.process_id if measurement else None,
+                             workers=measurement.worker_count if measurement else None,
+                             compute_scope="parallel_elapsed" if measurement and measurement.worker_seconds_total is not None else "worker_elapsed",
+                             worker_total_ms=round(measurement.worker_seconds_total * 1000, 2)
+                             if measurement and measurement.worker_seconds_total is not None else None,
                              has_result=result is not None,
                              error=result.get("error") if isinstance(result, dict) else None)
             if channel not in self._reported_channels or elapsed >= 1.0:
@@ -169,6 +203,9 @@ class SimWorker(QObject):
         diagnostics.emit("compute.shutdown", running=sum(bool(value) for value in self._busy.values()),
                          pending=len(self._pending))
         self._closed = True
+        for future in list(self._inflight.values()):
+            future.cancel()
+        self._inflight.clear()
         for ex in self._ex.values():
             ex.shutdown(wait=False, cancel_futures=True)
         self._ex.clear()
