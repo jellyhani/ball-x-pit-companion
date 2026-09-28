@@ -21,7 +21,7 @@ from typing import Dict, List, Optional, Tuple
 from ..gamedata import GameData
 from ..tracking.meta_state import RESOURCES, MetaState
 from ..i18n import tr
-from .construction_policy import EXCLUDED_BUILDINGS, is_recommended_building
+from .construction_policy import EXCLUDED_BUILDINGS, is_recommended_building, is_construction_target
 
 # 건물 종류 → 자원 번호 (0 골드, 1 밀, 2 나무, 3 돌). 이름 기준 + 보관 자원(held)으로 보정
 RES_BY_TYPE = {
@@ -264,7 +264,7 @@ def unfinished_buildings(base: Optional[dict], meta: Optional[MetaState]) -> Lis
         if (
             building_state not in UNFINISHED
             or "id" not in building
-            or not is_recommended_building(building.get("type", ""))
+            or not is_construction_target(building.get("type", ""))
         ):
             continue
         percentage = float(building.get("upgrade_pct") or 0)

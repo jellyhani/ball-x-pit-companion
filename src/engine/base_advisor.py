@@ -21,6 +21,7 @@ from .construction_policy import (
     construction_guidance,
     has_captain_targets,
     is_recommended_building,
+    is_construction_target,
     preferred_tile_types,
 )
 
@@ -89,10 +90,10 @@ def suggest(
     has_stats = has_captain_targets(owned_types, base, STAT_FALLBACK)
     has_infinite_stats = bool(owned_types & STATUE_TYPES)
     has_construction = any(
-        b.state in FINISH_LABEL and is_recommended_building(b.type) for b in meta.buildings
+        b.state in FINISH_LABEL and is_construction_target(b.type) for b in meta.buildings
     )
     for b in meta.buildings:
-        if is_recommended_building(b.type) and b.state in FINISH_LABEL:
+        if is_construction_target(b.type) and b.state in FINISH_LABEL:
             result.append(
                 BaseSuggestion(
                     "finish",

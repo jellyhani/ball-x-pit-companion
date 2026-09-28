@@ -35,7 +35,7 @@ class ConstructionFrontTest(unittest.TestCase):
         self.assertEqual(base, original)
 
     def test_all_unfinished_types_and_old_target_use_construction_priority(self):
-        for kind in ("kForest", "kSingleFamilyHome", "kClinic"):
+        for kind in ("kForest", "kSingleFamilyHome", "kClinic", "kWarRoom", "kIdleLauncher"):
             for state in ("kScaffold", "kUpgrading"):
                 with self.subTest(kind=kind, state=state):
                     base = self.base(kind)
@@ -51,6 +51,12 @@ class ConstructionFrontTest(unittest.TestCase):
         for kind in ("kGoldMine", "kHome"):
             base = self.base(kind)
             self.assertEqual(self.optimize(base).moved, 0)
+
+    def test_started_guide_excluded_buildings_are_in_harvest_targets_too(self):
+        from src.engine.harvest import unfinished_buildings
+        base = self.base("kWarRoom")
+        base["buildings"].append(bld(2, "kGoldMine", 5.5, 5.5, state="kScaffold"))
+        self.assertEqual([building.id for building in unfinished_buildings(base, None)], [1])
 
     def test_unknown_launcher_does_not_invent_a_front_position(self):
         base = self.base()

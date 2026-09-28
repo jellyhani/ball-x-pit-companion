@@ -26,6 +26,11 @@ RESOURCE_VARIANTS = (("kDenseWheat", "kWheatField"), ("kGrandTree", "kForest"), 
 RESOURCE_TILE_TYPES = frozenset(t for family in RESOURCE_VARIANTS for t in family)
 
 
+def is_construction_target(type_name: str) -> bool:
+    """이미 시작한 공사는 새 건설 공략과 분리한다. 사용자가 철거 대상으로 지정한 종류만 제외한다."""
+    return type_name not in USER_EXCLUDED_BUILDINGS
+
+
 def is_recommended_building(type_name: str) -> bool:
     """건설·강화·공사 완성 또는 일꾼 배정을 권할 수 있는 건물인지."""
     return type_name not in EXCLUDED_BUILDINGS

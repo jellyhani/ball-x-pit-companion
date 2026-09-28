@@ -376,7 +376,7 @@ class Layout:
 def pieces_from_base(
     base: dict, grid: Grid, housing: Set[str], fixed: Sequence[int] = ()
 ) -> Tuple[Dict[int, Piece], Dict[int, Tuple[int, int]]]:
-    from .construction_policy import is_recommended_building
+    from .construction_policy import is_construction_target
 
     buildings = buildings_from_base(base)
     masks = shape_masks(base.get("geo") or {}, buildings, grid)
@@ -401,7 +401,7 @@ def pieces_from_base(
         rng_ = b.range
         # 범위는 게임 GetRange 값을 그대로 쓴다. 공략의 '표시보다 +1칸'을 이미 계산된 값에 다시 더하지 않는다.
         # 공사 중인 건물도 옮길 수 있다 (커뮤니티: 채집 구역 가장자리로 옮겨 일꾼이 치게 — Screen Rant 기지 공략)
-        unfinished = info.get("state") in UNFINISHED_STATES and is_recommended_building(b.type)
+        unfinished = info.get("state") in UNFINISHED_STATES and is_construction_target(b.type)
         movable = b.type not in FIXED_TYPES and index not in fixed
         capacity = float(info.get("cap") or TILE_CAPACITY.get(b.type, 1)) if b.type in TILE_RES else 1.0
         from .game_range import boxes_from_row

@@ -17,7 +17,7 @@ class ConstructionGuidePolicyTest(unittest.TestCase):
         data = game_data()
         return suggest(parse_meta(raw, data), data, limit=100, base=base)
 
-    def test_user_and_guide_exclusions_cover_build_upgrade_and_finish(self):
+    def test_started_construction_is_separate_from_new_investment_exclusions(self):
         raw = {"resources": [1000, 100, 100, 100], "blueprints": [], "buildings": []}
         for kind in ("kGoldMine", "kIdleLauncher", "kWarRoom"):
             raw["blueprints"].append(blueprint(kind))
@@ -26,7 +26,10 @@ class ConstructionGuidePolicyTest(unittest.TestCase):
                                   {"type": kind, "state": "kNormal", "can_upgrade": True,
                                    "upgrade_cost": [10, 0, 0, 0]}]
         before = copy.deepcopy(raw)
-        self.assertEqual(self.recommendations(raw), [])
+        recommendations = self.recommendations(raw)
+        self.assertEqual(len(recommendations), 4)
+        self.assertEqual({(row.kind, row.type) for row in recommendations},
+                         {("finish", "kIdleLauncher"), ("finish", "kWarRoom")})
         self.assertEqual(EXCLUDED_BUILDINGS, {"kGoldMine", "kIdleLauncher", "kWarRoom"})
         self.assertEqual(raw, before)
 
